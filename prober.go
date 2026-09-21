@@ -9,13 +9,29 @@ import (
 	"time"
 )
 
-// Le prober ouvre un seul socket ICMP brut pour toutes les cibles et
-// fait correspondre les reponses par numero de sequence. Un socket par
-// cible ne passerait pas l'echelle, et le timestamp d'emission est
-// embarque dans le payload pour que le RTT ne depende pas du temps
-// passe dans nos propres structures.
+// La sonde ouvre un seul socket ICMP brut pour toutes les cibles et fait
+// correspondre les reponses par numero de sequence.
+//
+// Isolation : la sonde ne connait ni la base ni l'interface web. Elle lit
+// ses cibles dans une TargetSource (un cache en memoire) et depose ses
+// mesures dans un MeasureSink (une file non bloquante). Aucune de ces deux
+// operations ne peut attendre la base de donnees. Le meme code tourne dans
+// le processus principal ou dans un processus dedie (`smokestack probe`).
+//
+// Exactitude : l'heure de reception est donnee par le noyau
+// (SO_TIMESTAMPNS), l'heure d'emission est ecrite dans le paquet juste
+// avant l'envoi. La charge du processus ne s'ajoute donc pas au temps de
+// reponse mesure.
 
 const icmpPayloadSize = 56
+
+type TargetSource interface {
+	Targets() []*Target
+}
+
+type MeasureSink interface {
+	Submit(m Measurement, host string)
+}
 
 type inflight struct {
 	mu   sync.Mutex
@@ -24,32 +40,35 @@ type inflight struct {
 }
 
 type Prober struct {
-	store   *Store
-	probeID int64
-	conn    net.PacketConn
-	id      uint16
+	src      TargetSource
+	sink     MeasureSink
+	probeID  int64
+	conn     net.PacketConn
+	id       uint16
+	kernelTS bool
 
 	mu      sync.Mutex
 	seq     uint16
 	pending map[uint16]*inflight
 	running map[int64]bool
-
-	archive *Archive
 }
 
-func NewProber(store *Store, probeID int64, archive *Archive) (*Prober, error) {
+func NewProber(src TargetSource, sink MeasureSink, probeID int64) (*Prober, error) {
 	conn, err := net.ListenPacket("ip4:icmp", "0.0.0.0")
 	if err != nil {
 		return nil, err
 	}
 	p := &Prober{
-		store:   store,
-		probeID: probeID,
-		conn:    conn,
+		src: src, sink: sink, probeID: probeID, conn: conn,
 		id:      uint16(time.Now().UnixNano() & 0xffff),
 		pending: map[uint16]*inflight{},
 		running: map[int64]bool{},
-		archive: archive,
+	}
+	p.kernelTS = enableKernelRxTimestamps(conn)
+	if p.kernelTS {
+		log.Printf("sonde : horodatage des reponses par le noyau actif")
+	} else {
+		log.Printf("sonde : horodatage noyau indisponible, horodatage applicatif")
 	}
 	go p.readLoop()
 	return p, nil
@@ -75,28 +94,35 @@ func checksum(b []byte) uint16 {
 	return ^uint16(sum)
 }
 
-func (p *Prober) buildEcho(seq uint16) []byte {
+// echoTemplate prepare le paquet sans horodatage ; stampAndSend y ecrit
+// l'heure d'emission et la somme de controle juste avant l'envoi.
+func (p *Prober) echoTemplate(seq uint16) []byte {
 	b := make([]byte, 8+icmpPayloadSize)
 	b[0] = 8 // echo request
-	b[1] = 0
 	binary.BigEndian.PutUint16(b[4:6], p.id)
 	binary.BigEndian.PutUint16(b[6:8], seq)
-	binary.BigEndian.PutUint64(b[8:16], uint64(time.Now().UnixNano()))
 	for i := 16; i < len(b); i++ {
 		b[i] = byte(i)
 	}
-	binary.BigEndian.PutUint16(b[2:4], checksum(b))
 	return b
+}
+
+func (p *Prober) stampAndSend(b []byte, addr net.Addr) error {
+	b[2], b[3] = 0, 0
+	binary.BigEndian.PutUint64(b[8:16], uint64(time.Now().UnixNano()))
+	binary.BigEndian.PutUint16(b[2:4], checksum(b))
+	_, err := p.conn.WriteTo(b, addr)
+	return err
 }
 
 func (p *Prober) readLoop() {
 	buf := make([]byte, 1500)
+	oob := make([]byte, 128)
 	for {
-		n, _, err := p.conn.ReadFrom(buf)
+		n, now, err := readStamped(p.conn, buf, oob)
 		if err != nil {
 			return
 		}
-		now := time.Now().UnixNano()
 		b := buf[:n]
 		// Selon la plateforme, l'en-tete IP peut etre conserve.
 		if len(b) >= 20 && b[0]>>4 == 4 {
@@ -167,12 +193,7 @@ func (p *Prober) Run(t *Target) {
 		m.Lost = 0
 	}
 
-	if err := p.store.Record(m); err != nil {
-		log.Printf("record %s: %v", t.Slug, err)
-	}
-	if p.archive != nil {
-		p.archive.Append(m, t.Host)
-	}
+	p.sink.Submit(m, t.Host)
 }
 
 func (p *Prober) runICMP(t *Target) ([]float64, string) {
@@ -188,7 +209,7 @@ func (p *Prober) runICMP(t *Target) ([]float64, string) {
 	for i := 0; i < t.Packets; i++ {
 		seq := p.nextSeq(fl)
 		seqs = append(seqs, seq)
-		if _, err := p.conn.WriteTo(p.buildEcho(seq), addr); err != nil {
+		if err := p.stampAndSend(p.echoTemplate(seq), addr); err != nil {
 			return nil, "send: " + err.Error()
 		}
 		if i < t.Packets-1 {
@@ -213,7 +234,13 @@ func (p *Prober) runTCP(t *Target) ([]float64, string) {
 		start := time.Now()
 		c, err := net.DialTimeout("tcp", t.Host, timeout)
 		if err == nil {
-			out = append(out, float64(time.Since(start).Microseconds()))
+			// Le temps SYN -> SYN/ACK mesure par la pile TCP ne depend pas
+			// de la charge du processus ; a defaut, mesure applicative.
+			elapsed := float64(time.Since(start).Microseconds())
+			if rtt, ok := kernelTCPRTT(c); ok {
+				elapsed = rtt
+			}
+			out = append(out, elapsed)
 			c.Close()
 		} else {
 			lastErr = err.Error()
@@ -248,11 +275,7 @@ func (p *Prober) Schedule(stop <-chan struct{}) {
 		case <-stop:
 			return
 		case now := <-tick.C:
-			targets, err := p.store.ActiveTargets()
-			if err != nil {
-				log.Printf("targets: %v", err)
-				continue
-			}
+			targets := p.src.Targets()
 			sec := now.Unix()
 			for _, t := range targets {
 				if mod(sec, t.IntervalS) != offsetFor(t.ID, t.IntervalS) {
@@ -276,7 +299,6 @@ func (p *Prober) Schedule(stop <-chan struct{}) {
 					p.Run(tt)
 				}(t)
 			}
-			p.store.TouchProbe(p.probeID)
 		}
 	}
 }
