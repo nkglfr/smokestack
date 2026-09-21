@@ -1,0 +1,4 @@
+# Cles publiques autorisees a signer les paquets de mise a jour.
+# Une cle par ligne, au format produit par `smokestack release keygen` :
+#   ed25519:BASE64...
+# Voir DEPLOY.md, section "Release signing".
