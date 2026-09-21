@@ -249,6 +249,24 @@ function render(){
 }
 
 /* -------------------------------------------- tableau de bord */
+let PS=null;
+function probeCard(p){
+  if(!p) return "";
+  const age=p.last_seen_at?Math.round(Date.now()/1000-p.last_seen_at):null;
+  const alive=age!=null&&age<120, W=p.writer;
+  const mode={external:"processus isolé",embedded:"intégrée au service",disabled:"désactivée"}[p.mode]||p.mode;
+  return `<div class="card"><h3>Chaîne de mesure
+    <span style="margin-left:auto">${p.mode==="disabled"?'<span class="badge b-n">désactivée</span>'
+      :alive?'<span class="badge b-ok">sonde active</span>':'<span class="badge b-crit">sonde muette</span>'}</span></h3><div class="body">
+    <table><tbody>
+      <tr><td style="width:240px">Mode de la sonde</td><td>${esc(mode)}${p.mode==="embedded"
+        ?' <span style="font-size:12px;color:var(--ink2)">— le mode isolé protège mieux les mesures sous forte charge</span>':""}</td></tr>
+      <tr><td>Dernière mesure reçue</td><td>${age==null?"—":"il y a "+age+" s"}</td></tr>
+      <tr><td>Mesures écrites / écartées</td><td>${W.written} / <span style="color:${W.dropped?"var(--crit)":"inherit"}">${W.dropped}</span></td></tr>
+      <tr><td>File d'écriture</td><td>${W.queued} / ${W.capacity} · dernier lot ${W.last_batch_ms.toFixed(1)} ms</td></tr>
+      <tr><td>Calcul de l'accueil</td><td>${p.overview_build_ms} ms, toutes les 30 s</td></tr>
+    </tbody></table></div></div>`;
+}
 async function viewDash(m){
   m.innerHTML=`<h2>Tableau de bord</h2>
     <p class="lead">État de l'instance, de la sonde et du stockage.</p>
@@ -257,8 +275,9 @@ async function viewDash(m){
     const [tree,st,peers]=await Promise.all([
       api("GET","/api/v1/tree"),
       api("GET","/api/v1/admin/storage").catch(()=>null),
-      api("GET","/api/v1/fed/peers").catch(()=>[])
-    ]);
+      api("GET","/api/v1/fed/peers").catch(()=>[]),
+      api("GET","/api/v1/admin/probe/status").catch(()=>null)
+    ]).then(r=>{PS=r[3];return r;});
     const nT=(tree||[]).reduce((a,c)=>a+(c.targets||[]).length,0);
     const rep=st&&st.report?st.report:{};
     $("#d").innerHTML=`
@@ -272,6 +291,7 @@ async function viewDash(m){
         <div class="card"><div class="body"><div style="font-size:11px;color:var(--ink2)">Archive locale</div>
           <div style="font-size:22px;font-weight:600">${gb(rep.local_bytes||0)}</div></div></div>
       </div>
+      ${probeCard(PS)}
       <div class="card"><h3>Stockage</h3><div class="body">
         <table><tbody>
           <tr><td>Mode</td><td><span class="badge b-n">${esc(rep.mode||"—")}</span></td></tr>

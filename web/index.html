@@ -360,11 +360,11 @@ function renderDetail() {
 }
 async function paint() {
   const tg = S.target, acc = color(tg._ci), now = Math.floor(Date.now() / 1000);
-  const q = `/api/v1/series?target=${tg.id}&from=${S.from}&to=${S.to}`;
+  const q = `/api/v1/series?target=${tg.id}&from=${S.from}&to=${S.to}&points=1500`;
   const [cur, ev, nav] = await Promise.all([
     fetch(q).then(r => r.json()),
     fetch(`/api/v1/events?from=${S.from}&to=${S.to}`).then(r => r.ok ? r.json() : []).catch(() => []),
-    S.nav ? Promise.resolve(S.nav) : fetch(`/api/v1/series?target=${tg.id}&from=${now - 365 * 86400}&to=${now}`).then(r => r.json())
+    S.nav ? Promise.resolve(S.nav) : fetch(`/api/v1/series?target=${tg.id}&from=${now - 365 * 86400}&to=${now}&points=600`).then(r => r.json())
   ]);
   if (S.view !== "detail" || S.target !== tg) return;
   S.cur = cur; S.events = ev || []; S.nav = nav;

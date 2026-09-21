@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -103,16 +107,69 @@ func (s *Store) featured() map[int64]bool {
 	return out
 }
 
+type ovRow struct {
+	b, sent, lost int64
+	sk            *Sketch
+}
+
+// scanRows lit une table d'agregats pour toutes les cibles en une seule
+// requete, sur la connexion de lecture.
+func (s *Store) scanRows(table string, probeID, from int64) (map[int64][]ovRow, error) {
+	rows, err := s.mx.Query(`SELECT target_id,bucket,sent,lost,sketch FROM `+table+
+		` WHERE probe_id=? AND bucket>=? ORDER BY target_id,bucket`, probeID, from)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64][]ovRow{}
+	for rows.Next() {
+		var id int64
+		var r ovRow
+		var blob []byte
+		if err := rows.Scan(&id, &r.b, &r.sent, &r.lost, &blob); err != nil {
+			return nil, err
+		}
+		r.sk = UnmarshalSketch(blob)
+		out[id] = append(out[id], r)
+	}
+	return out, rows.Err()
+}
+
+func rowMed(r ovRow) float64 {
+	if r.sk.Count() == 0 {
+		return 0
+	}
+	return r.sk.Quantile(0.5) / 1000
+}
+
+// Overview calcule l'etat de toutes les cibles publiques. Trois requetes
+// en tout : reference 7 jours (roll_1h), 24 h par tranches de 5 min
+// (roll_5m) et 2 h a la minute (roll_1m) pour l'etat courant et le
+// debut du defaut.
 func (s *Store) Overview(probeID int64, now int64) (*Overview, error) {
 	cats, err := s.Tree(true)
 	if err != nil {
 		return nil, err
 	}
 	feat := s.featured()
+	baseRows, err := s.scanRows("roll_1h", probeID, now-7*86400)
+	if err != nil {
+		return nil, err
+	}
+	dayRows, err := s.scanRows("roll_5m", probeID, now-86400)
+	if err != nil {
+		return nil, err
+	}
+	minRows, err := s.scanRows("roll_1m", probeID, now-7200)
+	if err != nil {
+		return nil, err
+	}
+
 	out := &Overview{GeneratedAt: now, Categories: []*OverviewCategory{},
 		Counts: map[string]int{"targets": 0, "ok": 0, "warn": 0, "crit": 0, "nodata": 0}}
 	dayStart := now - 86400
-	slot0 := dayStart - dayStart%1800 + 1800 // 48 demi-heures alignees
+	slot0 := dayStart - dayStart%1800 + 1800
+	sparkStart := now - 3*3600
 
 	for _, c := range cats {
 		oc := &OverviewCategory{ID: c.ID, Slug: c.Slug, MenuFR: c.MenuFR, MenuEN: c.MenuEN,
@@ -124,56 +181,27 @@ func (s *Store) Overview(probeID int64, now int64) (*Overview, error) {
 			ot := &OverviewTarget{ID: t.ID, Title: t.Title, Host: t.Host, Proto: t.Proto,
 				Interval: t.IntervalS, Featured: feat[t.ID], Hours: make([]string, 48)}
 
-			// Reference : mediane sur 7 jours (roll_1h), a defaut 24 h.
-			var base ovAgg
-			if rows, err := s.mx.Query(`SELECT sent,lost,sketch FROM roll_1h
-				 WHERE target_id=? AND probe_id=? AND bucket>=?`, t.ID, probeID, now-7*86400); err == nil {
-				for rows.Next() {
-					var sent, lost int64
-					var blob []byte
-					if rows.Scan(&sent, &lost, &blob) == nil {
-						base.add(sent, lost, UnmarshalSketch(blob))
-					}
-				}
-				rows.Close()
+			var base, day, cur ovAgg
+			for _, r := range baseRows[t.ID] {
+				base.add(r.sent, r.lost, r.sk)
 			}
-
-			type minute struct {
-				b, sent, lost int64
-				sk            *Sketch
-			}
-			var mins []minute
-			rows, err := s.mx.Query(`SELECT bucket,sent,lost,sketch FROM roll_1m
-				 WHERE target_id=? AND probe_id=? AND bucket>=? ORDER BY bucket`, t.ID, probeID, dayStart)
-			if err != nil {
-				return nil, err
-			}
-			for rows.Next() {
-				var m minute
-				var blob []byte
-				if rows.Scan(&m.b, &m.sent, &m.lost, &blob) == nil {
-					m.sk = UnmarshalSketch(blob)
-					mins = append(mins, m)
-				}
-			}
-			rows.Close()
-
-			var day, cur ovAgg
 			slots := make([]ovAgg, 48)
 			sparks := make([]ovAgg, 36)
-			sparkStart := now - 3*3600
-			for _, m := range mins {
-				day.add(m.sent, m.lost, m.sk)
-				if m.b >= now-900 {
-					cur.add(m.sent, m.lost, m.sk)
+			for _, r := range dayRows[t.ID] {
+				day.add(r.sent, r.lost, r.sk)
+				if i := int((r.b - slot0 + 1800) / 1800); i >= 0 && i < 48 {
+					slots[i].add(r.sent, r.lost, r.sk)
 				}
-				if i := int((m.b - slot0 + 1800) / 1800); i >= 0 && i < 48 {
-					slots[i].add(m.sent, m.lost, m.sk)
-				}
-				if m.b >= sparkStart {
-					if i := int((m.b - sparkStart) / 300); i >= 0 && i < 36 {
-						sparks[i].add(m.sent, m.lost, m.sk)
+				if r.b >= sparkStart {
+					if i := int((r.b - sparkStart) / 300); i >= 0 && i < 36 {
+						sparks[i].add(r.sent, r.lost, r.sk)
 					}
+				}
+			}
+			mins := minRows[t.ID]
+			for _, r := range mins {
+				if r.b >= now-900 {
+					cur.add(r.sent, r.lost, r.sk)
 				}
 			}
 			baseMed := base.q(0.5)
@@ -212,25 +240,30 @@ func (s *Store) Overview(probeID int64, now int64) (*Overview, error) {
 				ot.Spark.P25 = append(ot.Spark.P25, sparks[i].q(0.25))
 				ot.Spark.P75 = append(ot.Spark.P75, sparks[i].q(0.75))
 			}
-			// Debut du defaut : on remonte minute par minute jusqu'a
-			// trouver deux minutes conformes consecutives.
+			// Debut du defaut : a la minute sur 2 h, puis par tranches de
+			// 5 min si le defaut est plus ancien.
 			if ot.Status == "warn" || ot.Status == "crit" {
-				okRun := 0
-				since := now
-				for i := len(mins) - 1; i >= 0; i-- {
-					mm := 0.0
-					if mins[i].sk.Count() > 0 {
-						mm = mins[i].sk.Quantile(0.5) / 1000
-					}
-					if classify(mins[i].sent, mins[i].lost, mm, bm) == "ok" {
-						okRun++
-						if okRun >= 2 {
-							break
+				since, okRun, open := now, 0, true
+				for i := len(mins) - 1; i >= 0 && open; i-- {
+					if classify(mins[i].sent, mins[i].lost, rowMed(mins[i]), bm) == "ok" {
+						if okRun++; okRun >= 2 {
+							open = false
 						}
 						continue
 					}
-					okRun = 0
-					since = mins[i].b
+					okRun, since = 0, mins[i].b
+				}
+				if open {
+					rows := dayRows[t.ID]
+					for i := len(rows) - 1; i >= 0; i-- {
+						if rows[i].b >= since {
+							continue
+						}
+						if classify(rows[i].sent, rows[i].lost, rowMed(rows[i]), bm) == "ok" {
+							break
+						}
+						since = rows[i].b
+					}
 				}
 				ot.Since = &since
 			}
@@ -247,39 +280,83 @@ func (s *Store) Overview(probeID int64, now int64) (*Overview, error) {
 
 // ------------------------------------------------------------------ routes
 
+// La vue d'ensemble est calculee en tache de fond et servie depuis la
+// memoire, deja compressee : une requete ne declenche jamais le calcul
+// (sauf la toute premiere apres le demarrage).
 type overviewCache struct {
-	mu   sync.Mutex
-	at   time.Time
-	data []byte
+	mu     sync.Mutex // serialise les calculs
+	data   atomic.Pointer[[]byte]
+	gz     atomic.Pointer[[]byte]
+	probe  int64
+	store  *Store
+	builds atomic.Int64
+	lastMs atomic.Int64
 }
 
 var ovCache overviewCache
 
+func (c *overviewCache) build() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	start := time.Now()
+	ov, err := c.store.Overview(c.probe, time.Now().Unix())
+	if err != nil {
+		return err
+	}
+	b, err := json.Marshal(ov)
+	if err != nil {
+		return err
+	}
+	var zb bytes.Buffer
+	zw, _ := gzip.NewWriterLevel(&zb, gzip.BestSpeed)
+	zw.Write(b)
+	zw.Close()
+	z := zb.Bytes()
+	c.data.Store(&b)
+	c.gz.Store(&z)
+	c.builds.Add(1)
+	c.lastMs.Store(time.Since(start).Milliseconds())
+	return nil
+}
+
+func (c *overviewCache) Loop(stop <-chan struct{}) {
+	t := time.NewTicker(30 * time.Second)
+	defer t.Stop()
+	for {
+		if err := c.build(); err != nil {
+			log.Printf("vue d'ensemble : %v", err)
+		}
+		select {
+		case <-stop:
+			return
+		case <-t.C:
+		}
+	}
+}
+
 func (a *API) OverviewRoutes(mux *http.ServeMux) {
+	ovCache.store, ovCache.probe = a.store, a.probeID
 	mux.HandleFunc("GET /api/v1/overview", a.overview)
 	mux.HandleFunc("GET /api/v1/admin/featured", a.need(RoleViewer, a.featuredGet))
 	mux.HandleFunc("PUT /api/v1/admin/featured", a.need(RoleEditor, a.featuredPut))
 }
 
 func (a *API) overview(w http.ResponseWriter, r *http.Request) {
-	ovCache.mu.Lock()
-	defer ovCache.mu.Unlock()
-	if ovCache.data == nil || time.Since(ovCache.at) > 20*time.Second {
-		ov, err := a.store.Overview(a.probeID, time.Now().Unix())
-		if err != nil {
+	if ovCache.data.Load() == nil {
+		if err := ovCache.build(); err != nil {
 			writeErr(w, 500, err.Error())
 			return
 		}
-		b, err := json.Marshal(ov)
-		if err != nil {
-			writeErr(w, 500, err.Error())
-			return
-		}
-		ovCache.data, ovCache.at = b, time.Now()
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=20")
-	w.Write(ovCache.data)
+	w.Header().Set("Cache-Control", "public, max-age=15")
+	w.Header().Set("Vary", "Accept-Encoding")
+	if acceptsGzip(r) {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Write(*ovCache.gz.Load())
+		return
+	}
+	w.Write(*ovCache.data.Load())
 }
 
 // featuredPut fixe la liste des cibles critiques, affichees en tete de
@@ -292,9 +369,7 @@ func (a *API) featuredPut(w http.ResponseWriter, r *http.Request, u *User) {
 	}
 	b, _ := json.Marshal(ids)
 	a.store.SetSetting("featured_targets", string(b))
-	ovCache.mu.Lock()
-	ovCache.data = nil
-	ovCache.mu.Unlock()
+	go ovCache.build()
 	a.store.Audit(u, clientIP(r), "featured_update", "targets", "")
 	writeJSON(w, ids)
 }

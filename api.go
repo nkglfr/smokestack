@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -12,15 +13,17 @@ import (
 )
 
 type API struct {
-	store   *Store
-	archive *Archive
-	fed     *Federation
-	token   string
-	probeID int64
-	limiter *attemptLimiter
-	i18n    *I18n
-	asn     *ASNService
-	upd     *Updater
+	store     *Store
+	archive   *Archive
+	fed       *Federation
+	token     string
+	probeID   int64
+	limiter   *attemptLimiter
+	i18n      *I18n
+	asn       *ASNService
+	upd       *Updater
+	writer    *Writer
+	probeMode string
 
 	setupMu   sync.Mutex
 	setupCode string
@@ -122,14 +125,44 @@ func parseTime(s string, def int64) int64 {
 	return def
 }
 
+// L'arbre public change rarement : il est servi depuis la memoire et
+// recalcule seulement apres une modification de cible ou de categorie
+// (ou au plus tard toutes les 60 s).
+var treeCache struct {
+	sync.Mutex
+	gen  int64
+	at   time.Time
+	data []byte
+}
+
 func (a *API) tree(w http.ResponseWriter, r *http.Request) {
 	publicOnly := r.Header.Get("Authorization") == ""
-	cats, err := a.store.Tree(publicOnly)
-	if err != nil {
-		writeErr(w, 500, err.Error())
+	if !publicOnly {
+		cats, err := a.store.Tree(false)
+		if err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		writeJSON(w, cats)
 		return
 	}
-	writeJSON(w, cats)
+	gen := a.store.gen.Load()
+	treeCache.Lock()
+	if treeCache.data == nil || treeCache.gen != gen || time.Since(treeCache.at) > time.Minute {
+		cats, err := a.store.Tree(true)
+		if err != nil {
+			treeCache.Unlock()
+			writeErr(w, 500, err.Error())
+			return
+		}
+		b, _ := json.Marshal(cats)
+		treeCache.data, treeCache.gen, treeCache.at = b, gen, time.Now()
+	}
+	b := treeCache.data
+	treeCache.Unlock()
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=30")
+	w.Write(b)
 }
 
 func (a *API) series(w http.ResponseWriter, r *http.Request) {
@@ -153,15 +186,43 @@ func (a *API) series(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s, err := a.store.Series(targetID, probeID, from, to)
-	if err != nil {
-		writeErr(w, 500, err.Error())
-		return
-	}
-	if t, err := a.store.TargetByID(targetID); err == nil && !t.Public &&
-		r.Header.Get("Authorization") == "" {
+	// La visibilite de la cible est verifiee avant toute lecture ou
+	// reponse depuis le cache.
+	if t, err := a.store.TargetByID(targetID); err != nil ||
+		(!t.Public && r.Header.Get("Authorization") == "") {
 		writeErr(w, 404, "cible introuvable")
 		return
+	}
+	points, _ := strconv.Atoi(q.Get("points"))
+	if points < 0 || points > 5000 {
+		points = 0
+	}
+	// Arrondi de la fenetre au pas de la resolution : deux visiteurs qui
+	// regardent le meme graphe a quelques secondes d'ecart partagent la
+	// meme entree de cache.
+	_, step := pickTable(to - from)
+	quant := step
+	if quant < 30 {
+		quant = 30
+	}
+	from, to = from-from%quant, to-to%quant+quant
+	key := fmt.Sprintf("%d|%d|%d|%d|%d", targetID, probeID, from, to, points)
+	s := seriesCache.get(key)
+	if s == nil {
+		select {
+		case seriesSlots <- struct{}{}:
+		case <-r.Context().Done():
+			return
+		}
+		var err error
+		s, err = a.store.Series(targetID, probeID, from, to, points)
+		<-seriesSlots
+		if err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		ttl := time.Duration(min(max(quant, 15), 300)) * time.Second
+		seriesCache.put(key, s, ttl)
 	}
 	// Le cache suit la granularite : inutile de revalider plus souvent
 	// que le pas de la serie.
@@ -299,20 +360,18 @@ func (a *API) ingest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "sonde inconnue")
 		return
 	}
-	if hash != "" && hash != tok {
+	// Une sonde sans jeton ne peut rien envoyer par HTTP : sans cette
+	// regle, n'importe qui pourrait injecter de fausses mesures dans les
+	// graphes publics. La sonde locale passe par le socket Unix.
+	if hash == "" || tok == "" ||
+		subtle.ConstantTimeCompare([]byte(hashToken(tok)), []byte(hash)) != 1 {
 		writeErr(w, 401, "jeton de sonde invalide")
 		return
 	}
 	n := 0
 	for _, m := range body.Batch {
 		m.ProbeID = id
-		if err := a.store.Record(m); err != nil {
-			log.Printf("ingest: %v", err)
-			continue
-		}
-		if a.archive != nil {
-			a.archive.Append(m, "")
-		}
+		a.writer.Submit(m, "")
 		n++
 	}
 	a.store.TouchProbe(id)
@@ -416,4 +475,17 @@ func (a *API) categoriesPost(w http.ResponseWriter, r *http.Request) {
 	}
 	c.ID = id
 	writeJSON(w, c)
+}
+
+// probeStatus expose l'etat de la chaine de mesure : file d'ecriture,
+// mesures ecartees, duree du calcul de la vue d'ensemble.
+func (a *API) probeStatus(w http.ResponseWriter, r *http.Request, u *User) {
+	var seen *int64
+	a.store.cfg.QueryRow(`SELECT last_seen_at FROM probes WHERE id=?`, a.probeID).Scan(&seen)
+	writeJSON(w, map[string]any{
+		"mode": a.probeMode, "last_seen_at": seen,
+		"writer":            a.writer.Stats(),
+		"overview_build_ms": ovCache.lastMs.Load(),
+		"overview_builds":   ovCache.builds.Load(),
+	})
 }
