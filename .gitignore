@@ -1,0 +1,11 @@
+# build output
+/dist/
+/smokestack
+# never commit the private signing key
+release.key
+*.key
+# local data
+*.db
+*.db-wal
+*.db-shm
+/data/

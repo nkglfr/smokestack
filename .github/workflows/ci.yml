@@ -1,0 +1,40 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Resolve dependencies
+        run: test -f go.sum || go mod tidy
+      - name: Vet and test
+        run: make test
+      - name: Build and self-test
+        run: |
+          make build
+          ./dist/smokestack selftest
+      - name: Check front-end scripts
+        run: |
+          for f in web/*.js; do node --check "$f"; done
+          for f in web/*.html; do
+            python3 - "$f" <<'PY'
+          import re, sys, subprocess, tempfile
+          html = open(sys.argv[1]).read()
+          for i, js in enumerate(re.findall(r"<script>(.*?)</script>", html, re.S)):
+              with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as t:
+                  t.write(js)
+              subprocess.run(["node", "--check", t.name], check=True)
+          PY
+          done
+      - name: Check the installer
+        run: sh -n install.sh
