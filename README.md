@@ -43,7 +43,8 @@ make build
 ## Ligne de commande
 
 ```
-smokestack [-config FICHIER]                 lance le service
+smokestack [-config FICHIER]                 lance le service web
+smokestack probe [-config FICHIER]           lance la sonde isolée
 smokestack version | selftest
 smokestack user add -email E [-role master]  crée un compte (mot de passe généré)
 smokestack update [-force] PAQUET.zip        installe une version
@@ -88,6 +89,31 @@ instances en mise à jour automatique l'installent dans les heures qui suivent.
 Les adresses du site officiel et du dépôt sont compilées dans le binaire
 (`make dist OFFICIAL_URL=... REPO_URL=...`) ; la publication refuse de se
 faire tant qu'elles contiennent `CHANGE-ME`.
+
+## Isolation de la sonde
+
+Par défaut, la sonde tourne dans **son propre processus** (`smokestack
+probe`, service `smokestack-probe`), seul autorisé à ouvrir un socket brut
+et prioritaire sur le CPU. Le service web, exposé à Internet, n'a plus ce
+droit. Les deux dialoguent par un socket Unix.
+
+- Horodatage des réponses par le noyau (`SO_TIMESTAMPNS`, `TCP_INFO`) : la
+  charge du processus ne s'ajoute jamais au temps de réponse mesuré.
+- La sonde ne touche pas la base : cibles en mémoire, mesures dans une file
+  non bloquante, un écrivain unique par lots sur une connexion dédiée.
+- Accueil précalculé en tâche de fond, arbre et séries en cache, gzip,
+  limite de 20 req/s par IP, lectures lourdes mises en file.
+
+Banc sur 1 cœur saturé par 8 clients web, cibles en boucle locale (vraie
+latence ≈ 0,03 ms) :
+
+| Sous charge web | Avant | Sonde isolée |
+|---|---|---|
+| Médiane mesurée | 1,708 ms | **0,016 ms** |
+| Pic mesuré | 50,5 ms | **0,041 ms** |
+| API, p95 | 9–12 ms | 9–14 ms |
+
+Détails et mode intégré (`--embedded`) : [DEPLOY.md, section 10](DEPLOY.md#10-probe-isolation-and-performance).
 
 ## Ce qui tourne
 

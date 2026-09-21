@@ -5,6 +5,7 @@
 #   sudo ./install.sh --package smokestack-1.2.0-linux-amd64.zip
 #   sudo ./install.sh --package ./smokestack           # a binary you built yourself
 #   sudo ./install.sh --admin-email noc@example.net --listen 0.0.0.0:8080
+#   sudo ./install.sh --embedded          # probe inside the web service (small servers)
 #   sudo ./install.sh --uninstall [--purge]
 #
 # Re-running the script on an installed server upgrades it in place.
@@ -18,9 +19,10 @@ ETC=/etc/smokestack
 DATA=/var/lib/smokestack
 USER_NAME=smokestack
 UNIT=/etc/systemd/system/smokestack.service
+PROBE_UNIT=/etc/systemd/system/smokestack-probe.service
 
 PACKAGE=""; ADMIN_EMAIL=""; LISTEN="127.0.0.1:8080"; PUBLIC_URL=""
-NO_SERVICE=0; UNINSTALL=0; PURGE=0
+NO_SERVICE=0; UNINSTALL=0; PURGE=0; EMBEDDED=0
 
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m  %s\n' "$*" >&2; }
@@ -33,6 +35,7 @@ while [ $# -gt 0 ]; do
     --listen)      LISTEN="$2"; shift 2 ;;
     --public-url)  PUBLIC_URL="$2"; shift 2 ;;
     --no-service)  NO_SERVICE=1; shift ;;
+    --embedded)    EMBEDDED=1; shift ;;
     --uninstall)   UNINSTALL=1; shift ;;
     --purge)       PURGE=1; shift ;;
     -h|--help)     sed -n '2,12p' "$0"; exit 0 ;;
@@ -46,8 +49,8 @@ done
 # ------------------------------------------------------------ uninstall
 if [ "$UNINSTALL" -eq 1 ]; then
   say "Stopping and removing the service"
-  systemctl disable --now smokestack 2>/dev/null || true
-  rm -f "$UNIT" /usr/local/bin/smokestack
+  systemctl disable --now smokestack-probe smokestack 2>/dev/null || true
+  rm -f "$UNIT" "$PROBE_UNIT" /usr/local/bin/smokestack
   systemctl daemon-reload 2>/dev/null || true
   rm -rf "$ROOT"
   if [ "$PURGE" -eq 1 ]; then
@@ -151,7 +154,7 @@ if [ ! -f "$ETC/config.json" ]; then
 {
   "listen": "$LISTEN",
   "data_dir": "$DATA",
-  "probe": { "enabled": true, "slug": "$HOST", "name": "$HOST", "location": "" },
+  "probe": { "enabled": true, "mode": "$( [ $EMBEDDED -eq 1 ] && echo embedded || echo external )", "slug": "$HOST", "name": "$HOST", "location": "" },
   "federation": { "enabled": false, "base_url": "$PUBLIC_URL", "anchors": [] },
   "update": {
     "enabled": true,
@@ -184,9 +187,33 @@ chmod 0755 /usr/local/bin/smokestack
 # --------------------------------------------------------------- systemd
 if [ "$NO_SERVICE" -eq 0 ]; then
   command -v systemctl >/dev/null 2>&1 || die "systemd not found (use --no-service and run the binary yourself)"
+  # Probe mode, read from the configuration (an existing install keeps its choice).
+  MODE=embedded
+  grep -q '"mode": *"external"' "$ETC/config.json" && MODE=external
+
+  HARDEN="NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+SystemCallArchitectures=native"
+
+  if [ "$MODE" = external ]; then
+    # Web service: no raw socket at all, lower CPU priority.
+    WEB_CAPS="CAP_NET_BIND_SERVICE"; WEB_PRIO="Nice=5
+CPUWeight=50"
+  else
+    WEB_CAPS="CAP_NET_RAW CAP_NET_BIND_SERVICE"; WEB_PRIO=""
+  fi
+
   cat > "$UNIT" <<EOF
 [Unit]
-Description=smokestack latency monitoring
+Description=smokestack latency monitoring (web service)
 Documentation=https://github.com/CHANGE-ME/smokestack
 After=network-online.target
 Wants=network-online.target
@@ -198,30 +225,57 @@ Group=$USER_NAME
 ExecStart=$ROOT/current/smokestack -config $ETC/config.json
 Restart=always
 RestartSec=3
-# ICMP probes need raw sockets; nothing else is granted.
-AmbientCapabilities=CAP_NET_RAW CAP_NET_BIND_SERVICE
-CapabilityBoundingSet=CAP_NET_RAW CAP_NET_BIND_SERVICE
-NoNewPrivileges=yes
-ProtectSystem=strict
+AmbientCapabilities=$WEB_CAPS
+CapabilityBoundingSet=$WEB_CAPS
+$WEB_PRIO
+$HARDEN
 ReadWritePaths=$DATA $ROOT
-ProtectHome=yes
-PrivateTmp=yes
-PrivateDevices=yes
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectControlGroups=yes
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
-RestrictNamespaces=yes
-LockPersonality=yes
-SystemCallArchitectures=native
 LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+  if [ "$MODE" = external ]; then
+    # Probe: its own process, the only one allowed raw sockets, and
+    # favoured by the CPU scheduler so web load cannot delay a measurement.
+    cat > "$PROBE_UNIT" <<EOF
+[Unit]
+Description=smokestack latency monitoring (probe)
+After=network-online.target smokestack.service
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+User=$USER_NAME
+Group=$USER_NAME
+ExecStart=$ROOT/current/smokestack probe -config $ETC/config.json
+Restart=always
+RestartSec=2
+AmbientCapabilities=CAP_NET_RAW
+CapabilityBoundingSet=CAP_NET_RAW
+Nice=-5
+CPUWeight=1000
+$HARDEN
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  else
+    systemctl disable --now smokestack-probe >/dev/null 2>&1 || true
+    rm -f "$PROBE_UNIT"
+  fi
+
   systemctl daemon-reload
   systemctl enable smokestack >/dev/null 2>&1
   systemctl restart smokestack
+  if [ "$MODE" = external ]; then
+    systemctl enable smokestack-probe >/dev/null 2>&1
+    systemctl restart smokestack-probe
+  fi
 
   say "Waiting for the service"
   PORT=${LISTEN##*:}; HOSTPART=${LISTEN%:*}
@@ -256,5 +310,5 @@ if [ -n "$CREDS" ]; then
   echo "$CREDS" | sed 's/^/    /'
   echo "    -> write this password down now, it is not stored in clear anywhere"
 fi
-echo "    logs           journalctl -u smokestack -f"
+echo "    logs           journalctl -u smokestack -u smokestack-probe -f"
 echo "    update         sudo smokestack update smokestack-X.Y.Z-linux-$ARCH.zip   (or from the back-office)"

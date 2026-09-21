@@ -14,6 +14,7 @@ probes a few hundred targets.
 5. [Updating](#5-updating)
 6. [Publishing your own releases](#6-publishing-your-own-releases)
 7. [Backups](#7-backups)
+10. [Probe isolation and performance](#10-probe-isolation-and-performance)
 8. [Troubleshooting](#8-troubleshooting)
 9. [Uninstalling](#9-uninstalling)
 
@@ -57,7 +58,7 @@ address and the **master account password — write it down, it is shown once**.
 | Creates a system user | `smokestack`, no shell, no home |
 | Lays out the files | `/opt/smokestack/releases/<version>/` + `current` symlink |
 | Writes the configuration | `/etc/smokestack/config.json`, **only if it does not exist yet** |
-| Installs a systemd unit | Hardened: read-only system, only `CAP_NET_RAW` granted |
+| Installs two systemd units | `smokestack` (web) and `smokestack-probe` (probe), hardened, see [section 10](#10-probe-isolation-and-performance) |
 | Creates the master account | And prints its password |
 | Adds a `smokestack` command | Always runs as the service user, even under `sudo` |
 
@@ -69,6 +70,7 @@ Options:
 | `--admin-email ADDR` | `admin@<hostname>` | Master account login |
 | `--listen ADDR:PORT` | `127.0.0.1:8080` | Keep it on localhost behind a reverse proxy |
 | `--public-url URL` | — | Public address, used by federation |
+| `--embedded` | — | Run the probe inside the web service (one process, for very small servers) |
 | `--no-service` | — | Skip systemd (containers, custom supervisors) |
 
 Running the installer again on an installed server **upgrades it in place**
@@ -246,7 +248,9 @@ the following release.
 
 | Symptom | Check |
 |---|---|
-| Service does not start | `journalctl -u smokestack -n 50` |
+| Service does not start | `journalctl -u smokestack -u smokestack-probe -n 50` |
+| Probe log says `la sonde a besoin de CAP_NET_RAW` | The probe unit was edited: `AmbientCapabilities=CAP_NET_RAW` is required |
+| Is the probe healthy? | Back-office dashboard, *Chaîne de mesure* card: last measurement age, dropped measurements |
 | All targets at 100 % loss | Outbound ICMP filtered? `ping -c3 1.1.1.1` from the host. The log says `sonde ICMP indisponible` if the raw socket was refused. |
 | "In-place updates unavailable" | The binary must run from `/opt/smokestack/releases/<v>/`: re-run the installer |
 | Package rejected: unknown signature | The signing key is not in `release.pub` nor `/etc/smokestack/release-keys.pub` |
@@ -260,3 +264,51 @@ the following release.
 sudo sh install.sh --uninstall           # keeps /etc/smokestack and /var/lib/smokestack
 sudo sh install.sh --uninstall --purge   # removes everything, including measurements
 ```
+
+## 10. Probe isolation and performance
+
+A latency probe must measure the network, not the load of the server it
+runs on. smokestack runs the probe as **a separate process** by default:
+
+| | `smokestack` (web service) | `smokestack-probe` (probe) |
+|---|---|---|
+| Role | Web interface, API, database, archive | Sends probes, timestamps replies |
+| Raw sockets | **no** (`CAP_NET_BIND_SERVICE` only) | `CAP_NET_RAW` only |
+| CPU priority | `Nice=5`, `CPUWeight=50` | `Nice=-5`, `CPUWeight=1000` |
+| Talks to | the database | the web service, over a Unix socket |
+
+Design points:
+
+- **Kernel timestamps.** ICMP replies are timestamped by the kernel on
+  arrival (`SO_TIMESTAMPNS`); TCP handshakes are read from `TCP_INFO`. The
+  process's own scheduling delay never adds to a measured round-trip time.
+- **The probe never waits.** It reads targets from memory and hands results
+  to a non-blocking queue; a single writer stores them in batches on a
+  dedicated database connection, separate from the pool serving web reads.
+- **Resilient.** If the web service restarts (update, crash), the probe keeps
+  measuring and buffers results in memory (up to ~1 h for 1,000 targets).
+  After an update, the probe restarts itself on the new version.
+- **Fast pages.** The home page overview is computed in the background every
+  30 s and served pre-compressed; the target tree and time series are cached;
+  responses are gzip-compressed; the API is rate-limited to 20 requests/s per
+  client IP (bursts of 80); heavy reads are queued rather than piling up.
+
+### Measured effect
+
+Benchmark on **one CPU core**, 300 targets with history, 8 web clients
+saturating the CPU, and 5 loopback targets whose true round-trip time is
+about 0.03 ms (any excess comes from the software, not the network):
+
+| Loopback RTT under web load | Before | Embedded probe | Isolated probe (default) |
+|---|---|---|---|
+| Median | 1.708 ms | 0.017–0.024 ms | **0.016 ms** |
+| p95 | 2.467 ms | 0.15–0.17 ms | **0.020 ms** |
+| Worst | 50.5 ms | 3–7 ms | **0.041 ms** |
+| API p95 | 9–12 ms | 10–15 ms | **9–14 ms** |
+
+The embedded mode (`--embedded`) is still far better than before, but keeps
+millisecond-level outliers under heavy load because the send time is taken
+in user space. Prefer the default isolated mode for public measurements.
+
+To switch an existing installation, set `"mode": "external"` in the
+`probe` section of `/etc/smokestack/config.json` and re-run the installer.
