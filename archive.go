@@ -159,7 +159,7 @@ func (a *Archive) sealLocked() {
 	}
 	s3Key := fmt.Sprintf("raw/probe=%s/date=%s/h=%s.ndjson.gz",
 		a.probeSlug, key[:10], key[11:])
-	res, err := a.store.mx.Exec(
+	res, err := a.store.mxw.Exec(
 		`INSERT INTO raw_chunks(probe_slug,ts_min,ts_max,location,local_path,
 		                        s3_key,bytes,rows,sealed_at)
 		 VALUES(?,?,?,'local',?,?,?,?,?)`,
@@ -170,7 +170,7 @@ func (a *Archive) sealLocked() {
 	}
 	id, _ := res.LastInsertId()
 	if a.cfg.s3Enabled() {
-		a.store.mx.Exec(
+		a.store.mxw.Exec(
 			`INSERT INTO upload_queue(chunk_id,next_try_at) VALUES(?,?)`,
 			id, time.Now().Unix())
 	}
@@ -221,19 +221,19 @@ func (a *Archive) drainUploads() {
 	for _, j := range jobs {
 		body, err := os.ReadFile(j.path)
 		if err != nil {
-			a.store.mx.Exec(`DELETE FROM upload_queue WHERE chunk_id=?`, j.id)
+			a.store.mxw.Exec(`DELETE FROM upload_queue WHERE chunk_id=?`, j.id)
 			continue
 		}
 		if err := s3Put(cfg.S3, j.key, body); err != nil {
 			backoff := int64(30) << minInt(j.attempts, 6)
-			a.store.mx.Exec(
+			a.store.mxw.Exec(
 				`UPDATE upload_queue SET attempts=attempts+1,next_try_at=?,last_error=?
 				  WHERE chunk_id=?`, time.Now().Unix()+backoff, err.Error(), j.id)
 			log.Printf("upload s3 %s: %v", j.key, err)
 			continue
 		}
-		a.store.mx.Exec(`UPDATE raw_chunks SET location='both' WHERE id=?`, j.id)
-		a.store.mx.Exec(`DELETE FROM upload_queue WHERE chunk_id=?`, j.id)
+		a.store.mxw.Exec(`UPDATE raw_chunks SET location='both' WHERE id=?`, j.id)
+		a.store.mxw.Exec(`DELETE FROM upload_queue WHERE chunk_id=?`, j.id)
 	}
 }
 
@@ -459,10 +459,10 @@ func (a *Archive) Enforce() {
 			continue
 		}
 		if c.loc == "both" {
-			a.store.mx.Exec(
+			a.store.mxw.Exec(
 				`UPDATE raw_chunks SET location='s3', local_path=NULL WHERE id=?`, c.id)
 		} else {
-			a.store.mx.Exec(`DELETE FROM raw_chunks WHERE id=?`, c.id)
+			a.store.mxw.Exec(`DELETE FROM raw_chunks WHERE id=?`, c.id)
 		}
 		local -= c.bytes
 		evicted += c.bytes
@@ -477,7 +477,7 @@ func (a *Archive) Enforce() {
 
 	if evicted > 0 {
 		day := time.Now().Unix() / 86400
-		a.store.mx.Exec(
+		a.store.mxw.Exec(
 			`INSERT INTO storage_stats(day,local_bytes,s3_bytes,evicted_bytes)
 			 VALUES(?,?,0,?)
 			 ON CONFLICT(day) DO UPDATE SET

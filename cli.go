@@ -25,6 +25,7 @@ const usage = `smokestack %s — latency monitoring
 
 Usage:
   smokestack [-config FILE] [-listen ADDR]      run the service (default)
+  smokestack probe [-config FILE]               run the isolated probe (probe.mode "external")
   smokestack version                            print version
   smokestack selftest                           check the binary is sound
   smokestack user add -email E -name N [-role master|admin|editor|viewer] [-password P]
@@ -50,6 +51,8 @@ func runCLI(args []string) bool {
 		fmt.Printf("smokestack %s %s-%s %s\n", Version, runtime.GOOS, runtime.GOARCH, BuildDate)
 	case "selftest":
 		err = cmdSelftest()
+	case "probe":
+		err = runProbe(args[1:])
 	case "user":
 		err = cmdUser(args[1:])
 	case "update":

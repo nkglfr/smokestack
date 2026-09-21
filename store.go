@@ -6,6 +6,7 @@ import (
 	"math"
 	"path/filepath"
 	"sort"
+	"sync/atomic"
 	"time"
 )
 
@@ -173,7 +174,11 @@ CREATE TABLE IF NOT EXISTS storage_stats (
 
 type Store struct {
 	cfg *sql.DB
-	mx  *sql.DB
+	mx  *sql.DB // lectures (interface, API) : pool de connexions
+	mxw *sql.DB // ecritures : une connexion dediee, jamais prise par une lecture
+
+	targetsChanged chan struct{}
+	gen            atomic.Int64 // incremente a chaque changement de cibles ou categories
 }
 
 func dsn(path string) string {
@@ -194,24 +199,35 @@ func OpenStore(dir string) (*Store, error) {
 		return nil, fmt.Errorf("schema config: %w", err)
 	}
 
+	// Deux pools sur metrics.db : l'ecriture des mesures dispose de sa
+	// propre connexion et ne fait jamais la queue derriere des lectures de
+	// l'interface. En mode WAL, les lecteurs ne bloquent pas l'ecrivain.
+	mxw, err := sql.Open("sqlite", dsn(filepath.Join(dir, "metrics.db")))
+	if err != nil {
+		return nil, err
+	}
+	mxw.SetMaxOpenConns(1)
+	for _, g := range cascade {
+		q := fmt.Sprintf(metricsSchemaTemplate, g.table, g.table, g.table)
+		if _, err := mxw.Exec(q); err != nil {
+			return nil, fmt.Errorf("schema %s: %w", g.table, err)
+		}
+	}
+	if _, err := mxw.Exec(metricsExtraSchema); err != nil {
+		return nil, fmt.Errorf("schema metrics: %w", err)
+	}
 	mx, err := sql.Open("sqlite", dsn(filepath.Join(dir, "metrics.db")))
 	if err != nil {
 		return nil, err
 	}
-	mx.SetMaxOpenConns(4)
-	for _, g := range cascade {
-		q := fmt.Sprintf(metricsSchemaTemplate, g.table, g.table, g.table)
-		if _, err := mx.Exec(q); err != nil {
-			return nil, fmt.Errorf("schema %s: %w", g.table, err)
-		}
-	}
-	if _, err := mx.Exec(metricsExtraSchema); err != nil {
-		return nil, fmt.Errorf("schema metrics: %w", err)
-	}
-	return &Store{cfg: cfg, mx: mx}, nil
+	mx.SetMaxOpenConns(8)
+	return &Store{cfg: cfg, mx: mx, mxw: mxw, targetsChanged: make(chan struct{}, 1)}, nil
 }
 
 func (s *Store) Close() {
+	if s.mxw != nil {
+		s.mxw.Close()
+	}
 	if s.cfg != nil {
 		s.cfg.Close()
 	}
@@ -382,6 +398,7 @@ func (s *Store) CreateCategory(slug, fr, en string, public bool) (int64, error) 
 	if err != nil {
 		return 0, err
 	}
+	s.notifyTargets()
 	return res.LastInsertId()
 }
 
@@ -405,12 +422,24 @@ func (s *Store) CreateTarget(t *Target) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	s.notifyTargets()
 	return res.LastInsertId()
 }
 
 func (s *Store) DeleteTarget(id int64) error {
 	_, err := s.cfg.Exec(`DELETE FROM targets WHERE id=?`, id)
+	s.notifyTargets()
 	return err
+}
+
+// notifyTargets reveille le cache des cibles de la sonde apres une
+// modification, sans jamais bloquer l'appelant.
+func (s *Store) notifyTargets() {
+	s.gen.Add(1)
+	select {
+	case s.targetsChanged <- struct{}{}:
+	default:
+	}
 }
 
 func (s *Store) Setting(key, def string) string {
@@ -457,7 +486,7 @@ func (s *Store) Record(m Measurement) error {
 		sum += v
 		sumsq += v * v
 	}
-	_, err := s.mx.Exec(
+	_, err := s.mxw.Exec(
 		`INSERT INTO samples(target_id,probe_id,bucket,sent,lost,cnt,
 		                     min_us,max_us,sum_us,sumsq_us,sketch)
 		 VALUES(?,?,?,?,?,?,?,?,?,?,?)
@@ -472,7 +501,7 @@ func (s *Store) Record(m Measurement) error {
 	if m.Sent > 0 {
 		loss = float64(m.Lost) * 100 / float64(m.Sent)
 	}
-	_, err = s.mx.Exec(
+	_, err = s.mxw.Exec(
 		`INSERT INTO live(target_id,probe_id,ts,med_us,p95_us,loss_pct)
 		 VALUES(?,?,?,?,?,?)
 		 ON CONFLICT(target_id,probe_id) DO UPDATE SET
@@ -544,7 +573,7 @@ func (s *Store) RollupRange(src, dst string, secs, from, to int64) error {
 		return err
 	}
 
-	tx, err := s.mx.Begin()
+	tx, err := s.mxw.Begin()
 	if err != nil {
 		return err
 	}
@@ -606,7 +635,7 @@ func (s *Store) Purge(now int64) error {
 		if g.keep == 0 {
 			continue
 		}
-		if _, err := s.mx.Exec(fmt.Sprintf(
+		if _, err := s.mxw.Exec(fmt.Sprintf(
 			`DELETE FROM %s WHERE bucket < ?`, g.table), now-g.keep); err != nil {
 			return err
 		}
@@ -648,9 +677,19 @@ func pickTable(span int64) (string, int64) {
 	}
 }
 
-func (s *Store) Series(targetID, probeID, from, to int64) (*Series, error) {
+type seriesRow struct {
+	bucket, sent, lost, cnt int64
+	sk                      *Sketch
+}
+
+// Series lit une serie a la resolution adaptee a la fenetre. maxPoints
+// (0 = sans limite) fusionne les points consecutifs pour alleger la
+// reponse, sans fausser les percentiles.
+func (s *Store) Series(targetID, probeID, from, to int64, maxPoints int) (*Series, error) {
 	table, step := pickTable(to - from)
-	out := &Series{TargetID: targetID, ProbeID: probeID, Table: table, StepS: step}
+	out := &Series{TargetID: targetID, ProbeID: probeID, Table: table, StepS: step,
+		T: []int64{}, Med: []*float64{}, P05: []*float64{}, P25: []*float64{},
+		P75: []*float64{}, P95: []*float64{}, Loss: []*float64{}}
 
 	rows, err := s.mx.Query(fmt.Sprintf(
 		`SELECT bucket,sent,lost,cnt,sketch FROM %s
@@ -659,38 +698,49 @@ func (s *Store) Series(targetID, probeID, from, to int64) (*Series, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
+	var list []seriesRow
 	for rows.Next() {
-		var bucket, sent, lost, cnt int64
+		var r seriesRow
 		var blob []byte
-		if err := rows.Scan(&bucket, &sent, &lost, &cnt, &blob); err != nil {
+		if err := rows.Scan(&r.bucket, &r.sent, &r.lost, &r.cnt, &blob); err != nil {
+			rows.Close()
 			return nil, err
 		}
-		sk := UnmarshalSketch(blob)
+		r.sk = UnmarshalSketch(blob)
+		list = append(list, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	list, factor := downsample(list, maxPoints)
+	if factor > 1 && out.StepS > 0 {
+		out.StepS *= int64(factor)
+	}
+	for _, r := range list {
 		loss := 0.0
-		if sent > 0 {
-			loss = float64(lost) * 100 / float64(sent)
+		if r.sent > 0 {
+			loss = float64(r.lost) * 100 / float64(r.sent)
 		}
-		out.T = append(out.T, bucket)
-		if cnt == 0 {
+		out.T = append(out.T, r.bucket)
+		if r.cnt == 0 || r.sk.Count() == 0 {
 			// JSON n'a pas de NaN : une valeur absente est un null,
-			// ce que le traceur cote client interprete comme un trou.
+			// que le traceur cote client dessine comme un trou.
 			out.Med = append(out.Med, nil)
 			out.P05 = append(out.P05, nil)
 			out.P25 = append(out.P25, nil)
 			out.P75 = append(out.P75, nil)
 			out.P95 = append(out.P95, nil)
 		} else {
-			out.Med = append(out.Med, ptr(sk.Quantile(0.50)/1000))
-			out.P05 = append(out.P05, ptr(sk.Quantile(0.05)/1000))
-			out.P25 = append(out.P25, ptr(sk.Quantile(0.25)/1000))
-			out.P75 = append(out.P75, ptr(sk.Quantile(0.75)/1000))
-			out.P95 = append(out.P95, ptr(sk.Quantile(0.95)/1000))
+			out.Med = append(out.Med, ptr(r.sk.Quantile(0.50)/1000))
+			out.P05 = append(out.P05, ptr(r.sk.Quantile(0.05)/1000))
+			out.P25 = append(out.P25, ptr(r.sk.Quantile(0.25)/1000))
+			out.P75 = append(out.P75, ptr(r.sk.Quantile(0.75)/1000))
+			out.P95 = append(out.P95, ptr(r.sk.Quantile(0.95)/1000))
 		}
 		out.Loss = append(out.Loss, ptr(loss))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 type LiveRow struct {

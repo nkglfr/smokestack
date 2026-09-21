@@ -23,7 +23,12 @@ import (
 var webFS embed.FS
 
 type ProbeConfig struct {
-	Enabled  bool   `json:"enabled"`
+	Enabled bool `json:"enabled"`
+	// Mode "embedded" : la sonde tourne dans le service (petites
+	// installations). Mode "external" : elle tourne dans son propre
+	// processus (`smokestack probe`), isolee de l'interface web.
+	Mode     string `json:"mode"`
+	Socket   string `json:"socket"`
 	Slug     string `json:"slug"`
 	Name     string `json:"name"`
 	Location string `json:"location"`
@@ -198,15 +203,28 @@ func main() {
 	go archive.Loop(stop)
 	go backgroundLoop(store, stop)
 
+	// La sonde ne parle jamais a la base : elle lit ses cibles dans un
+	// cache memoire et depose ses mesures dans la file de l'ecrivain.
+	writer := NewWriter(store, archive)
+	go writer.Loop(stop)
+	targets := NewTargetCache(store)
+	go targets.Loop(stop)
+
 	if cfg.Probe.Enabled {
-		prober, err := NewProber(store, probeID, archive)
-		if err != nil {
-			log.Printf("sonde ICMP indisponible (%v) — le collecteur tourne "+
-				"quand meme, verifiez cap_net_raw", err)
+		if cfg.Probe.Mode == "external" {
+			if err := ServeProbeSocket(probeSocketPath(cfg), targets, writer, probeID, stop); err != nil {
+				log.Fatalf("socket de la sonde : %v", err)
+			}
 		} else {
-			defer prober.Close()
-			go prober.Schedule(stop)
-			log.Printf("sonde %s active", cfg.Probe.Slug)
+			prober, err := NewProber(targets, writer, probeID)
+			if err != nil {
+				log.Printf("sonde ICMP indisponible (%v) — le collecteur tourne "+
+					"quand meme, verifiez cap_net_raw", err)
+			} else {
+				defer prober.Close()
+				go prober.Schedule(stop)
+				log.Printf("sonde %s active (integree au service)", cfg.Probe.Slug)
+			}
 		}
 	}
 
@@ -240,7 +258,12 @@ func main() {
 
 	api := &API{store: store, archive: archive, fed: fed,
 		token: cfg.AdminToken, probeID: probeID, limiter: newAttemptLimiter(),
-		i18n: i18n, asn: asnSvc, upd: upd}
+		i18n: i18n, asn: asnSvc, upd: upd, writer: writer, probeMode: cfg.Probe.Mode}
+	if !cfg.Probe.Enabled {
+		api.probeMode = "disabled"
+	} else if api.probeMode == "" {
+		api.probeMode = "embedded"
+	}
 	api.initSetupCode(cfg.DataDir)
 	mux := http.NewServeMux()
 	api.Routes(mux)
@@ -253,7 +276,7 @@ func main() {
 	api.OverviewRoutes(mux)
 
 	page := func(name string) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
+		return withAssetCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			b, err := fs.ReadFile(sub, name)
 			if err != nil {
 				http.NotFound(w, r)
@@ -263,7 +286,7 @@ func main() {
 			w.Header().Set("X-Frame-Options", "DENY")
 			w.Header().Set("Referrer-Policy", "same-origin")
 			w.Write(b)
-		}
+		}), 0).ServeHTTP
 	}
 	// Chemins lisibles pour les deux pages qui ont une adresse a
 	// communiquer : le back-office et la page d'appairage.
@@ -274,11 +297,17 @@ func main() {
 	mux.HandleFunc("GET /federation", page("federation.html"))
 	mux.HandleFunc("GET /network", page("network.html"))
 	mux.HandleFunc("GET /about", page("about.html"))
-	mux.Handle("GET /", http.FileServer(http.FS(sub)))
+	mux.HandleFunc("GET /{$}", page("index.html"))
+	mux.Handle("GET /", withAssetCache(http.FileServer(http.FS(sub)), 300))
+	mux.HandleFunc("GET /api/v1/admin/probe/status", api.need(RoleViewer, api.probeStatus))
+	go ovCache.Loop(stop)
+
+	// Compression et limite de debit devant toutes les routes.
+	handler := withRateLimit(newRateLimiter(20, 80), withGzip(mux))
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           mux,
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -302,6 +331,8 @@ func main() {
 		log.Printf("redemarrage sur la nouvelle version")
 	}
 	close(stop)
+	// L'ecrivain vide sa file avant la fermeture de la base.
+	writer.Wait(5 * time.Second)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	srv.Shutdown(ctx)
