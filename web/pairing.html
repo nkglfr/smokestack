@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cdefs%3E%3ClinearGradient id=%27g%27 x1=%270%27 y1=%270%27 x2=%271%27 y2=%271%27%3E%3Cstop offset=%270%27 stop-color=%27%232458e6%27/%3E%3Cstop offset=%271%27 stop-color=%27%230e8fa8%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27url(%23g)%27/%3E%3Cpath d=%27M7 12h18M7 20h18%27 stroke=%27white%27 stroke-width=%272.5%27 stroke-linecap=%27round%27 opacity=%27.9%27/%3E%3C/svg%3E">
+<title>Pairing — smokestack</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="hdr" id="hdr"></header>
+<main class="wrap">
+  <div class="page-head">
+    <p class="eyebrow" data-i18n="nav.pairing"></p>
+    <h1 data-i18n="pairing.title"></h1>
+    <p class="lead" id="lead"></p>
+  </div>
+  <section class="section">
+    <div class="section-h"><h2 data-i18n="pairing.this_instance"></h2></div>
+    <div class="card"><div class="card-b" id="id"></div></div>
+  </section>
+  <section class="section">
+    <div class="section-h"><h2 data-i18n="pairing.steps_title"></h2></div>
+    <div class="steps" id="steps"></div>
+  </section>
+  <section class="section"><div class="note" data-i18n="pairing.scope_note"></div></section>
+  <section class="section">
+    <div class="section-h"><h2 data-i18n="pairing.tech_title"></h2></div>
+    <p class="muted" style="font-size:13px" data-i18n="pairing.tech_body"></p>
+    <p class="muted mono" style="font-size:12px" id="ep"></p>
+  </section>
+</main>
+<footer class="ftr" id="ftr"></footer>
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script>
+let D = null;
+function render() {
+  const t = I18N.t, esc = App.esc;
+  if (!D) return;
+  document.getElementById("lead").textContent = t(D.open ? "pairing.lead_open" : "pairing.lead_closed");
+  const rows = [
+    ["pairing.org", esc(D.org)],
+    ["pairing.asn", `<a class="mono" href="/network">${esc(D.asn)}</a>`],
+    ["pairing.url", `<span class="mono">${esc(D.url)}</span>`],
+    ["pairing.fingerprint", `<span class="fp">${esc(D.fingerprint)}</span>`],
+    ["pairing.anchors", `<div class="pill-list" style="justify-content:flex-end">${(D.anchors||[]).map(a=>`<span>${esc(a)}</span>`).join("")}</div>`],
+    ["pairing.noc", D.noc_email ? `<a href="mailto:${esc(D.noc_email)}">${esc(D.noc_email)}</a>` : ""],
+    ["pairing.version", esc(D.software)],
+    ["pairing.pending", String(D.pending_requests || 0)]
+  ].filter(r => r[1]);
+  document.getElementById("id").innerHTML = `<div class="kv">` +
+    rows.map(r => `<div class="k">${esc(t(r[0]))}</div><div class="v">${r[1]}</div>`).join("") + `</div>`;
+  const n = D.min_justification || 20;
+  document.getElementById("steps").innerHTML = [1,2,3,4].map(i =>
+    `<div class="step"><h3>${esc(t("pairing.step"+i+"_t"))}</h3><p>${esc(t("pairing.step"+i, {n}))}</p></div>`).join("");
+  document.getElementById("ep").textContent = (D.url || "") + "/api/v1/fed/profile";
+}
+fetch("/api/v1/fed/pairing/info").then(r => r.json()).then(d => { D = d; })
+  .finally(() => App.boot("pairing", render));
+</script>
+</body>
+</html>

@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cdefs%3E%3ClinearGradient id=%27g%27 x1=%270%27 y1=%270%27 x2=%271%27 y2=%271%27%3E%3Cstop offset=%270%27 stop-color=%27%232458e6%27/%3E%3Cstop offset=%271%27 stop-color=%27%230e8fa8%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27url(%23g)%27/%3E%3Cpath d=%27M7 12h18M7 20h18%27 stroke=%27white%27 stroke-width=%272.5%27 stroke-linecap=%27round%27 opacity=%27.9%27/%3E%3C/svg%3E">
+<title>smokestack</title>
+<link rel="stylesheet" href="/app.css">
+<style>
+:root{--grid:#eef2f7;--axis:#8e99aa}
+@media (prefers-color-scheme:dark){:root{--grid:#1b2331;--axis:#6b778a}}
+.lbl{font-size:10px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em}
+
+/* bandeau d'état */
+.hero{border-bottom:1px solid var(--line)}
+.hero.ok{background:linear-gradient(180deg,var(--ok-soft),var(--bg))}
+.hero.crit{background:linear-gradient(180deg,var(--crit-soft),var(--bg))}
+.hero.warn{background:linear-gradient(180deg,var(--warn-soft),var(--bg))}
+.hero-in{display:grid;gap:clamp(18px,3vw,40px);padding-block:clamp(22px,3.5vw,40px);grid-template-columns:1fr}
+@media(min-width:1100px){.hero-in{grid-template-columns:minmax(0,1fr) auto;align-items:center}}
+.hero .eyebrow{display:flex;align-items:center;gap:8px}
+.hero.ok .eyebrow{color:var(--ok)}.hero.crit .eyebrow{color:var(--crit)}.hero.warn .eyebrow{color:var(--warn)}
+.hero h1{font-size:clamp(24px,3.4vw,36px);line-height:1.12;letter-spacing:-.03em;margin:0 0 8px;font-weight:700}
+.hero p.lead{margin:0;color:var(--ink-2);font-size:clamp(14px,1.3vw,16px)}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(110px,1fr));gap:10px}
+@media(max-width:620px){.kpis{grid-template-columns:repeat(2,1fr)}}
+.kpi{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:12px 14px;box-shadow:var(--shadow)}
+.kpi .k{font-size:11px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em}
+.kpi .v{font-size:24px;font-weight:700;letter-spacing:-.03em;line-height:1.25}
+.kpi .u{font-size:12px;color:var(--ink-3);font-weight:500;margin-left:3px}
+.pulse{width:9px;height:9px;border-radius:50%;background:currentColor;animation:p 2s infinite}
+@keyframes p{0%{box-shadow:0 0 0 0 color-mix(in srgb,currentColor 50%,transparent)}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@media(prefers-reduced-motion:reduce){.pulse{animation:none}}
+
+/* ossature */
+.shell{display:grid;gap:clamp(18px,2.4vw,32px);padding:clamp(18px,2.4vw,28px) 0 20px;grid-template-columns:1fr}
+@media(min-width:960px){.shell{grid-template-columns:250px minmax(0,1fr)}}
+.rail{align-self:start;min-width:0}
+@media(min-width:960px){.rail{position:sticky;top:76px;max-height:calc(100vh - 92px);overflow-y:auto;padding-right:6px}}
+.rail-tog{display:none;width:100%;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--bg-soft);font-size:13.5px;font-weight:600}
+.rail-tog .chev{margin-left:auto}
+@media(max-width:959px){.rail-tog{display:flex}.rail #rail{display:none}.rail.open #rail{display:block;margin-top:10px}.rail.open .rail-tog .chev{transform:rotate(180deg)}}
+.search{width:100%;font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--line);border-radius:10px;background:var(--bg-soft);color:var(--ink);margin-bottom:12px}
+.rg{margin-bottom:3px}
+.rgt{width:100%;display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;font-size:13px;font-weight:600;text-align:left}
+.rgt:hover{background:var(--bg-soft)}
+.chev{font-size:9px;color:var(--ink-3);width:9px;transition:transform .12s}
+.rg[data-open="false"] .chev{transform:rotate(-90deg)}
+.rg[data-open="false"] .rl{display:none}
+.cbar{width:3px;height:15px;border-radius:2px;flex:none}
+.rgn{margin-left:auto;font-size:11px;color:var(--ink-3);display:flex;align-items:center;gap:6px}
+.ri{width:100%;display:flex;align-items:center;gap:8px;padding:4px 8px 4px 28px;border-radius:8px;font-size:12.8px;color:var(--ink-2);text-align:left}
+.ri:hover{background:var(--bg-soft);color:var(--ink)}
+.ri[aria-current="true"]{background:var(--accent-soft);color:var(--accent-ink);font-weight:550}
+.ri .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ri .vl{font-size:11px;color:var(--ink-3)}
+.d-nodata{background:var(--ink-3)}
+.netcard{display:block;margin-top:16px;border:1px solid var(--line);border-radius:12px;padding:12px 13px;background:var(--bg-soft);color:inherit}
+.netcard:hover{border-color:var(--accent);text-decoration:none}
+.netcard .h{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3)}
+.netcard .n{font-weight:650;margin:3px 0 7px}
+.netcard .s{display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;color:var(--ink-2)}
+.netcard .s b{color:var(--ink);font-weight:650}
+
+details.how{border:1px solid var(--line);border-radius:12px;background:var(--bg-soft);margin-bottom:clamp(20px,2.6vw,30px)}
+details.how summary{cursor:pointer;padding:11px 15px;font-size:13px;font-weight:600;list-style:none;display:flex;align-items:center;gap:8px}
+details.how summary::-webkit-details-marker{display:none}
+details.how summary::before{content:"?";width:18px;height:18px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;font-size:11px}
+.how-b{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));padding:2px 15px 15px}
+.how-b h3{margin:0 0 3px;font-size:12.5px}.how-b p{margin:0;font-size:12.5px;color:var(--ink-2)}
+
+/* lignes */
+.rows{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
+.row{display:grid;align-items:center;gap:14px;padding:11px 14px;cursor:pointer;border-top:1px solid var(--line-2);
+  grid-template-columns:minmax(0,1.5fr) minmax(170px,1.4fr) 110px 86px 72px 100px}
+.row:first-child{border-top:none}
+.row:hover{background:var(--bg-soft)}
+.row.a-crit{box-shadow:inset 3px 0 0 var(--crit)}.row.a-warn{box-shadow:inset 3px 0 0 var(--warn)}
+.who{display:flex;gap:10px;align-items:center;min-width:0}
+.who .nm{font-weight:550;font-size:13.8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who .sb{font-size:11.5px;color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.since{font-size:11.5px;margin-top:2px}
+.num{font-size:13.5px}.num b{font-weight:650}
+.x{color:var(--warn);font-size:12px;margin-left:3px}
+.hbar{display:flex;gap:1.5px;height:22px}
+.hbar i{flex:1;border-radius:2px;background:var(--ok);opacity:.8}
+.hbar i.w{background:var(--warn);opacity:1}.hbar i.c{background:var(--crit);opacity:1}.hbar i.n{background:var(--bg-sunk);opacity:1}
+.hbar-l{display:flex;justify-content:space-between;font-size:10px;color:var(--ink-3);margin-top:2px}
+canvas{display:block;width:100%}
+@media(max-width:1180px){.row{grid-template-columns:minmax(0,1.3fr) minmax(140px,1fr) 86px 72px 96px}.row .spk{display:none}}
+@media(max-width:720px){.row{grid-template-columns:minmax(0,1fr) 80px 90px}.row .hb,.row .lc{display:none}}
+.catblock{margin-bottom:18px}
+.cath{display:flex;align-items:center;gap:10px;margin:0 0 8px}
+.cath .t{font-size:14px;font-weight:650}
+.empty{display:flex;gap:10px;align-items:center;padding:14px 16px;border-radius:12px;background:var(--ok-soft);color:var(--ok);font-size:13.5px}
+
+/* détail */
+.crumb{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-2);margin-bottom:12px}
+.dh{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.dh h1{font-size:clamp(21px,2.6vw,28px);margin:0;letter-spacing:-.025em;font-weight:700}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+.tag{background:var(--bg-sunk);color:var(--ink-2);border-radius:7px;padding:3px 9px;font-size:11.5px}
+.presets{display:flex;gap:5px;margin-top:18px;flex-wrap:wrap;align-items:center}
+.preset{padding:5px 12px;border-radius:8px;border:1px solid var(--line);color:var(--ink-2);font-size:12.5px}
+.preset[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink);font-weight:550}
+#cw{position:relative}
+.legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--ink-2);border-top:1px solid var(--line-2);margin-top:8px;padding-top:8px}
+.sw{display:inline-block;vertical-align:middle;margin-right:5px}
+.tip{position:absolute;pointer-events:none;background:var(--bg);border:1px solid var(--line);border-radius:9px;padding:7px 10px;font-size:11.5px;line-height:1.6;box-shadow:0 6px 20px rgba(0,0,0,.12);display:none;white-space:nowrap}
+.stats{display:grid;gap:10px;margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))}
+.st{background:var(--bg-soft);border:1px solid var(--line-2);border-radius:10px;padding:11px 13px}
+.st .k{font-size:11px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em}
+.st .v{font-size:21px;font-weight:700;letter-spacing:-.02em}
+.st .u{font-size:11.5px;color:var(--ink-3);font-weight:500;margin-left:3px}
+</style>
+</head>
+<body>
+<header class="hdr" id="hdr"></header>
+<div id="view"><p class="wrap muted" style="padding:40px 0" data-i18n="common.loading">…</p></div>
+<footer class="ftr" id="ftr"></footer>
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script>
+"use strict";
+const $ = s => document.querySelector(s), esc = s => App.esc(s), t = (k, v) => I18N.t(k, v);
+const PALETTE = ["#2458e6", "#0e8fa8", "#7a3fe0", "#0f917a", "#c26a00", "#c2185b", "#5d7a00", "#8d6e63"];
+const PALETTE_DARK = ["#6b93ff", "#3cc3dc", "#a98bff", "#3fd1b4", "#f0a93a", "#f06292", "#aed581", "#bcaaa4"];
+const dark = () => matchMedia("(prefers-color-scheme: dark)").matches;
+const color = i => (dark() ? PALETTE_DARK : PALETTE)[i % PALETTE.length];
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const n1 = v => v == null ? "—" : I18N.num(v, 1);
+const n2 = v => v == null ? "—" : I18N.num(v, v < 1 ? 2 : 1);
+const avg = a => { const f = a.filter(x => x != null); return f.length ? f.reduce((x, y) => x + y, 0) / f.length : null; };
+const clock = ts => new Intl.DateTimeFormat(I18N.lang, { hour: "2-digit", minute: "2-digit" }).format(new Date(ts * 1000));
+function rgba(hex, a) { if (!hex.startsWith("#")) return hex; return `rgba(${parseInt(hex.substr(1, 2), 16)},${parseInt(hex.substr(3, 2), 16)},${parseInt(hex.substr(5, 2), 16)},${a})`; }
+
+const S = { ov: null, net: null, peers: 0, open: {}, q: "", view: "home", target: null,
+            from: 0, to: 0, preset: 0, cur: null, nav: null, events: [] };
+const PRESETS = [["detail.preset_3h", 3 * 3600], ["detail.preset_30h", 30 * 3600], ["detail.preset_10d", 10 * 86400],
+                 ["detail.preset_3m", 90 * 86400], ["detail.preset_1y", 365 * 86400]];
+
+const cname = c => (I18N.lang === "fr" ? c.menu_fr : c.menu_en) || c.menu_en || c.menu_fr || c.slug;
+const allTargets = () => S.ov ? S.ov.categories.flatMap((c, ci) => c.targets.map(x => Object.assign(x, { _cat: c, _ci: ci }))) : [];
+const byId = id => allTargets().find(x => x.id === id);
+const worst = list => list.some(x => x.status === "crit") ? "crit" : list.some(x => x.status === "warn") ? "warn" : "ok";
+
+/* -------------------------------------------------------------- données */
+async function loadOverview() {
+  S.ov = await fetch("/api/v1/overview").then(r => r.json());
+  S.ov.categories.forEach(c => { if (S.open[c.id] === undefined) S.open[c.id] = true; });
+}
+async function loadSide() {
+  const [net, peers] = await Promise.all([
+    fetch("/api/v1/asn").then(r => r.ok ? r.json() : null).catch(() => null),
+    fetch("/api/v1/fed/peers").then(r => r.ok ? r.json() : []).catch(() => [])
+  ]);
+  S.net = net; S.peers = (peers || []).length;
+}
+
+/* ------------------------------------------------------------ gabarits */
+function hbarHTML(tg) {
+  return `<div class="hbar" title="${esc(t("home.last24h"))}">${tg.hours.map(k =>
+    `<i class="${k === "crit" ? "c" : k === "warn" ? "w" : k === "nodata" ? "n" : ""}"></i>`).join("")}</div>`;
+}
+function rowHTML(tg, showCat) {
+  const k = tg.status, ratio = tg.ratio && tg.ratio > 1.15 ? `<span class="x">×${n1(tg.ratio)}</span>` : "";
+  const since = tg.since ? `<div class="since" style="color:var(--${k === "crit" ? "crit" : "warn"})">${esc(t("common.since"))} ${clock(tg.since)} · ${esc(I18N.ago(tg.since))}</div>` : "";
+  return `<div class="row ${k === "crit" || k === "warn" ? "a-" + k : ""}" data-t="${tg.id}">
+    <div><div class="who"><span class="dot d-${k}"></span><div style="min-width:0"><div class="nm">${esc(tg.title)}</div>
+      <div class="sb"><span class="mono">${esc(tg.host)}</span>${showCat ? ` · <span style="color:${color(tg._ci)}">${esc(cname(tg._cat))}</span>` : ""}</div></div></div>${since}</div>
+    <div class="hb">${hbarHTML(tg)}</div>
+    <div class="spk"><canvas height="30" data-spark="${tg.id}"></canvas></div>
+    <div><div class="lbl">${esc(t("metric.median"))}</div><div class="num"><b>${n2(tg.med_ms)}</b> ms${ratio}</div></div>
+    <div class="lc"><div class="lbl">${esc(t("metric.loss"))}</div><div class="num"><b>${n1(tg.loss_pct)}</b> %</div></div>
+    <div style="text-align:right"><span class="badge b-${k === "nodata" ? "n" : k}">${esc(t("status." + k))}</span></div></div>`;
+}
+
+function railHTML() {
+  const q = S.q.toLowerCase();
+  let h = `<input class="search" id="q" placeholder="⌕  ${esc(t("metric.targets"))}…" value="${esc(S.q)}">`;
+  S.ov.categories.forEach((c, ci) => {
+    const cm = q && cname(c).toLowerCase().includes(q);
+    const list = c.targets.filter(x => !q || cm || x.title.toLowerCase().includes(q) || x.host.includes(q));
+    if (!list.length) return;
+    h += `<div class="rg" data-open="${S.open[c.id] || !!q}"><button class="rgt" data-tog="${c.id}"><span class="chev">▼</span>
+      <span class="cbar" style="background:${color(ci)}"></span><span>${esc(cname(c))}</span>
+      <span class="rgn"><span class="dot d-${worst(list)}"></span>${list.length}</span></button><div class="rl">` +
+      list.map(x => `<button class="ri" data-t="${x.id}" aria-current="${S.view === "detail" && S.target && S.target.id === x.id}">
+        <span class="dot d-${x.status}"></span><span class="nm">${esc(x.title)}</span><span class="vl mono">${n2(x.med_ms)}</span></button>`).join("") +
+      `</div></div>`;
+  });
+  if (S.net) {
+    const p = S.net.peeringdb;
+    h += `<a class="netcard" href="/network"><div class="h">${esc(t("home.hosted_by"))}</div>
+      <div class="n">AS${esc(S.net.asn)}${S.net.holder ? " · " + esc(S.net.holder.split(" - ")[0]) : ""}</div>
+      <div class="s"><span><b>${S.net.prefixes_v4}</b> IPv4 · <b>${S.net.prefixes_v6}</b> IPv6</span>
+      <span><b>${S.net.nb_upstreams}</b> ${esc(t("net.nb_up").toLowerCase())}</span>
+      ${p ? `<span><b>${p.ixs.length}</b> IX</span><span>PeeringDB · ${esc(p.policy || "—")}</span>` : ""}</div>
+      <div style="font-size:12px;color:var(--accent);margin-top:8px">${esc(t("home.see_network"))} →</div></a>`;
+  }
+  return h;
+}
+function railBox() {
+  const n = allTargets().length;
+  return `<aside class="rail" id="railBox"><button class="rail-tog" id="railTog"><span class="cbar" style="background:var(--accent)"></span>
+    ${esc(t("metric.categories"))} · ${n} ${esc(t("metric.targets").toLowerCase())}<span class="chev">▼</span></button>
+    <div id="rail">${railHTML()}</div></aside>`;
+}
+function bindRail() {
+  const tg = $("#railTog"); if (tg) tg.onclick = () => $("#railBox").classList.toggle("open");
+  const q = $("#q");
+  if (q) q.oninput = e => { S.q = e.target.value; const pos = e.target.selectionStart; $("#rail").innerHTML = railHTML(); bindRail(); const n = $("#q"); n.focus(); n.setSelectionRange(pos, pos); };
+  document.querySelectorAll("[data-tog]").forEach(b => b.onclick = () => { S.open[b.dataset.tog] = !S.open[b.dataset.tog]; $("#rail").innerHTML = railHTML(); bindRail(); });
+  document.querySelectorAll("#rail [data-t]").forEach(b => b.onclick = () => openTarget(+b.dataset.t));
+}
+
+/* --------------------------------------------------------------- dessin */
+const PAD = { l: 52, r: 12, t: 14, b: 34 };
+function setup(cv, h) { const d = devicePixelRatio || 1, w = cv.parentElement.clientWidth || 600; cv.width = w * d; cv.height = h * d; cv.style.height = h + "px"; const c = cv.getContext("2d"); c.setTransform(d, 0, 0, d, 0, 0); return { c, w, h }; }
+function draw(cv, s, o) {
+  const { c, w, h } = setup(cv, o.height); c.clearRect(0, 0, w, h);
+  const T = s.t || [];
+  const pl = o.bare ? 1 : PAD.l, pr = o.bare ? 1 : PAD.r, pt = o.bare ? 3 : PAD.t, pb = o.bare ? 3 : PAD.b, lh = o.loss ? 22 : 0;
+  const pw = w - pl - pr, ph = h - pt - pb - lh;
+  let lo = 1e9, hi = -1e9;
+  for (let i = 0; i < T.length; i++) { const a = (s.p05 || s.p25)[i], b = (s.p95 || s.p75)[i]; if (a != null) lo = Math.min(lo, a); if (b != null) hi = Math.max(hi, b); }
+  const x0 = o.from != null ? o.from : T[0], x1 = o.to != null ? o.to : T[T.length - 1];
+  const X = v => pl + (v - x0) / ((x1 - x0) || 1) * pw;
+  if (lo > hi) { if (!o.bare) { c.fillStyle = cssv("--ink-3"); c.font = "12px system-ui,sans-serif"; c.textAlign = "center"; c.fillText(t("home.no_data"), w / 2, h / 2); } return { X, x0, x1, pw, ph, w, h, pl, Y: () => 0 }; }
+  const mg = (hi - lo) * .12 || .05; lo = Math.max(0, lo - mg); hi += mg;
+  const Y = v => pt + ph - (v - lo) / ((hi - lo) || 1) * ph, acc = o.accent, crit = cssv("--crit");
+  if (!o.bare) {
+    c.strokeStyle = cssv("--grid"); c.lineWidth = 1; c.fillStyle = cssv("--axis"); c.font = "10px system-ui,sans-serif"; c.textAlign = "right"; c.textBaseline = "middle";
+    for (let i = 0; i <= 4; i++) { const v = lo + (hi - lo) * i / 4, y = Math.round(Y(v)) + .5; c.beginPath(); c.moveTo(pl, y); c.lineTo(w - pr, y); c.stroke(); c.fillText(n2(v) + " ms", pl - 7, y); }
+  }
+  // Bandes, segment par segment : une valeur absente est un trou.
+  const band = (a, b, f) => {
+    let i = 0;
+    while (i < T.length) {
+      while (i < T.length && (a[i] == null || b[i] == null)) i++;
+      const s0 = i; while (i < T.length && a[i] != null && b[i] != null) i++;
+      if (i - s0 < 1) continue;
+      c.beginPath();
+      for (let k = s0; k < i; k++) k === s0 ? c.moveTo(X(T[k]), Y(a[k])) : c.lineTo(X(T[k]), Y(a[k]));
+      for (let k = i - 1; k >= s0; k--) c.lineTo(X(T[k]), Y(b[k]));
+      c.closePath(); c.fillStyle = f; c.fill();
+    }
+  };
+  if (s.p95) band(s.p95, s.p05, rgba(acc, .15));
+  band(s.p75, s.p25, rgba(acc, .3));
+  c.lineWidth = o.bare ? 1.3 : 1.7; c.lineJoin = "round";
+  const L = s.loss || [];
+  for (let i = 1; i < T.length; i++) {
+    if (s.med[i] == null || s.med[i - 1] == null) continue;
+    c.beginPath(); c.moveTo(X(T[i - 1]), Y(s.med[i - 1])); c.lineTo(X(T[i]), Y(s.med[i]));
+    c.strokeStyle = ((L[i] || 0) > 1 || (L[i - 1] || 0) > 1) ? crit : acc; c.stroke();
+  }
+  if (o.loss) {
+    const base = h - pb + 4, bw = Math.max(1.5, pw / Math.max(T.length, 1) * .7);
+    for (let i = 0; i < T.length; i++) { if (!(L[i] > .5)) continue; const bh = Math.min(lh, lh * L[i] / 40 + 3); c.fillStyle = rgba(crit.startsWith("#") ? crit : "#d92d20", Math.min(.95, .35 + L[i] / 50)); c.fillRect(X(T[i]) - bw / 2, base - bh, bw, bh); }
+    c.strokeStyle = cssv("--line"); c.beginPath(); c.moveTo(pl, base + .5); c.lineTo(w - pr, base + .5); c.stroke();
+  }
+  if (!o.bare) {
+    c.fillStyle = cssv("--axis"); c.textAlign = "center"; c.textBaseline = "top"; const span = x1 - x0;
+    for (let i = 0; i <= 5; i++) {
+      const ts = x0 + span * i / 5, d = new Date(ts * 1000);
+      const lbl = span <= 2 * 86400 ? clock(ts) : new Intl.DateTimeFormat(I18N.lang, span <= 120 * 86400 ? { day: "2-digit", month: "short" } : { month: "short", year: "2-digit" }).format(d);
+      c.fillText(lbl, Math.min(w - pr - 20, Math.max(pl + 20, X(ts))), h - 16);
+    }
+  }
+  for (const e of (o.events || [])) {
+    if (e.ts_start < x0 || e.ts_start > x1) continue; const x = Math.round(X(e.ts_start)) + .5, am = cssv("--warn");
+    c.strokeStyle = am; c.lineWidth = 1; c.beginPath(); c.moveTo(x, pt); c.lineTo(x, h - pb + lh); c.stroke();
+    c.fillStyle = am; c.font = "10px system-ui,sans-serif"; c.textAlign = x > w - 170 ? "right" : "left"; c.textBaseline = "top"; c.fillText(e.title, x + (x > w - 170 ? -5 : 5), pt);
+  }
+  return { X, Y, x0, x1, pw, ph, w, h, pl };
+}
+
+/* --------------------------------------------------------------- accueil */
+function renderHome() {
+  const all = allTargets(), c = S.ov.counts;
+  const faults = all.filter(x => x.status === "crit" || x.status === "warn")
+    .sort((a, b) => (b.status === "crit") - (a.status === "crit") || (b.loss_pct || 0) - (a.loss_pct || 0));
+  const heroK = c.crit ? "crit" : c.warn ? "warn" : "ok";
+  const asn = S.net ? "AS" + S.net.asn : (App.site.asn || "");
+  let h = `<section class="hero ${heroK}"><div class="wrap hero-in"><div>
+      <p class="eyebrow"><span class="pulse"></span>${asn ? esc(t("home.hosted_by")) + " " + esc(asn) + " · " : ""}${esc(t("home.refresh"))}</p>
+      <h1>${esc(faults.length ? t("home.hero_fault_title", { n: faults.length }) : t("home.hero_ok_title"))}</h1>
+      <p class="lead">${esc(faults.length ? t("home.hero_fault_body", { total: c.targets }) : t("home.hero_ok_body", { total: c.targets, cats: S.ov.categories.length }))}</p></div>
+    <div class="kpis">
+      <div class="kpi"><div class="k">${esc(t("metric.targets"))}</div><div class="v">${c.targets}</div></div>
+      <div class="kpi"><div class="k">${esc(t("metric.median"))}</div><div class="v">${n2(avg(all.map(x => x.med_ms)))}<span class="u">ms</span></div></div>
+      <div class="kpi"><div class="k">${esc(t("metric.loss"))}</div><div class="v">${n1(avg(all.map(x => x.loss_pct)))}<span class="u">%</span></div></div>
+      <div class="kpi"><div class="k">${esc(t("metric.peers"))}</div><div class="v">${S.peers}</div></div>
+    </div></div></section>
+  <div class="wrap"><div class="shell">${railBox()}<div style="min-width:0">
+    <details class="how" ${faults.length ? "" : "open"}><summary>${esc(t("home.ex_measure_t"))} · ${esc(t("home.ex_bands_t"))} · ${esc(t("home.ex_colours_t"))}</summary>
+      <div class="how-b"><div><h3>${esc(t("home.ex_measure_t"))}</h3><p>${esc(t("home.ex_measure"))}</p></div>
+      <div><h3>${esc(t("home.ex_bands_t"))}</h3><p>${esc(t("home.ex_bands"))}</p></div>
+      <div><h3>${esc(t("home.ex_colours_t"))}</h3><p>${esc(t("home.ex_colours"))}</p></div></div></details>
+    <section class="section"><div class="section-h"><h2><span class="dot d-${faults.length ? heroK : "ok"}"></span> ${esc(t("home.faults"))}</h2>
+      <span class="sub">${esc(t("home.faults_sub"))}</span><span class="right"><span class="badge b-${faults.length ? heroK : "ok"}">${faults.length}</span></span></div>
+      ${faults.length ? `<div class="rows">${faults.map(x => rowHTML(x, true)).join("")}</div>` : `<div class="empty"><span class="dot d-ok"></span>${esc(t("home.no_fault"))}</div>`}</section>`;
+  const feat = all.filter(x => x.featured);
+  if (feat.length) h += `<section class="section"><div class="section-h"><h2>★ ${esc(t("home.key"))}</h2><span class="sub">${esc(t("home.key_sub"))}</span>
+      <span class="right faint" style="font-size:11.5px">${esc(t("home.last24h"))}</span></div><div class="rows">${feat.map(x => rowHTML(x, true)).join("")}</div></section>`;
+  h += `<section class="section"><div class="section-h"><h2>${esc(t("home.all"))}</h2></div>`;
+  S.ov.categories.forEach((cat, ci) => {
+    const meds = cat.targets.map(x => x.med_ms);
+    h += `<div class="catblock"><div class="cath"><span class="cbar" style="background:${color(ci)};height:18px;width:4px"></span><span class="t">${esc(cname(cat))}</span>
+      <span class="faint" style="font-size:12px">${cat.targets.length} · ${n2(avg(meds))} ms</span><span style="margin-left:auto" class="badge b-${worst(cat.targets)}">${esc(t("status." + worst(cat.targets)))}</span></div>
+      <div class="rows">${cat.targets.map(x => rowHTML(x, false)).join("")}</div></div>`;
+  });
+  h += `</section></div></div></div>`;
+  $("#view").innerHTML = h; bindRail();
+  document.querySelectorAll("#view .row[data-t]").forEach(r => r.onclick = () => openTarget(+r.dataset.t));
+  requestAnimationFrame(() => document.querySelectorAll("[data-spark]").forEach(cv => {
+    const tg = byId(+cv.dataset.spark); draw(cv, tg.spark, { height: 30, bare: true, accent: color(tg._ci) });
+  }));
+}
+
+/* ---------------------------------------------------------------- détail */
+function openTarget(id, from, to) {
+  const tg = byId(id); if (!tg) return;
+  const now = Math.floor(Date.now() / 1000);
+  S.view = "detail"; S.target = tg;
+  if (from && to) { S.from = from; S.to = to; S.preset = -1; } else { S.preset = 0; S.to = now; S.from = now - PRESETS[0][1]; }
+  S.nav = null; writeHash(); renderDetail(); scrollTo({ top: 0 });
+}
+function writeHash() {
+  const h = S.view === "detail" ? `#t=${S.target.id}` + (S.preset === -1 ? `&from=${S.from}&to=${S.to}` : `&p=${S.preset}`) : "";
+  history.replaceState(null, "", location.pathname + location.search + h);
+}
+function renderDetail() {
+  const tg = S.target, acc = color(tg._ci), k = tg.status;
+  $("#view").innerHTML = `<div class="wrap"><div class="shell">${railBox()}<div style="min-width:0;padding-top:4px">
+    <div class="crumb"><a href="/" id="bk">← ${esc(t("common.back_home"))}</a><span class="faint">/</span><span style="color:${acc}">${esc(cname(tg._cat))}</span></div>
+    <div class="dh"><h1>${esc(tg.title)}</h1><span class="badge b-${k === "nodata" ? "n" : k}">${esc(t("status." + (k === "nodata" ? "nodata" : k + "_long")))}</span></div>
+    <div class="tags"><span class="tag mono">${esc(tg.host)}</span><span class="tag">${esc(tg.proto.toUpperCase())} · ${tg.interval_s} s</span>
+      ${tg.base_ms != null ? `<span class="tag">ref. ${n2(tg.base_ms)} ms</span>` : ""}</div>
+    <div class="presets" id="pr">${PRESETS.map(([key], i) => `<button class="preset" data-p="${i}" aria-pressed="${S.preset === i}">${esc(t(key))}</button>`).join("")}
+      <button class="preset" id="cp" style="margin-left:auto">🔗 ${esc(t("common.copy_link"))}</button></div>
+    <div class="card" style="margin-top:12px"><div class="card-b"><div id="cw"><canvas id="ch" height="330"></canvas><div class="tip" id="tip"></div></div>
+      <div class="legend"><span><span class="sw" style="width:16px;height:3px;background:${acc}"></span>${esc(t("metric.median"))}</span>
+      <span><span class="sw" style="width:16px;height:9px;background:${rgba(acc, .3)}"></span>p25–p75</span>
+      <span><span class="sw" style="width:16px;height:9px;background:${rgba(acc, .15)}"></span>p5–p95</span>
+      <span><span class="sw" style="width:10px;height:9px;background:var(--crit)"></span>${esc(t("metric.loss"))}</span>
+      <span class="mono faint" id="res" style="margin-left:auto"></span></div></div></div>
+    <div class="card" style="margin-top:10px"><div class="card-b" style="padding-block:10px">
+      <div class="lbl" style="margin-bottom:5px">${esc(t("home.last24h"))}</div>${hbarHTML(tg)}
+      <div class="hbar-l"><span>−24 h</span><span>−12 h</span><span>${esc(t("common.updated"))}</span></div>
+      <div class="lbl" style="margin:12px 0 3px">${esc(t("detail.navigator"))}</div><canvas id="nv" height="58"></canvas></div></div>
+    <div class="stats" id="stats"></div><p class="faint" style="font-size:12.5px;margin-top:12px">${esc(t("detail.hint"))}</p>
+  </div></div></div>`;
+  bindRail();
+  $("#bk").onclick = e => { e.preventDefault(); S.view = "home"; writeHash(); renderHome(); };
+  document.querySelectorAll("[data-p]").forEach(b => b.onclick = () => { const now = Math.floor(Date.now() / 1000); S.preset = +b.dataset.p; S.to = now; S.from = now - PRESETS[S.preset][1]; writeHash(); paint(); });
+  $("#cp").onclick = () => { navigator.clipboard && navigator.clipboard.writeText(location.href); $("#cp").textContent = "✓"; };
+  paint(); bindChart();
+}
+async function paint() {
+  const tg = S.target, acc = color(tg._ci), now = Math.floor(Date.now() / 1000);
+  const q = `/api/v1/series?target=${tg.id}&from=${S.from}&to=${S.to}`;
+  const [cur, ev, nav] = await Promise.all([
+    fetch(q).then(r => r.json()),
+    fetch(`/api/v1/events?from=${S.from}&to=${S.to}`).then(r => r.ok ? r.json() : []).catch(() => []),
+    S.nav ? Promise.resolve(S.nav) : fetch(`/api/v1/series?target=${tg.id}&from=${now - 365 * 86400}&to=${now}`).then(r => r.json())
+  ]);
+  if (S.view !== "detail" || S.target !== tg) return;
+  S.cur = cur; S.events = ev || []; S.nav = nav;
+  $("#res").textContent = `${cur.resolution} · ${cur.step_s || tg.interval_s}s · ${cur.t.length} pts`;
+  S.g = draw($("#ch"), cur, { height: 330, loss: 1, events: S.events, accent: acc, from: S.from, to: S.to });
+  S.ng = draw($("#nv"), nav, { height: 58, bare: 1, accent: acc, from: now - 365 * 86400, to: now }); sel();
+  const jit = cur.p75.map((v, i) => v != null && cur.p25[i] != null ? v - cur.p25[i] : null);
+  const st = (key, v, u) => `<div class="st"><div class="k">${esc(t(key))}</div><div class="v">${v}<span class="u">${u}</span></div></div>`;
+  const loss = avg(cur.loss);
+  $("#stats").innerHTML = st("metric.median", n2(avg(cur.med)), "ms") + st("metric.p95", n2(avg(cur.p95)), "ms") +
+    st("metric.jitter", n2(avg(jit)), "ms") + st("metric.uptime", loss == null ? "—" : n1(100 - loss), "%");
+  document.querySelectorAll("[data-p]").forEach(b => b.setAttribute("aria-pressed", String(S.preset === +b.dataset.p)));
+}
+function sel() {
+  const g = S.ng; if (!g) return; const c = $("#nv").getContext("2d"), a = g.X(Math.max(g.x0, S.from)), b = g.X(Math.min(g.x1, S.to)), ac = cssv("--accent");
+  c.fillStyle = rgba(ac.startsWith("#") ? ac : "#2458e6", .14); c.fillRect(a, 2, Math.max(3, b - a), g.h - 4); c.strokeStyle = ac; c.strokeRect(Math.round(a) + .5, 2.5, Math.max(3, b - a), g.h - 5);
+}
+function bindChart() {
+  const acc = color(S.target._ci);
+  const redraw = () => { S.g = draw($("#ch"), S.cur, { height: 330, loss: 1, events: S.events, accent: acc, from: S.from, to: S.to }); };
+  const zoom = (cv, gg, rd) => {
+    let d = 0, sx = 0, ex = 0; const px = e => e.clientX - cv.getBoundingClientRect().left;
+    cv.onmousedown = e => { d = 1; sx = ex = px(e); };
+    addEventListener("mouseup", () => {
+      if (!d) return; d = 0; const g = gg(); if (!g) return;
+      if (Math.abs(ex - sx) > 10) { const inv = p => g.x0 + (p - g.pl) / g.pw * (g.x1 - g.x0); const a = Math.round(inv(Math.min(sx, ex))), b = Math.round(inv(Math.max(sx, ex)));
+        if (b - a > 120) { S.preset = -1; S.from = a; S.to = b; writeHash(); paint(); return; } }
+      rd();
+    });
+    cv.addEventListener("mousemove", e => { if (!d) return; const g = gg(); ex = px(e); rd(); const c = cv.getContext("2d"); c.fillStyle = "rgba(36,88,230,.10)"; c.fillRect(Math.min(sx, ex), 4, Math.abs(ex - sx), g.ph || g.h); });
+    cv.ondblclick = () => { const now = Math.floor(Date.now() / 1000); S.preset = 0; S.to = now; S.from = now - PRESETS[0][1]; writeHash(); paint(); };
+  };
+  zoom($("#ch"), () => S.g, redraw);
+  zoom($("#nv"), () => S.ng, () => { const now = Math.floor(Date.now() / 1000); S.ng = draw($("#nv"), S.nav, { height: 58, bare: 1, accent: acc, from: now - 365 * 86400, to: now }); sel(); });
+  const tip = $("#tip");
+  $("#ch").addEventListener("mousemove", e => {
+    const g = S.g, cur = S.cur; if (!g || !cur || !cur.t.length) return; const x = e.clientX - $("#ch").getBoundingClientRect().left;
+    if (x < PAD.l || x > g.w - PAD.r) { tip.style.display = "none"; return; }
+    const ts = g.x0 + (x - PAD.l) / g.pw * (g.x1 - g.x0); let i = 0, best = 1e18;
+    for (let k = 0; k < cur.t.length; k++) { const dd = Math.abs(cur.t[k] - ts); if (dd < best) { best = dd; i = k; } }
+    tip.innerHTML = `<b>${esc(I18N.date(cur.t[i]))}</b><br>${esc(t("metric.median"))} ${n2(cur.med[i])} ms<br>p95 ${n2(cur.p95[i])} ms<br>${esc(t("metric.loss"))} ${n1(cur.loss[i])} %`;
+    tip.style.display = "block"; tip.style.left = Math.min(g.w - 190, g.X(cur.t[i]) + 14) + "px"; tip.style.top = "20px";
+  });
+  $("#ch").addEventListener("mouseleave", () => { tip.style.display = "none"; });
+}
+
+/* ------------------------------------------------------------- démarrage */
+function render() { S.view === "detail" && S.target ? renderDetail() : renderHome(); }
+function fromHash() {
+  const p = new URLSearchParams(location.hash.slice(1)); const id = +p.get("t");
+  if (id && byId(id)) {
+    if (p.get("from") && p.get("to")) openTarget(id, +p.get("from"), +p.get("to"));
+    else { openTarget(id); const pi = +p.get("p"); if (pi > 0 && pi < PRESETS.length) { S.preset = pi; S.from = S.to - PRESETS[pi][1]; paint(); } }
+    return true;
+  }
+  return false;
+}
+(async () => {
+  await Promise.all([loadOverview(), loadSide()]);
+  let first = true;
+  App.boot("home", () => { if (first) { first = false; if (fromHash()) return; } render(); });
+  setInterval(async () => { await loadOverview(); if (S.view === "home") renderHome(); else if (S.target) { S.target = byId(S.target.id) || S.target; } }, 30000);
+  let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(render, 160); });
+  addEventListener("hashchange", () => { if (!fromHash()) { S.view = "home"; renderHome(); } });
+})();
+</script>
+</body>
+</html>

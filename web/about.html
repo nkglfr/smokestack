@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cdefs%3E%3ClinearGradient id=%27g%27 x1=%270%27 y1=%270%27 x2=%271%27 y2=%271%27%3E%3Cstop offset=%270%27 stop-color=%27%232458e6%27/%3E%3Cstop offset=%271%27 stop-color=%27%230e8fa8%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27url(%23g)%27/%3E%3Cpath d=%27M7 12h18M7 20h18%27 stroke=%27white%27 stroke-width=%272.5%27 stroke-linecap=%27round%27 opacity=%27.9%27/%3E%3C/svg%3E">
+<title>About — smokestack</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="hdr" id="hdr"></header>
+<main class="wrap">
+  <div class="page-head">
+    <p class="eyebrow" data-i18n="nav.about"></p>
+    <h1 data-i18n="about.title"></h1>
+    <p class="lead" id="desc"></p>
+  </div>
+  <div class="grid g2 section">
+    <div class="card"><div class="card-b">
+      <div class="section-h"><h2 data-i18n="about.operator"></h2></div><div id="operator"></div>
+    </div></div>
+    <div class="card"><div class="card-b">
+      <div class="section-h"><h2 data-i18n="about.contact"></h2></div><div id="contact"></div>
+      <p class="faint" style="font-size:12.5px;margin:12px 0 0" data-i18n="about.noc_note"></p>
+    </div></div>
+  </div>
+  <section class="section">
+    <div class="section-h"><h2 data-i18n="about.method"></h2></div>
+    <div class="card"><div class="card-b muted" style="font-size:14px">
+      <p style="margin-top:0" data-i18n="about.method_p1"></p>
+      <p data-i18n="about.method_p2"></p>
+      <p style="margin-bottom:0" data-i18n="about.method_p3"></p>
+    </div></div>
+  </section>
+  <section class="section" id="legalSec">
+    <div class="section-h"><h2 data-i18n="about.legal"></h2></div>
+    <p class="muted" style="font-size:13px" id="legal"></p>
+  </section>
+</main>
+<footer class="ftr" id="ftr"></footer>
+<script src="/i18n.js"></script>
+<script src="/app.js"></script>
+<script>
+function render(s) {
+  const t = I18N.t, esc = App.esc;
+  const kv = rows => `<div class="kv">` + rows.filter(r => r[1]).map(r =>
+    `<div class="k">${esc(t(r[0]))}</div><div class="v">${r[1]}</div>`).join("") + `</div>`;
+  const asnNum = String(s.asn || "").replace(/\D/g, "");
+  document.getElementById("desc").textContent = s.description || "";
+  document.getElementById("operator").innerHTML = kv([
+    ["about.org", esc(s.org)],
+    ["about.asn", asnNum ? `<a class="mono" href="/network">${esc(s.asn)}</a>` : ""],
+    ["about.owner", esc(s.owner)],
+    ["about.location", esc(s.location)],
+    ["about.timezone", esc(s.timezone)],
+    ["about.peeringdb", s.peeringdb ? `<a href="${esc(s.peeringdb)}" rel="noopener">↗</a>` : ""]
+  ]);
+  document.getElementById("contact").innerHTML = kv([
+    ["about.email", s.email ? `<a href="mailto:${esc(s.email)}">${esc(s.email)}</a>` : ""],
+    ["about.noc", s.noc_email ? `<a href="mailto:${esc(s.noc_email)}">${esc(s.noc_email)}</a>` : ""],
+    ["about.website", s.url ? `<a href="${esc(s.url)}" rel="noopener">${esc(s.url.replace(/^https?:\/\//,""))}</a>` : ""]
+  ]);
+  document.getElementById("legal").textContent = s.legal || "";
+  document.getElementById("legalSec").hidden = !s.legal;
+}
+App.boot("about", render);
+</script>
+</body>
+</html>
