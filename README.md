@@ -210,3 +210,9 @@ Working and tested, not yet 1.0. Known gaps:
 - Remote probes on another machine (same-host isolation is done)
 
 Design notes (in French): [docs/DESIGN.fr.md](docs/DESIGN.fr.md).
+
+---
+
+## License
+
+smokestack is released under the [Apache License 2.0](LICENSE).
