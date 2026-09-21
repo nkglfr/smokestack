@@ -202,5 +202,24 @@
     "peeringdb": "PeeringDB",
     "bgptools": "bgp.tools",
     "rights": "Les mesures sont publiées telles quelles, sans garantie."
+  },
+  "trace": {
+    "title": "Traceroutes",
+    "sub": "Pris automatiquement quand la cible sort de sa référence, et une fois par jour sur un chemin sain pour comparaison.",
+    "anomaly": "anomalie",
+    "reference": "chemin de référence",
+    "manual": "manuel",
+    "reached": "atteinte en {n} sauts",
+    "refused": "refusé au saut {n}",
+    "not_reached": "non atteinte",
+    "hop": "Saut",
+    "address": "Adresse",
+    "name": "Nom",
+    "as": "AS",
+    "rtt": "RTT",
+    "replies": "Réponses",
+    "ref_col": "Chemin sain",
+    "changed": "Lignes surlignées : un routeur du dernier chemin sain a changé ou ne répond plus.",
+    "none": "Aucun traceroute pour cette cible pour l'instant."
   }
 }

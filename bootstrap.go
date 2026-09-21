@@ -41,8 +41,8 @@ func (a *API) initSetupCode(dataDir string) {
 			log.Printf("setup-code: %v", err)
 		}
 	}
-	log.Printf("aucun compte : ouvrez /admin et saisissez le code d'installation %s "+
-		"(aussi dans %s), ou lancez 'smokestack user add'", a.setupCode, a.setupFile)
+	log.Printf("no account yet: open /admin and enter the setup code %s "+
+		"(also in %s), or run 'smokestack user add'", a.setupCode, a.setupFile)
 }
 
 func (a *API) clearSetupCode() {

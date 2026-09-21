@@ -202,5 +202,24 @@
     "peeringdb": "PeeringDB",
     "bgptools": "bgp.tools",
     "rights": "Las medidas se publican tal cual, sin garantía."
+  },
+  "trace": {
+    "title": "Traceroutes",
+    "sub": "Tomados automáticamente cuando el destino sale de su referencia, y una vez al día sobre una ruta sana para comparar.",
+    "anomaly": "anomalía",
+    "reference": "ruta de referencia",
+    "manual": "manual",
+    "reached": "alcanzado en {n} saltos",
+    "refused": "rechazado en el salto {n}",
+    "not_reached": "no alcanzado",
+    "hop": "Salto",
+    "address": "Dirección",
+    "name": "Nombre",
+    "as": "AS",
+    "rtt": "RTT",
+    "replies": "Respuestas",
+    "ref_col": "Ruta sana",
+    "changed": "Filas resaltadas: un router de la última ruta sana ha cambiado o ya no responde.",
+    "none": "Aún no hay traceroutes para este destino."
   }
 }

@@ -250,10 +250,8 @@ plutôt que les 20 paquets par seconde de SmokePing.
 
 ## Limites actuelles
 
-- IPv6 non câblé (le schéma le prévoit, le prober ouvre un socket `ip4`).
+- IPv6 vérifié par tests unitaires seulement (paquets construits) ; à valider sur un hôte double pile.
 - Archive en NDJSON gzip, pas encore en Parquet.
-- Pas de traceroute déclenché sur anomalie.
-- Back-office en français uniquement ; les pages publiques sont traduites.
 - Édition d'une cible existante et gestion des sondes distantes à venir.
 
 ## Page éditeur
@@ -518,3 +516,21 @@ curl https://smokestack.exemple.fr/api/v1/asn/64501    # un pair approuvé
 | `/about` | exploitant, contacts, méthode |
 
 Toutes partagent `app.css` (thème sombre automatique), `i18n.js` et `app.js`.
+
+## IPv6 et traceroute sur anomalie
+
+Chaque cible porte une famille d'adresses (auto, IPv4, IPv6) ; la sonde ouvre
+un socket ICMP et un socket ICMPv6. Après chaque passe, elle compare perte et
+médiane à une référence glissante propre à la cible ; à la sortie de cette
+référence, elle lance un traceroute ICMP sur des sockets dédiés (le TTL du
+socket de mesure n'est jamais modifié). Garde-fous : 15 min entre deux traces
+d'anomalie par cible, 30 par heure au total, une à la fois. Un chemin de
+référence est enregistré chaque jour sur les cibles saines ; le back-office
+surligne les routeurs de ce chemin qui ont changé ou ne répondent plus. Un
+routeur qui renvoie « inaccessible » n'est jamais pris pour la destination : il
+est noté `!N`, `!H` ou `!A` et le chemin s'arrête là. Traceroutes non publics
+par défaut (les sauts révèlent l'intérieur du réseau).
+
+Le back-office et les messages du serveur sont en anglais ; les pages
+publiques restent traduites (anglais de référence, français, allemand,
+espagnol).

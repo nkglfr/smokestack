@@ -27,11 +27,13 @@ type ProbeConfig struct {
 	// Mode "embedded" : la sonde tourne dans le service (petites
 	// installations). Mode "external" : elle tourne dans son propre
 	// processus (`smokestack probe`), isolee de l'interface web.
-	Mode     string `json:"mode"`
-	Socket   string `json:"socket"`
-	Slug     string `json:"slug"`
-	Name     string `json:"name"`
-	Location string `json:"location"`
+	Mode   string `json:"mode"`
+	Socket string `json:"socket"`
+	// Traceroute on anomalies (on by default).
+	Traceroute TracerouteConfig `json:"traceroute"`
+	Slug       string           `json:"slug"`
+	Name       string           `json:"name"`
+	Location   string           `json:"location"`
 }
 
 type FedConfig struct {
@@ -59,7 +61,7 @@ func defaultConfig() Config {
 		DataDir: "/var/lib/smokestack",
 		Probe: ProbeConfig{
 			Enabled: true, Slug: "local-01",
-			Name: "Sonde locale", Location: "sur site",
+			Name: "Sonde locale", Location: "on site",
 		},
 		Federation: FedConfig{Enabled: false, Anchors: []string{}},
 		Update:     defaultUpdateConfig(),
@@ -87,7 +89,7 @@ func loadConfig(path string) (Config, error) {
 		if err := os.WriteFile(path, out, 0o640); err != nil {
 			return c, err
 		}
-		log.Printf("configuration creee dans %s", path)
+		log.Printf("configuration written to %s", path)
 		return c, nil
 	}
 	if err != nil {
@@ -130,7 +132,7 @@ func seed(store *Store) error {
 			return err
 		}
 	}
-	log.Printf("jeu de demonstration cree : %d cibles", len(demo))
+	log.Printf("demo set created: %d targets", len(demo))
 	return nil
 }
 
@@ -157,7 +159,7 @@ func main() {
 		cfg.Listen = *listen
 	}
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
-		log.Fatalf("repertoire de donnees: %v", err)
+		log.Fatalf("data directory: %v", err)
 	}
 
 	// Avant tout : si la version precedente a ete installee et echoue a
@@ -191,7 +193,7 @@ func main() {
 	probeID, err := store.ProbeID(cfg.Probe.Slug, cfg.Probe.Name,
 		cfg.Probe.Location, cfg.Probe.Enabled)
 	if err != nil {
-		log.Fatalf("sonde: %v", err)
+		log.Fatalf("probe: %v", err)
 	}
 
 	archive, err := NewArchive(store, cfg.DataDir, cfg.Probe.Slug, storage)
@@ -213,17 +215,17 @@ func main() {
 	if cfg.Probe.Enabled {
 		if cfg.Probe.Mode == "external" {
 			if err := ServeProbeSocket(probeSocketPath(cfg), targets, writer, probeID, stop); err != nil {
-				log.Fatalf("socket de la sonde : %v", err)
+				log.Fatalf("probe socket: %v", err)
 			}
 		} else {
-			prober, err := NewProber(targets, writer, probeID)
+			prober, err := NewProber(targets, writer, probeID, cfg.Probe.Traceroute)
 			if err != nil {
-				log.Printf("sonde ICMP indisponible (%v) — le collecteur tourne "+
-					"quand meme, verifiez cap_net_raw", err)
+				log.Printf("ICMP probe unavailable (%v), the service keeps running "+
+					"anyway: check CAP_NET_RAW", err)
 			} else {
 				defer prober.Close()
 				go prober.Schedule(stop)
-				log.Printf("sonde %s active (integree au service)", cfg.Probe.Slug)
+				log.Printf("probe %s running (embedded in the service)", cfg.Probe.Slug)
 			}
 		}
 	}
@@ -253,7 +255,7 @@ func main() {
 	go upd.Loop(stop)
 	go upd.ConfirmAfter(60*time.Second, stop)
 	if !upd.Managed() {
-		log.Printf("mise a jour en place indisponible : %s", upd.reason)
+		log.Printf("in-place updates unavailable: %s", upd.reason)
 	}
 
 	api := &API{store: store, archive: archive, fed: fed,
@@ -274,6 +276,7 @@ func main() {
 	api.ASNRoutes(mux)
 	api.UpdateRoutes(mux)
 	api.OverviewRoutes(mux)
+	api.TracerouteRoutes(mux)
 
 	page := func(name string) http.HandlerFunc {
 		return withAssetCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -312,7 +315,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("ecoute sur %s", cfg.Listen)
+		log.Printf("listening on %s", cfg.Listen)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("http: %v", err)
 		}
@@ -323,12 +326,12 @@ func main() {
 	restart := false
 	select {
 	case <-sig:
-		log.Printf("arret en cours")
+		log.Printf("shutting down")
 	case <-upd.Restart:
 		restart = true
 		// Laisse le temps a la reponse HTTP de partir.
 		time.Sleep(700 * time.Millisecond)
-		log.Printf("redemarrage sur la nouvelle version")
+		log.Printf("restarting on the new version")
 	}
 	close(stop)
 	// L'ecrivain vide sa file avant la fermeture de la base.
@@ -347,7 +350,7 @@ func main() {
 // memes arguments) : compatible systemd, Docker ou lancement manuel.
 func execBinary(path string) {
 	if err := syscall.Exec(path, os.Args, os.Environ()); err != nil {
-		log.Fatalf("relance de %s impossible : %v", path, err)
+		log.Fatalf("cannot restart %s: %v", path, err)
 	}
 }
 

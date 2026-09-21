@@ -183,7 +183,7 @@ func (a *API) fedIncident(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if i.ID == "" || i.SuspectASN == "" {
-		writeErr(w, 400, "incident incomplet")
+		writeErr(w, 400, "incomplete incident")
 		return
 	}
 	i.ObserverASN = peer.ASN
@@ -226,7 +226,7 @@ func (a *API) fedAck(w http.ResponseWriter, r *http.Request) {
 	}
 	n, _ := res.RowsAffected()
 	if n == 0 {
-		writeErr(w, 403, "acquittement non applicable")
+		writeErr(w, 403, "acknowledgement not applicable")
 		return
 	}
 	writeJSON(w, map[string]any{"acked": true})
@@ -256,15 +256,15 @@ func (a *API) fedPeerAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]any{
 		"peer": p,
-		"next": "Comparez l'empreinte avec celle communiquee par l'operateur, " +
-			"puis approuvez le pair.",
+		"next": "Compare the fingerprint with the one given by the operator, " +
+			"then approve the peer.",
 	})
 }
 
 func (a *API) fedPeerTrust(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeErr(w, 400, "identifiant invalide")
+		writeErr(w, 400, "invalid identifier")
 		return
 	}
 	if err := a.fed.TrustPeer(id); err != nil {
@@ -277,7 +277,7 @@ func (a *API) fedPeerTrust(w http.ResponseWriter, r *http.Request) {
 func (a *API) fedPeerDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeErr(w, 400, "identifiant invalide")
+		writeErr(w, 400, "invalid identifier")
 		return
 	}
 	if _, err := a.store.cfg.Exec(`DELETE FROM fed_peers WHERE id=?`, id); err != nil {

@@ -91,7 +91,7 @@ func (i *I18n) Reload() error {
 	load := func(name string, b []byte, src string) {
 		code := strings.TrimSuffix(filepath.Base(name), ".json")
 		if !langCodeRE.MatchString(code) {
-			log.Printf("i18n: fichier ignore (code invalide): %s", name)
+			log.Printf("i18n: file ignored (invalid code): %s", name)
 			return
 		}
 		d, err := parseLang(b)
@@ -130,8 +130,8 @@ func (i *I18n) Reload() error {
 
 	base, ok := dicts[baseLang]
 	if !ok {
-		return fmt.Errorf("fichier de langue de reference %s.json introuvable : "+
-			"l'anglais est obligatoire", baseLang)
+		return fmt.Errorf("reference language file %s.json not found: "+
+			"English is mandatory", baseLang)
 	}
 
 	infos := map[string]*LangInfo{}
@@ -164,13 +164,13 @@ func (i *I18n) Reload() error {
 			// traduction produirait un texte faux : on le signale.
 			if !sameVars(ref, tr) {
 				info.Warnings = append(info.Warnings,
-					fmt.Sprintf("%s : variables differentes de l'anglais", k))
+					fmt.Sprintf("%s: placeholders differ from English", k))
 			}
 		}
 		for k := range d {
 			if _, ok := base[k]; !ok && !strings.HasPrefix(k, "_meta.") {
 				info.Warnings = append(info.Warnings,
-					fmt.Sprintf("%s : cle inconnue de la reference", k))
+					fmt.Sprintf("%s: key unknown in the reference", k))
 			}
 		}
 		sort.Strings(info.Warnings)
@@ -180,14 +180,14 @@ func (i *I18n) Reload() error {
 		}
 		infos[code] = info
 		if len(info.Warnings) > 0 {
-			log.Printf("i18n %s : %d avertissement(s)", code, len(info.Warnings))
+			log.Printf("i18n %s: %d warning(s)", code, len(info.Warnings))
 		}
 	}
 
 	i.mu.Lock()
 	i.dicts, i.infos = dicts, infos
 	i.mu.Unlock()
-	log.Printf("i18n : %d langue(s) chargee(s), reference %s (%d cles)",
+	log.Printf("i18n: %d language(s) loaded, reference %s (%d keys)",
 		len(dicts), baseLang, total)
 	return nil
 }
@@ -287,7 +287,7 @@ func (a *API) i18nDict(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	d, ok := a.i18n.Dict(code)
 	if !ok {
-		writeErr(w, 404, "langue inconnue")
+		writeErr(w, 404, "unknown language")
 		return
 	}
 	w.Header().Set("Cache-Control", "public, max-age=3600")
@@ -297,7 +297,7 @@ func (a *API) i18nDict(w http.ResponseWriter, r *http.Request) {
 func (a *API) i18nMissing(w http.ResponseWriter, r *http.Request, u *User) {
 	code := r.PathValue("code")
 	if !a.i18n.Has(code) {
-		writeErr(w, 404, "langue inconnue")
+		writeErr(w, 404, "unknown language")
 		return
 	}
 	writeJSON(w, map[string]any{"code": code, "missing": a.i18n.MissingKeys(code)})

@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"syscall"
 	"time"
@@ -46,18 +47,24 @@ func readStamped(conn net.PacketConn, buf, oob []byte) (int, int64, error) {
 	if err != nil {
 		return n, 0, err
 	}
-	if oobn > 0 {
-		if msgs, perr := syscall.ParseSocketControlMessage(oob[:oobn]); perr == nil {
+	return n, stampFromOOB(oob[:oobn]), nil
+}
+
+// stampFromOOB extracts the kernel receive time from ancillary data, or
+// returns the current time if there is none.
+func stampFromOOB(oob []byte) int64 {
+	if len(oob) > 0 {
+		if msgs, perr := syscall.ParseSocketControlMessage(oob); perr == nil {
 			for _, m := range msgs {
 				if m.Header.Level == syscall.SOL_SOCKET && m.Header.Type == syscall.SCM_TIMESTAMPNS &&
 					len(m.Data) >= int(unsafe.Sizeof(syscall.Timespec{})) {
 					ts := (*syscall.Timespec)(unsafe.Pointer(&m.Data[0]))
-					return n, ts.Nano(), nil
+					return ts.Nano()
 				}
 			}
 		}
 	}
-	return n, time.Now().UnixNano(), nil
+	return time.Now().UnixNano()
 }
 
 // kernelTCPRTT lit le RTT de la poignee de main mesure par le noyau
@@ -82,4 +89,26 @@ func kernelTCPRTT(c net.Conn) (float64, bool) {
 		return 0, false
 	}
 	return float64(info.Rtt), true
+}
+
+// setTTL sets the TTL (IPv4) or hop limit (IPv6) of packets sent on a raw
+// socket. Used only on the traceroute sockets.
+func setTTL(conn net.PacketConn, ttl int, v6 bool) error {
+	sc, ok := conn.(syscall.Conn)
+	if !ok {
+		return fmt.Errorf("socket does not support TTL control")
+	}
+	raw, err := sc.SyscallConn()
+	if err != nil {
+		return err
+	}
+	var serr error
+	raw.Control(func(fd uintptr) {
+		if v6 {
+			serr = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_UNICAST_HOPS, ttl)
+		} else {
+			serr = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IP, syscall.IP_TTL, ttl)
+		}
+	})
+	return serr
 }

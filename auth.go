@@ -114,7 +114,7 @@ func verifyPassword(stored, pw string) bool {
 
 func validPassword(pw string) error {
 	if len(pw) < 12 {
-		return fmt.Errorf("le mot de passe doit compter au moins 12 caracteres")
+		return fmt.Errorf("the password must be at least 12 characters long")
 	}
 	return nil
 }
@@ -160,7 +160,7 @@ func (s *Store) Users() ([]*User, error) {
 func (s *Store) CreateUser(email, name, pw, role string) (*User, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" || !strings.Contains(email, "@") {
-		return nil, fmt.Errorf("adresse de courriel invalide")
+		return nil, fmt.Errorf("invalid email address")
 	}
 	if _, ok := roleLevels[role]; !ok {
 		return nil, fmt.Errorf("role inconnu: %s", role)
@@ -180,7 +180,7 @@ func (s *Store) CreateUser(email, name, pw, role string) (*User, error) {
 		 VALUES(?,?,?,?,?)`, email, name, h, role, time.Now().Unix())
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
-			return nil, fmt.Errorf("cette adresse est deja utilisee")
+			return nil, fmt.Errorf("this email address is already in use")
 		}
 		return nil, err
 	}
@@ -201,13 +201,13 @@ func (s *Store) UpdateUser(id int64, name, role, pw *string, disabled *bool) err
 	cur := s.cfg.QueryRow(`SELECT `+userCols+` FROM users WHERE id=?`, id)
 	u, err := scanUser(cur.Scan)
 	if err != nil {
-		return fmt.Errorf("utilisateur introuvable")
+		return fmt.Errorf("user not found")
 	}
 	// Garde-fou : on ne retire jamais le dernier master actif.
 	losingMaster := (role != nil && *role != "master") ||
 		(disabled != nil && *disabled)
 	if u.Role == "master" && losingMaster && s.masterCount(id) == 0 {
-		return fmt.Errorf("il doit rester au moins un master actif")
+		return fmt.Errorf("at least one active master account must remain")
 	}
 	if name != nil && *name != "" {
 		s.cfg.Exec(`UPDATE users SET display_name=? WHERE id=?`, *name, id)
@@ -243,10 +243,10 @@ func (s *Store) DeleteUser(id int64) error {
 	row := s.cfg.QueryRow(`SELECT `+userCols+` FROM users WHERE id=?`, id)
 	u, err := scanUser(row.Scan)
 	if err != nil {
-		return fmt.Errorf("utilisateur introuvable")
+		return fmt.Errorf("user not found")
 	}
 	if u.Role == "master" && s.masterCount(id) == 0 {
-		return fmt.Errorf("il doit rester au moins un master actif")
+		return fmt.Errorf("at least one active master account must remain")
 	}
 	_, err = s.cfg.Exec(`DELETE FROM users WHERE id=?`, id)
 	return err
@@ -387,23 +387,23 @@ func (a *API) need(level int, h func(http.ResponseWriter, *http.Request, *User))
 		}
 		c, err := r.Cookie(sessionCookie)
 		if err != nil {
-			writeErr(w, http.StatusUnauthorized, "authentification requise")
+			writeErr(w, http.StatusUnauthorized, "authentication required")
 			return
 		}
 		sess, err := a.store.Session(c.Value)
 		if err != nil {
 			clearSessionCookie(w)
-			writeErr(w, http.StatusUnauthorized, "session expiree")
+			writeErr(w, http.StatusUnauthorized, "session expired")
 			return
 		}
 		if r.Method != "GET" && r.Method != "HEAD" {
 			if r.Header.Get("X-CSRF-Token") != sess.CSRF {
-				writeErr(w, http.StatusForbidden, "jeton CSRF invalide")
+				writeErr(w, http.StatusForbidden, "invalid CSRF token")
 				return
 			}
 		}
 		if sess.User.Level() < level {
-			writeErr(w, http.StatusForbidden, "droits insuffisants")
+			writeErr(w, http.StatusForbidden, "insufficient privileges")
 			return
 		}
 		h(w, r, sess.User)
@@ -467,7 +467,7 @@ func (a *API) authState(w http.ResponseWriter, r *http.Request) {
 // la creation du premier master, et la fenetre se referme ensuite.
 func (a *API) authSetup(w http.ResponseWriter, r *http.Request) {
 	if a.store.CountUsers() > 0 {
-		writeErr(w, http.StatusConflict, "un compte existe deja")
+		writeErr(w, http.StatusConflict, "an account already exists")
 		return
 	}
 	var in struct {
@@ -481,14 +481,14 @@ func (a *API) authSetup(w http.ResponseWriter, r *http.Request) {
 	// Sans ce code, le premier visiteur d'une instance fraichement
 	// exposee pourrait s'attribuer le compte master.
 	if !a.limiter.allow(clientIP(r)) {
-		writeErr(w, http.StatusTooManyRequests, "trop de tentatives, reessayez plus tard")
+		writeErr(w, http.StatusTooManyRequests, "too many attempts, try again later")
 		return
 	}
 	if a.setupCode == "" || subtle.ConstantTimeCompare(
 		[]byte(strings.TrimSpace(in.SetupCode)), []byte(a.setupCode)) != 1 {
 		writeErr(w, http.StatusForbidden,
-			"code d'installation invalide : il figure dans le journal du service "+
-				"et dans le fichier setup-code du repertoire de donnees")
+			"invalid setup code: it is shown in the service log "+
+				"and in the setup-code file of the data directory")
 		return
 	}
 	u, err := a.store.CreateUser(in.Email, in.Name, in.Password, "master")
@@ -511,7 +511,7 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 	ip := clientIP(r)
 	if !a.limiter.allow(ip) {
 		writeErr(w, http.StatusTooManyRequests,
-			"trop de tentatives, reessayez dans quelques minutes")
+			"too many attempts, try again in a few minutes")
 		return
 	}
 	var in struct{ Email, Password string }
@@ -529,7 +529,7 @@ func (a *API) authLogin(w http.ResponseWriter, r *http.Request) {
 	// compte existe.
 	if err != nil || disabled == 1 || !verifyPassword(hash, in.Password) {
 		a.store.Audit(nil, ip, "login_failed", "user", in.Email)
-		writeErr(w, http.StatusUnauthorized, "identifiants invalides")
+		writeErr(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
 	token, csrf, err := a.store.OpenSession(id, ip, r.UserAgent())
@@ -565,13 +565,13 @@ func (a *API) authPassword(w http.ResponseWriter, r *http.Request, u *User) {
 		return
 	}
 	if u.ID == 0 {
-		writeErr(w, 400, "le jeton API n'a pas de mot de passe")
+		writeErr(w, 400, "the API token has no password")
 		return
 	}
 	var hash string
 	a.store.cfg.QueryRow(`SELECT password_hash FROM users WHERE id=?`, u.ID).Scan(&hash)
 	if !verifyPassword(hash, in.Current) {
-		writeErr(w, 403, "mot de passe actuel incorrect")
+		writeErr(w, 403, "current password is incorrect")
 		return
 	}
 	if err := a.store.UpdateUser(u.ID, nil, nil, &in.New, nil); err != nil {
@@ -615,7 +615,7 @@ func (a *API) usersCreate(w http.ResponseWriter, r *http.Request, actor *User) {
 func (a *API) usersPatch(w http.ResponseWriter, r *http.Request, actor *User) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeErr(w, 400, "identifiant invalide")
+		writeErr(w, 400, "invalid identifier")
 		return
 	}
 	var in struct {
@@ -639,11 +639,11 @@ func (a *API) usersPatch(w http.ResponseWriter, r *http.Request, actor *User) {
 func (a *API) usersDelete(w http.ResponseWriter, r *http.Request, actor *User) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeErr(w, 400, "identifiant invalide")
+		writeErr(w, 400, "invalid identifier")
 		return
 	}
 	if id == actor.ID {
-		writeErr(w, 400, "on ne supprime pas son propre compte")
+		writeErr(w, 400, "you cannot delete your own account")
 		return
 	}
 	if err := a.store.DeleteUser(id); err != nil {

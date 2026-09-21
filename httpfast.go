@@ -209,7 +209,7 @@ func withRateLimit(rl *rateLimiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") && !isLocalDirect(r) && !rl.allow(clientIP(r)) {
 			w.Header().Set("Retry-After", "1")
-			writeErr(w, http.StatusTooManyRequests, "trop de requetes, ralentissez")
+			writeErr(w, http.StatusTooManyRequests, "too many requests, slow down")
 			return
 		}
 		next.ServeHTTP(w, r)

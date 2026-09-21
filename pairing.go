@@ -169,11 +169,11 @@ func checkJustification(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	n := utf8.RuneCountInString(s)
 	if n < minJustification {
-		return "", fmt.Errorf("la justification doit compter au moins %d caracteres",
+		return "", fmt.Errorf("the justification must be at least %d characters long",
 			minJustification)
 	}
 	if n > maxNoteLength {
-		return "", fmt.Errorf("la justification depasse %d caracteres", maxNoteLength)
+		return "", fmt.Errorf("the justification exceeds %d characters", maxNoteLength)
 	}
 	return s, nil
 }
@@ -181,7 +181,7 @@ func checkJustification(s string) (string, error) {
 func checkNote(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if utf8.RuneCountInString(s) > maxNoteLength {
-		return "", fmt.Errorf("la note depasse %d caracteres", maxNoteLength)
+		return "", fmt.Errorf("the note exceeds %d characters", maxNoteLength)
 	}
 	return s, nil
 }
@@ -213,7 +213,7 @@ type pairingPayload struct {
 func (f *Federation) RequestPairing(in PairingInput) (*PairingRequest, error) {
 	base := baseOf(in.URL)
 	if !strings.HasPrefix(base, "https://") && !strings.HasPrefix(base, "http://") {
-		return nil, fmt.Errorf("l'URL doit commencer par https://")
+		return nil, fmt.Errorf("the URL must start with https://")
 	}
 	just, err := checkJustification(in.Justification)
 	if err != nil {
@@ -225,17 +225,17 @@ func (f *Federation) RequestPairing(in PairingInput) (*PairingRequest, error) {
 	}
 	me := f.Profile()
 	if me.ASN == "" {
-		return nil, fmt.Errorf("renseignez votre numero d'AS avant d'appairer")
+		return nil, fmt.Errorf("set your AS number before pairing")
 	}
 	if base == me.URL {
-		return nil, fmt.Errorf("c'est l'URL de cette instance")
+		return nil, fmt.Errorf("this is the URL of this instance")
 	}
 
 	// Lecture du profil public du distant : on obtient sa cle et son
 	// empreinte, que l'operateur compare avant d'aller plus loin.
 	resp, err := f.client.Get(base + "/api/v1/fed/profile")
 	if err != nil {
-		return nil, fmt.Errorf("instance injoignable: %w", err)
+		return nil, fmt.Errorf("instance unreachable: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
@@ -247,10 +247,10 @@ func (f *Federation) RequestPairing(in PairingInput) (*PairingRequest, error) {
 	}
 	raw, err := base64.StdEncoding.DecodeString(prof.PubKey)
 	if err != nil || len(raw) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("cle publique distante invalide")
+		return nil, fmt.Errorf("invalid remote public key")
 	}
 	if prof.ASN == me.ASN {
-		return nil, fmt.Errorf("l'instance distante annonce le meme AS que nous")
+		return nil, fmt.Errorf("the remote instance announces the same AS as ours")
 	}
 
 	token := randomHex(16)
@@ -278,7 +278,7 @@ func (f *Federation) RequestPairing(in PairingInput) (*PairingRequest, error) {
 		f.store.cfg.Exec(
 			`UPDATE fed_pairing SET state='failed', error=? WHERE id=?`,
 			err.Error(), id)
-		return nil, fmt.Errorf("envoi de la demande: %w", err)
+		return nil, fmt.Errorf("sending the request: %w", err)
 	}
 	return f.pairingByID(id)
 }
@@ -296,7 +296,7 @@ func (f *Federation) postUnsigned(url string, payload any) error {
 	}
 	idx := strings.Index(url, "/api/")
 	if idx < 0 {
-		return fmt.Errorf("URL d'API invalide")
+		return fmt.Errorf("invalid API URL")
 	}
 	f.sign(req, url[idx:], body)
 	resp, err := f.client.Do(req)
@@ -323,7 +323,7 @@ func (f *Federation) HandlePairingRequest(r *http.Request) (*PairingRequest, err
 		return nil, err
 	}
 	if in.Token == "" || in.ASN == "" || in.URL == "" || in.PubKey == "" {
-		return nil, fmt.Errorf("demande incomplete")
+		return nil, fmt.Errorf("incomplete request")
 	}
 	just, err := checkJustification(in.Justification)
 	if err != nil {
@@ -334,17 +334,17 @@ func (f *Federation) HandlePairingRequest(r *http.Request) (*PairingRequest, err
 		return nil, err
 	}
 	if h.asn != in.ASN {
-		return nil, fmt.Errorf("l'AS signataire ne correspond pas au corps")
+		return nil, fmt.Errorf("the signing AS does not match the body")
 	}
 	raw, err := base64.StdEncoding.DecodeString(in.PubKey)
 	if err != nil || len(raw) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("cle publique invalide")
+		return nil, fmt.Errorf("invalid public key")
 	}
 	if err := f.checkSig(ed25519.PublicKey(raw), r, h, body); err != nil {
 		return nil, err
 	}
 	if in.ASN == f.Profile().ASN {
-		return nil, fmt.Errorf("AS identique au notre")
+		return nil, fmt.Errorf("same AS as ours")
 	}
 
 	anchors, _ := json.Marshal(in.Anchors)
@@ -363,7 +363,7 @@ func (f *Federation) HandlePairingRequest(r *http.Request) (*PairingRequest, err
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("demande d'appairage recue de %s (%s), empreinte %s",
+	log.Printf("pairing request received from %s (%s), fingerprint %s",
 		in.ASN, in.Org, fingerprintOf(raw))
 	row := f.store.cfg.QueryRow(`SELECT `+pairCols+
 		` FROM fed_pairing WHERE direction='in' AND token=?`, in.Token)
@@ -387,13 +387,13 @@ type DecisionInput struct {
 func (f *Federation) DecidePairing(id int64, in DecisionInput, by string) error {
 	p, err := f.pairingByID(id)
 	if err != nil {
-		return fmt.Errorf("demande introuvable")
+		return fmt.Errorf("request not found")
 	}
 	if p.Direction != "in" {
-		return fmt.Errorf("seules les demandes entrantes se decident ici")
+		return fmt.Errorf("only incoming requests can be decided here")
 	}
 	if p.State != "pending" {
-		return fmt.Errorf("demande deja traitee (%s)", p.State)
+		return fmt.Errorf("request already handled (%s)", p.State)
 	}
 	reply, err := checkNote(in.Reply)
 	if err != nil {
@@ -423,7 +423,7 @@ func (f *Federation) DecidePairing(id int64, in DecisionInput, by string) error 
 	payload.Profile.NOCPhone = ""
 	if err := f.postUnsigned(p.URL+"/api/v1/fed/pairing/response", payload); err != nil {
 		f.store.cfg.Exec(`UPDATE fed_pairing SET error=? WHERE id=?`, err.Error(), id)
-		log.Printf("reponse d'appairage vers %s: %v", p.URL, err)
+		log.Printf("pairing response to %s: %v", p.URL, err)
 	}
 	return nil
 }
@@ -438,13 +438,13 @@ func (f *Federation) HandlePairingResponse(r *http.Request) (string, error) {
 		return "", err
 	}
 	if in.Token == "" {
-		return "", fmt.Errorf("jeton d'appairage absent")
+		return "", fmt.Errorf("missing pairing token")
 	}
 	row := f.store.cfg.QueryRow(`SELECT `+pairCols+
 		` FROM fed_pairing WHERE direction='out' AND token=?`, in.Token)
 	p, err := scanPairing(row.Scan)
 	if err != nil {
-		return "", fmt.Errorf("aucune demande sortante pour ce jeton")
+		return "", fmt.Errorf("no outgoing request for this token")
 	}
 	if p.State != "pending" {
 		return p.State, nil
@@ -453,10 +453,10 @@ func (f *Federation) HandlePairingResponse(r *http.Request) (string, error) {
 	// au moment de la demande : un tiers ne peut pas repondre a sa place.
 	raw, err := base64.StdEncoding.DecodeString(p.pubkey)
 	if err != nil || len(raw) != ed25519.PublicKeySize {
-		return "", fmt.Errorf("cle enregistree invalide")
+		return "", fmt.Errorf("stored key is invalid")
 	}
 	if h.asn != p.ASN {
-		return "", fmt.Errorf("AS signataire inattendu")
+		return "", fmt.Errorf("unexpected signing AS")
 	}
 	if err := f.checkSig(ed25519.PublicKey(raw), r, h, body); err != nil {
 		return "", err
@@ -472,7 +472,7 @@ func (f *Federation) HandlePairingResponse(r *http.Request) (string, error) {
 			`UPDATE fed_pairing SET state='accepted', decided_at=?, reply_note=?,
 			        peer_public=? WHERE id=?`,
 			now, reply, b2i(in.PublicListing), p.ID)
-		log.Printf("appairage accepte par %s (%s)", p.ASN, p.Org)
+		log.Printf("pairing accepted by %s (%s)", p.ASN, p.Org)
 		return "accepted", nil
 	}
 	f.store.cfg.Exec(
@@ -515,10 +515,10 @@ func (f *Federation) SetPeerPublic(id int64, public bool) error {
 	var consent int
 	if err := f.store.cfg.QueryRow(
 		`SELECT peer_consent FROM fed_peers WHERE id=?`, id).Scan(&consent); err != nil {
-		return fmt.Errorf("pair introuvable")
+		return fmt.Errorf("peer not found")
 	}
 	if public && consent == 0 {
-		return fmt.Errorf("ce pair n'a pas consenti a l'affichage public")
+		return fmt.Errorf("this peer has not agreed to public listing")
 	}
 	_, err := f.store.cfg.Exec(`UPDATE fed_peers SET public=? WHERE id=?`, b2i(public), id)
 	return err
@@ -567,7 +567,7 @@ func (a *API) pairingInbound(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]any{
 		"state": p.State, "fingerprint": a.fed.Fingerprint(),
-		"note": "demande enregistree, en attente de validation humaine",
+		"note": "request recorded, waiting for human approval",
 	})
 }
 
@@ -610,7 +610,7 @@ func (a *API) pairingCreate(w http.ResponseWriter, r *http.Request, u *User) {
 func (a *API) pairingDecide(w http.ResponseWriter, r *http.Request, u *User) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeErr(w, 400, "identifiant invalide")
+		writeErr(w, 400, "invalid identifier")
 		return
 	}
 	var in DecisionInput
@@ -633,7 +633,7 @@ func (a *API) pairingDecide(w http.ResponseWriter, r *http.Request, u *User) {
 func (a *API) peerPatch(w http.ResponseWriter, r *http.Request, u *User) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeErr(w, 400, "identifiant invalide")
+		writeErr(w, 400, "invalid identifier")
 		return
 	}
 	var in struct {

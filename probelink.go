@@ -46,9 +46,10 @@ type wireMeasure struct {
 }
 
 type probeTargetsResp struct {
-	Version string    `json:"version"`
-	ProbeID int64     `json:"probe_id"`
-	Targets []*Target `json:"targets"`
+	Version       string    `json:"version"`
+	ProbeID       int64     `json:"probe_id"`
+	Targets       []*Target `json:"targets"`
+	TraceRequests []int64   `json:"trace_requests"`
 }
 
 func probeSocketPath(cfg Config) string {
@@ -69,7 +70,20 @@ func ServeProbeSocket(path string, cache *TargetCache, writer *Writer, probeID i
 	os.Chmod(path, 0o660)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /probe/v1/targets", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, probeTargetsResp{Version: Version, ProbeID: probeID, Targets: cache.Targets()})
+		writeJSON(w, probeTargetsResp{Version: Version, ProbeID: probeID, Targets: cache.Targets(),
+			TraceRequests: traceRequests.Pop()})
+	})
+	mux.HandleFunc("POST /probe/v1/traceroutes", func(w http.ResponseWriter, r *http.Request) {
+		var list []*Traceroute
+		if err := json.NewDecoder(io.LimitReader(r.Body, 16<<20)).Decode(&list); err != nil {
+			writeErr(w, 400, err.Error())
+			return
+		}
+		for _, tr := range list {
+			tr.ProbeID = probeID
+			writer.SubmitTrace(tr)
+		}
+		writeJSON(w, map[string]int{"accepted": len(list)})
 	})
 	mux.HandleFunc("POST /probe/v1/measurements", func(w http.ResponseWriter, r *http.Request) {
 		var batch []wireMeasure
@@ -89,7 +103,7 @@ func ServeProbeSocket(path string, cache *TargetCache, writer *Writer, probeID i
 		srv.Close()
 		os.Remove(path)
 	}()
-	log.Printf("sonde externe attendue sur %s", path)
+	log.Printf("waiting for the external probe on %s", path)
 	go srv.Serve(l)
 	return nil
 }
@@ -107,6 +121,8 @@ type remoteLink struct {
 	bmu     sync.Mutex
 	buf     []wireMeasure
 	dropped int64
+	traces  []*Traceroute
+	treqs   []int64
 }
 
 func newRemoteLink(sock string) *remoteLink {
@@ -137,6 +153,22 @@ func (l *remoteLink) Submit(m Measurement, host string) {
 	l.buf = append(l.buf, wireMeasure{Measurement: m, Host: host})
 }
 
+func (l *remoteLink) SubmitTrace(tr *Traceroute) {
+	l.bmu.Lock()
+	defer l.bmu.Unlock()
+	if len(l.traces) < 1000 {
+		l.traces = append(l.traces, tr)
+	}
+}
+
+func (l *remoteLink) TraceRequests() []int64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := l.treqs
+	l.treqs = nil
+	return out
+}
+
 func (l *remoteLink) fetchTargets() error {
 	resp, err := l.client.Get("http://probe/probe/v1/targets")
 	if err != nil {
@@ -152,11 +184,28 @@ func (l *remoteLink) fetchTargets() error {
 	}
 	l.mu.Lock()
 	l.targets, l.version, l.probeID = tr.Targets, tr.Version, tr.ProbeID
+	l.treqs = append(l.treqs, tr.TraceRequests...)
 	l.mu.Unlock()
 	return nil
 }
 
 func (l *remoteLink) flush() error {
+	l.bmu.Lock()
+	traces := l.traces
+	l.traces = nil
+	l.bmu.Unlock()
+	if len(traces) > 0 {
+		body, _ := json.Marshal(traces)
+		resp, err := l.client.Post("http://probe/probe/v1/traceroutes", "application/json", bytes.NewReader(body))
+		if err != nil || resp.StatusCode != 200 {
+			l.bmu.Lock()
+			l.traces = append(traces, l.traces...)
+			l.bmu.Unlock()
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}
 	l.bmu.Lock()
 	n := len(l.buf)
 	if n > probeFlushMax {
@@ -212,19 +261,19 @@ func runProbe(args []string) error {
 	}
 	sock := probeSocketPath(cfg)
 	link := newRemoteLink(sock)
-	log.Printf("sonde smokestack %s, service sur %s", Version, sock)
+	log.Printf("smokestack probe %s, service on %s", Version, sock)
 
 	for i := 0; ; i++ {
 		if err := link.fetchTargets(); err == nil {
 			break
 		} else if i%10 == 0 {
-			log.Printf("en attente du service : %v", err)
+			log.Printf("waiting for the service: %v", err)
 		}
 		time.Sleep(time.Second)
 	}
-	prober, err := NewProber(link, link, link.probeID)
+	prober, err := NewProber(link, link, link.probeID, cfg.Probe.Traceroute)
 	if err != nil {
-		return fmt.Errorf("socket ICMP : %w (la sonde a besoin de CAP_NET_RAW)", err)
+		return fmt.Errorf("ICMP socket: %w (the probe needs CAP_NET_RAW)", err)
 	}
 	defer prober.Close()
 
@@ -255,7 +304,7 @@ func runProbe(args []string) error {
 					break
 				}
 			}
-			log.Printf("sonde arretee")
+			log.Printf("probe stopped")
 			return nil
 		case <-refresh.C:
 			if err := link.fetchTargets(); err != nil {
@@ -269,10 +318,10 @@ func runProbe(args []string) error {
 			if v != "" && v != Version {
 				if bin := currentBinary(); bin != "" {
 					link.flush()
-					log.Printf("service en version %s, relance de la sonde", v)
+					log.Printf("service now runs version %s, restarting the probe", v)
 					prober.Close()
 					if err := syscall.Exec(bin, os.Args, os.Environ()); err != nil {
-						log.Printf("relance impossible : %v", err)
+						log.Printf("restart failed: %v", err)
 					}
 				}
 			}
@@ -281,7 +330,7 @@ func runProbe(args []string) error {
 				link.bmu.Lock()
 				n, d := len(link.buf), link.dropped
 				link.bmu.Unlock()
-				log.Printf("service injoignable (%v) : %d mesures en attente, %d ecartees", err, n, d)
+				log.Printf("service unreachable (%v): %d measurements pending, %d dropped", err, n, d)
 				lastWarn = time.Now()
 			}
 		}

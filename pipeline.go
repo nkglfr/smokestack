@@ -31,6 +31,7 @@ type Writer struct {
 	store   *Store
 	archive *Archive
 	ch      chan queuedMeasure
+	traces  chan *Traceroute
 	done    chan struct{}
 
 	written atomic.Int64
@@ -40,7 +41,8 @@ type Writer struct {
 
 func NewWriter(store *Store, archive *Archive) *Writer {
 	return &Writer{store: store, archive: archive,
-		ch: make(chan queuedMeasure, writerQueueSize), done: make(chan struct{})}
+		ch: make(chan queuedMeasure, writerQueueSize), traces: make(chan *Traceroute, 256),
+		done: make(chan struct{})}
 }
 
 // Submit ne bloque jamais.
@@ -49,8 +51,22 @@ func (w *Writer) Submit(m Measurement, host string) {
 	case w.ch <- queuedMeasure{m, host}:
 	default:
 		if w.dropped.Add(1)%1000 == 1 {
-			log.Printf("file d'ecriture pleine : mesures ecartees (%d au total)", w.dropped.Load())
+			log.Printf("write queue full: measurements dropped (%d in total)", w.dropped.Load())
 		}
+	}
+}
+
+// SubmitTrace never blocks either.
+func (w *Writer) SubmitTrace(tr *Traceroute) {
+	select {
+	case w.traces <- tr:
+	default:
+	}
+}
+
+func (w *Writer) saveTrace(tr *Traceroute) {
+	if err := w.store.SaveTraceroute(tr); err != nil {
+		log.Printf("saving traceroute: %v", err)
 	}
 }
 
@@ -74,7 +90,7 @@ func (w *Writer) Loop(stop <-chan struct{}) {
 		}
 		start := time.Now()
 		if err := w.store.RecordBatch(batch); err != nil {
-			log.Printf("ecriture des mesures : %v", err)
+			log.Printf("writing measurements: %v", err)
 		} else {
 			w.written.Add(int64(len(batch)))
 		}
@@ -93,6 +109,8 @@ func (w *Writer) Loop(stop <-chan struct{}) {
 			if len(batch) >= writerBatchMax {
 				flush()
 			}
+		case tr := <-w.traces:
+			w.saveTrace(tr)
 		case <-timer.C:
 			flush()
 			timer.Reset(writerFlushWait)
@@ -198,13 +216,17 @@ func NewTargetCache(store *Store) *TargetCache {
 func (c *TargetCache) refresh() {
 	list, err := c.store.ActiveTargets()
 	if err != nil {
-		log.Printf("cache des cibles : %v", err)
+		log.Printf("target cache: %v", err)
 		return
 	}
 	c.mu.Lock()
 	c.list = list
 	c.mu.Unlock()
 }
+
+// TraceRequests hands traceroutes requested from the back-office to the
+// embedded probe.
+func (c *TargetCache) TraceRequests() []int64 { return traceRequests.Pop() }
 
 func (c *TargetCache) Targets() []*Target {
 	c.mu.RLock()

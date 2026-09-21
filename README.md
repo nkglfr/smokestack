@@ -6,7 +6,8 @@ between operators who measure each other.
 
 - 📈 **Latency, jitter and loss** to your transits, exchanges, DNS resolvers and clouds
 - 🔍 **Zoom from one year down to 30 seconds**, percentiles stay exact at every level
-- 🌍 **Public status page** with a private back-office, in English, French, German and Spanish
+- 🧭 **Traceroute on anomalies**, compared with the last healthy path, over IPv4 and IPv6
+- 🌍 **Public status page** in English, French, German and Spanish, with a private back-office
 - 🤝 **Federation**: pair with other operators, measure each other, get notified of incidents
 - 📦 **One static binary**, SQLite inside, optional S3 archive, installs in under a minute
 
@@ -88,13 +89,15 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 - Status overview: faults first, critical targets, all categories
 - 24-hour status bar and sparkline per target
 - Detail view with drag-to-zoom, 1-year navigator, event annotations, permalinks
+- Anomaly traceroutes marked on the graph (optional, off by default)
 - Host network page: your AS from RIPEstat and PeeringDB
 - Federation page: paired networks and inter-AS latency matrix
 - Light and dark themes, responsive, translated
 
 **Back-office**
 - Accounts with four roles (viewer, editor, admin, master) and an audit log
-- Targets and categories, ICMP or TCP, every 30 s, 1, 5 or 10 min
+- Targets and categories, ICMP or TCP, IPv4 or IPv6, every 30 s, 1, 5 or 10 min
+- Traceroutes: automatic on anomalies, daily reference path, on demand, with path comparison
 - Storage settings (local quota or S3), publisher page, languages
 - One-click updates with rollback
 
@@ -108,7 +111,7 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 
 ## Updating
 
-Every release is a signed `.zip`. From the back-office (*Instance → Mise à jour*),
+Every release is a signed `.zip`. From the back-office (*Instance → Updates*),
 the command line, or automatically:
 
 ```sh
@@ -131,7 +134,8 @@ restored automatically.
 {
   "listen": "127.0.0.1:8080",
   "data_dir": "/var/lib/smokestack",
-  "probe": { "enabled": true, "mode": "external", "slug": "par-01", "name": "Paris" },
+  "probe": { "enabled": true, "mode": "external", "slug": "par-01", "name": "Paris",
+             "traceroute": { "max_hops": 30, "reference_hours": 24 } },
   "update": { "auto_check": true, "auto_apply": false }
 }
 ```
@@ -154,6 +158,7 @@ Public, read-only, JSON:
 | `GET /api/v1/live` | Server-sent events, latest measurements |
 | `GET /api/v1/asn` | Host network (RIPEstat, PeeringDB) |
 | `GET /api/v1/fed/peers` | Public federation peers |
+| `GET /api/v1/traceroutes?target=ID` | Traceroutes, if made public by the operator |
 | `GET /healthz` | Health check |
 
 Rate limit: 20 requests/s per client IP, bursts of 80.
@@ -200,9 +205,8 @@ few hours. See [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
 Working and tested, not yet 1.0. Known gaps:
 
-- IPv6 probing
-- Traceroute triggered on anomalies
-- Back-office still in French only (public pages are translated)
+- IPv6 has been tested with crafted packets only so far; feedback from dual-stack hosts is welcome
+- Latency-triggered traceroutes are covered by unit tests; loss-triggered ones were tested on a multi-hop lab network
 - Remote probes on another machine (same-host isolation is done)
 
 Design notes (in French): [docs/DESIGN.fr.md](docs/DESIGN.fr.md).

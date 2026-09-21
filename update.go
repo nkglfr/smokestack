@@ -157,7 +157,7 @@ func parseKeyLines(text string, into map[string]ed25519.PublicKey) {
 		line = strings.TrimPrefix(line, "ed25519:")
 		raw, err := base64.StdEncoding.DecodeString(line)
 		if err != nil || len(raw) != ed25519.PublicKeySize {
-			log.Printf("mise a jour : cle publique ignoree (format invalide)")
+			log.Printf("update: public key ignored (invalid format)")
 			continue
 		}
 		pub := ed25519.PublicKey(raw)
@@ -187,12 +187,12 @@ func (u *Updater) KeyIDs() []string {
 
 func (u *Updater) detectLayout() {
 	if !u.cfg.Enabled {
-		u.reason = "mises a jour desactivees dans la configuration"
+		u.reason = "updates are disabled in the configuration"
 		return
 	}
 	exe, err := os.Executable()
 	if err != nil {
-		u.reason = "emplacement du binaire inconnu"
+		u.reason = "unknown binary location"
 		return
 	}
 	if real, err := filepath.EvalSymlinks(exe); err == nil {
@@ -201,18 +201,18 @@ func (u *Updater) detectLayout() {
 	relDir := filepath.Dir(exe)
 	releases := filepath.Dir(relDir)
 	if filepath.Base(releases) != "releases" {
-		u.reason = "installation non geree (binaire hors de <racine>/releases/<version>/) : " +
-			"utilisez install.sh pour activer les mises a jour en place"
+		u.reason = "unmanaged installation (binary outside <root>/releases/<version>/): " +
+			"use install.sh to enable in-place updates"
 		return
 	}
 	root := filepath.Dir(releases)
 	if _, err := os.Lstat(filepath.Join(root, "current")); err != nil {
-		u.reason = "lien " + filepath.Join(root, "current") + " absent"
+		u.reason = "link " + filepath.Join(root, "current") + " missing"
 		return
 	}
 	probe := filepath.Join(releases, ".write-test")
 	if err := os.WriteFile(probe, nil, 0o600); err != nil {
-		u.reason = "le service ne peut pas ecrire dans " + releases
+		u.reason = "the service cannot write to " + releases
 		return
 	}
 	os.Remove(probe)
@@ -308,7 +308,7 @@ func zipEntry(zr *zip.Reader, name string) *zip.File {
 
 func readSmall(f *zip.File, max int64) ([]byte, error) {
 	if f.UncompressedSize64 > uint64(max) {
-		return nil, fmt.Errorf("%s trop volumineux", f.Name)
+		return nil, fmt.Errorf("%s too large", f.Name)
 	}
 	rc, err := f.Open()
 	if err != nil {
@@ -322,13 +322,13 @@ func readSmall(f *zip.File, max int64) ([]byte, error) {
 func (u *Updater) Verify(zipPath string, requireSigned bool) (*Staged, *zip.ReadCloser, error) {
 	zr, err := zip.OpenReader(zipPath)
 	if err != nil {
-		return nil, nil, fmt.Errorf("ZIP illisible : %w", err)
+		return nil, nil, fmt.Errorf("unreadable ZIP: %w", err)
 	}
 	fail := func(e error) (*Staged, *zip.ReadCloser, error) { zr.Close(); return nil, nil, e }
 
 	mf, bin := zipEntry(&zr.Reader, "manifest.json"), zipEntry(&zr.Reader, "smokestack")
 	if mf == nil || bin == nil {
-		return fail(errors.New("paquet invalide : manifest.json et smokestack sont requis"))
+		return fail(errors.New("invalid package: manifest.json and smokestack are required"))
 	}
 	raw, err := readSmall(mf, 64<<10)
 	if err != nil {
@@ -336,17 +336,17 @@ func (u *Updater) Verify(zipPath string, requireSigned bool) (*Staged, *zip.Read
 	}
 	var m Manifest
 	if err := json.Unmarshal(raw, &m); err != nil {
-		return fail(fmt.Errorf("manifeste illisible : %w", err))
+		return fail(fmt.Errorf("unreadable manifest: %w", err))
 	}
 	if m.Name != "smokestack" || !validVersion(m.Version) || len(m.SHA256) != 64 {
-		return fail(errors.New("manifeste incomplet ou invalide"))
+		return fail(errors.New("incomplete or invalid manifest"))
 	}
 	if m.OS != runtime.GOOS || m.Arch != runtime.GOARCH {
-		return fail(fmt.Errorf("paquet pour %s-%s, ce serveur est %s-%s",
+		return fail(fmt.Errorf("package for %s-%s, this server is %s-%s",
 			m.OS, m.Arch, runtime.GOOS, runtime.GOARCH))
 	}
 	if bin.UncompressedSize64 > maxPackageBytes {
-		return fail(errors.New("binaire trop volumineux"))
+		return fail(errors.New("binary too large"))
 	}
 
 	st := &Staged{Manifest: m, Current: Version, Newer: compareVersions(m.Version, Version) > 0}
@@ -366,10 +366,10 @@ func (u *Updater) Verify(zipPath string, requireSigned bool) (*Staged, *zip.Read
 	}
 	if !st.Signed && (requireSigned || !u.cfg.AllowUnsigned) {
 		if len(u.keys) == 0 {
-			return fail(errors.New("aucune cle de publication de confiance n'est configuree : " +
-				"ajoutez la cle publique dans /etc/smokestack/release-keys.pub (voir DEPLOY.md)"))
+			return fail(errors.New("no trusted release key is configured: " +
+				"add the public key to /etc/smokestack/release-keys.pub (see DEPLOY.md)"))
 		}
-		return fail(errors.New("signature absente ou inconnue : paquet refuse"))
+		return fail(errors.New("missing or unknown signature: package rejected"))
 	}
 	return st, zr, nil
 }
@@ -382,7 +382,7 @@ func (u *Updater) Stage(zipPath string, requireSigned bool) (*Staged, error) {
 	u.mu.Lock()
 	if u.busy {
 		u.mu.Unlock()
-		return nil, errors.New("une mise a jour est deja en cours")
+		return nil, errors.New("an update is already in progress")
 	}
 	u.busy = true
 	u.mu.Unlock()
@@ -395,7 +395,7 @@ func (u *Updater) Stage(zipPath string, requireSigned bool) (*Staged, error) {
 	defer zr.Close()
 
 	if st.Version == u.link("current") {
-		return nil, fmt.Errorf("la version %s est deja active", st.Version)
+		return nil, fmt.Errorf("version %s is already active", st.Version)
 	}
 	releases := filepath.Join(u.root, "releases")
 	staging, err := os.MkdirTemp(releases, ".staging-")
@@ -427,7 +427,7 @@ func (u *Updater) Stage(zipPath string, requireSigned bool) (*Staged, error) {
 	}
 	if got := hex.EncodeToString(h.Sum(nil)); got != strings.ToLower(st.SHA256) {
 		cleanup()
-		return nil, errors.New("empreinte SHA-256 du binaire differente du manifeste : paquet altere")
+		return nil, errors.New("binary SHA-256 differs from the manifest: package tampered with")
 	}
 	if b, err := json.MarshalIndent(st.Manifest, "", "  "); err == nil {
 		os.WriteFile(filepath.Join(staging, "manifest.json"), b, 0o644)
@@ -440,7 +440,7 @@ func (u *Updater) Stage(zipPath string, requireSigned bool) (*Staged, error) {
 	res, err := exec.CommandContext(ctx, dst, "selftest").Output()
 	if err != nil {
 		cleanup()
-		return nil, fmt.Errorf("autotest du nouveau binaire en echec : %v", err)
+		return nil, fmt.Errorf("self-test of the new binary failed: %v", err)
 	}
 	var self struct {
 		OK      bool   `json:"ok"`
@@ -448,7 +448,7 @@ func (u *Updater) Stage(zipPath string, requireSigned bool) (*Staged, error) {
 	}
 	if json.Unmarshal(res, &self) != nil || !self.OK || self.Version != st.Version {
 		cleanup()
-		return nil, fmt.Errorf("autotest : version annoncee %q, attendue %q", self.Version, st.Version)
+		return nil, fmt.Errorf("self-test: reported version %q, expected %q", self.Version, st.Version)
 	}
 
 	final := filepath.Join(releases, st.Version)
@@ -463,7 +463,7 @@ func (u *Updater) Stage(zipPath string, requireSigned bool) (*Staged, error) {
 	u.mu.Lock()
 	u.staged = st
 	u.mu.Unlock()
-	log.Printf("mise a jour : version %s prete (signee: %v, cle %s)", st.Version, st.Signed, st.KeyID)
+	log.Printf("update: version %s staged (signed: %v, key %s)", st.Version, st.Signed, st.KeyID)
 	return st, nil
 }
 
@@ -473,21 +473,21 @@ func (u *Updater) Apply(force bool, by string) (*Staged, error) {
 	st := u.staged
 	u.mu.Unlock()
 	if st == nil {
-		return nil, errors.New("aucune version preparee : televersez d'abord un paquet")
+		return nil, errors.New("no version staged: upload a package first")
 	}
 	if !st.Newer && !force {
-		return nil, fmt.Errorf("la version %s n'est pas plus recente que %s : "+
-			"cochez « forcer » pour revenir a une version anterieure", st.Version, Version)
+		return nil, fmt.Errorf("version %s is not newer than %s: "+
+			"tick \"force\" to go back to an older version", st.Version, Version)
 	}
 	from, oldPrev := u.link("current"), u.link("previous")
 	if err := u.backupConfig(); err != nil {
-		log.Printf("mise a jour : sauvegarde de config.db impossible (%v), on continue", err)
+		log.Printf("update: could not back up config.db (%v), continuing", err)
 	}
 	if from != "" {
 		swapLink(filepath.Join(u.root, "previous"), filepath.Join("releases", from))
 	}
 	if err := swapLink(filepath.Join(u.root, "current"), filepath.Join("releases", st.Version)); err != nil {
-		return nil, fmt.Errorf("bascule impossible : %w", err)
+		return nil, fmt.Errorf("switch failed: %w", err)
 	}
 	u.writePending(pending{Previous: oldPrev, From: from, To: st.Version, At: time.Now().Unix()})
 	u.record("update", from, st.Version, by)
@@ -495,7 +495,7 @@ func (u *Updater) Apply(force bool, by string) (*Staged, error) {
 	u.mu.Lock()
 	u.staged = nil
 	u.mu.Unlock()
-	log.Printf("mise a jour : %s -> %s, redemarrage", from, st.Version)
+	log.Printf("update: %s -> %s, restarting", from, st.Version)
 	u.signalRestart()
 	return st, nil
 }
@@ -507,10 +507,10 @@ func (u *Updater) Rollback(by string) (string, error) {
 	}
 	prev, cur := u.link("previous"), u.link("current")
 	if prev == "" || prev == cur {
-		return "", errors.New("aucune version precedente disponible")
+		return "", errors.New("no previous version available")
 	}
 	if _, err := os.Stat(filepath.Join(u.root, "releases", prev, "smokestack")); err != nil {
-		return "", fmt.Errorf("version %s introuvable sur le disque", prev)
+		return "", fmt.Errorf("version %s not found on disk", prev)
 	}
 	if err := swapLink(filepath.Join(u.root, "current"), filepath.Join("releases", prev)); err != nil {
 		return "", err
@@ -518,7 +518,7 @@ func (u *Updater) Rollback(by string) (string, error) {
 	swapLink(filepath.Join(u.root, "previous"), filepath.Join("releases", cur))
 	os.Remove(filepath.Join(u.dataDir, pendingFile))
 	u.record("rollback", cur, prev, by)
-	log.Printf("retour arriere : %s -> %s, redemarrage", cur, prev)
+	log.Printf("rollback: %s -> %s, restarting", cur, prev)
 	u.signalRestart()
 	return prev, nil
 }
@@ -602,7 +602,7 @@ func (u *Updater) CheckPending() bool {
 	}
 	p.Attempts++
 	if p.Attempts > 3 && p.From != "" {
-		log.Printf("mise a jour : la version %s a echoue %d fois, retour a %s",
+		log.Printf("update: version %s failed %d times, going back to %s",
 			p.To, p.Attempts-1, p.From)
 		swapLink(filepath.Join(u.root, "current"), filepath.Join("releases", p.From))
 		// Le lien previous retrouve sa valeur d'avant la mise a jour :
@@ -632,7 +632,7 @@ func (u *Updater) RecordAutoRollback() {
 	var p pending
 	if json.Unmarshal(b, &p) == nil {
 		u.record("auto_rollback", p.To, p.From, "auto")
-		log.Printf("historique : restauration automatique %s -> %s enregistree", p.To, p.From)
+		log.Printf("history: automatic rollback %s -> %s recorded", p.To, p.From)
 	}
 	os.Remove(path)
 }
@@ -647,7 +647,7 @@ func (u *Updater) ConfirmAfter(d time.Duration, stop <-chan struct{}) {
 	case <-stop:
 	case <-time.After(d):
 		os.Remove(path)
-		log.Printf("mise a jour vers %s confirmee", Version)
+		log.Printf("update to %s confirmed", Version)
 	}
 }
 
@@ -691,7 +691,7 @@ func (u *Updater) autoFlags() (check, apply bool) {
 
 func (u *Updater) Check() (*RemoteRelease, error) {
 	if u.cfg.ManifestURL == "" || strings.Contains(u.cfg.ManifestURL, "CHANGE-ME") {
-		return nil, errors.New("aucune source de mise a jour configuree (update.manifest_url)")
+		return nil, errors.New("no update source configured (update.manifest_url)")
 	}
 	client := &http.Client{Timeout: 20 * time.Second}
 	req, _ := http.NewRequest("GET", u.cfg.ManifestURL, nil)
@@ -702,14 +702,14 @@ func (u *Updater) Check() (*RemoteRelease, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("source de mise a jour : HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("update source: HTTP %d", resp.StatusCode)
 	}
 	var rel RemoteRelease
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&rel); err != nil {
 		return nil, err
 	}
 	if !validVersion(rel.Version) {
-		return nil, errors.New("source de mise a jour : version invalide")
+		return nil, errors.New("update source: invalid version")
 	}
 	rel.CheckedAt = time.Now().Unix()
 	rel.Newer = compareVersions(rel.Version, Version) > 0
@@ -725,10 +725,10 @@ func (u *Updater) Check() (*RemoteRelease, error) {
 func (u *Updater) fetchAndApply(rel *RemoteRelease, by string) error {
 	asset, ok := rel.Assets[runtime.GOOS+"-"+runtime.GOARCH]
 	if !ok {
-		return fmt.Errorf("pas de paquet %s-%s dans la version %s", runtime.GOOS, runtime.GOARCH, rel.Version)
+		return fmt.Errorf("no %s-%s package in version %s", runtime.GOOS, runtime.GOARCH, rel.Version)
 	}
 	if !strings.HasPrefix(asset.URL, "https://") {
-		return errors.New("URL de paquet non HTTPS refusee")
+		return errors.New("non-HTTPS package URL rejected")
 	}
 	tmp, err := os.CreateTemp(filepath.Join(u.root, "releases"), ".download-*.zip")
 	if err != nil {
@@ -753,7 +753,7 @@ func (u *Updater) fetchAndApply(rel *RemoteRelease, by string) error {
 		return err
 	}
 	if asset.SHA256 != "" && hex.EncodeToString(h.Sum(nil)) != strings.ToLower(asset.SHA256) {
-		return errors.New("empreinte du paquet telecharge differente de celle annoncee")
+		return errors.New("downloaded package checksum differs from the announced one")
 	}
 	if _, err := u.Stage(tmp.Name(), true); err != nil {
 		return err
@@ -774,16 +774,16 @@ func (u *Updater) Loop(stop <-chan struct{}) {
 		}
 		rel, err := u.Check()
 		if err != nil {
-			log.Printf("verification des mises a jour : %v", err)
+			log.Printf("checking for updates: %v", err)
 			return
 		}
 		if !rel.Newer {
 			return
 		}
-		log.Printf("nouvelle version disponible : %s (actuelle %s)", rel.Version, Version)
+		log.Printf("new version available: %s (current %s)", rel.Version, Version)
 		if apply && u.Managed() {
 			if err := u.fetchAndApply(rel, "auto"); err != nil {
-				log.Printf("mise a jour automatique vers %s : %v", rel.Version, err)
+				log.Printf("automatic update to %s: %v", rel.Version, err)
 			}
 		}
 	}
@@ -846,7 +846,7 @@ func (a *API) updUpload(w http.ResponseWriter, r *http.Request, u *User) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxPackageBytes+(1<<20))
 	mr, err := r.MultipartReader()
 	if err != nil {
-		writeErr(w, 400, "envoi multipart attendu")
+		writeErr(w, 400, "multipart upload expected")
 		return
 	}
 	var tmpName string
@@ -872,13 +872,13 @@ func (a *API) updUpload(w http.ResponseWriter, r *http.Request, u *User) {
 		tmp.Close()
 		if err != nil {
 			os.Remove(tmpName)
-			writeErr(w, 400, "envoi interrompu ou trop volumineux")
+			writeErr(w, 400, "upload interrupted or too large")
 			return
 		}
 		break
 	}
 	if tmpName == "" {
-		writeErr(w, 400, "champ « package » manquant")
+		writeErr(w, 400, "missing \"package\" field")
 		return
 	}
 	defer os.Remove(tmpName)

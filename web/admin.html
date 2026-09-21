@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -30,7 +30,7 @@
   .btn.s{padding:4px 10px;font-size:12px}
   .row2{display:grid;gap:11px;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr))}
 
-  /* écrans d'entrée */
+  /* entry screens */
   .gate{min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--panel)}
   .gatebox{width:100%;max-width:400px;background:#fff;border:1px solid var(--line);
            border-radius:14px;padding:26px}
@@ -39,7 +39,7 @@
   .logo{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,#2563eb,#0891b2);
         display:grid;place-items:center;color:#fff;font-size:13px;font-weight:700;margin-bottom:14px}
 
-  /* ossature */
+  /* layout */
   .top{border-bottom:1px solid var(--line);position:sticky;top:0;background:#fff;z-index:10}
   .topin{display:flex;align-items:center;gap:14px;height:56px;padding:0 clamp(14px,2.5vw,28px)}
   .brand{display:flex;align-items:center;gap:9px;font-weight:600}
@@ -97,6 +97,13 @@
   .chk small{display:block;color:var(--ink2);font-size:12px}
   .bar{height:6px;border-radius:3px;background:var(--line2);overflow:hidden;min-width:90px}
   .bar i{display:block;height:100%;background:var(--ok)}
+  .diff td{background:#fffbeb}
+  .hopnote{color:var(--crit);font-weight:600;margin-left:6px}
+  .trrow{cursor:pointer}
+  .trrow:hover td{background:var(--panel)}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .tabs button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:5px 11px;font-size:12px;color:var(--ink2)}
+  .tabs button[aria-pressed="true"]{background:#eff6ff;border-color:#93c5fd;color:#1d4ed8}
 </style>
 </head>
 <body>
@@ -105,7 +112,7 @@
 
 <script>
 const $=s=>document.querySelector(s);
-let CSRF="", ME=null, VIEW="dash", PENDING=0, LANGS=[];
+let CSRF="", ME=null, VIEW="dash", PENDING=0, LANGS=[], TR_TARGET=null;
 
 function toast(msg,err){
   const t=$("#toast");t.textContent=msg;t.className="toast"+(err?" err":"");
@@ -126,25 +133,26 @@ async function api(method,path,body){
 }
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,
   c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const dt=ts=>ts?new Date(ts*1000).toLocaleString("fr-FR",
-  {day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
-const gb=b=>(b/1073741824).toFixed(2)+" Go";
+const dt=ts=>ts?new Date(ts*1000).toLocaleString("en-GB",
+  {day:"2-digit",month:"short",year:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
+const gb=b=>(b/1073741824).toFixed(2)+" GB";
+const ago=s=>s<60?s+" s ago":s<3600?Math.round(s/60)+" min ago":Math.round(s/3600)+" h ago";
 
-/* ---------------------------------------------- écrans d'entrée */
+/* --------------------------------------------------- entry screens */
 function gateSetup(){
   $("#app").innerHTML=`<div class="gate"><div class="gatebox">
     <div class="logo">S</div>
-    <h1>Première configuration</h1>
-    <p class="sub">Aucun compte n'existe encore. Créez le compte master :
-      il pourra gérer les utilisateurs et toute la configuration.</p>
-    <div class="field"><label>Code d'installation</label><input id="c" class="mono" placeholder="XXXX-XXXX-XXXX" autocomplete="off">
-      <div style="font-size:11.5px;color:var(--ink2);margin-top:4px">Affiché dans le journal du service
-        (<span class="mono">journalctl -u smokestack</span>) et dans <span class="mono">/var/lib/smokestack/setup-code</span>.</div></div>
-    <div class="field"><label>Adresse de courriel</label><input id="e" type="email" autocomplete="username"></div>
-    <div class="field"><label>Nom affiché</label><input id="n" type="text"></div>
-    <div class="field"><label>Mot de passe (12 caractères minimum)</label>
+    <h1>First-time setup</h1>
+    <p class="sub">No account exists yet. Create the master account: it can manage
+      users and the whole configuration.</p>
+    <div class="field"><label>Setup code</label><input id="c" class="mono" placeholder="XXXX-XXXX-XXXX" autocomplete="off">
+      <div style="font-size:11.5px;color:var(--ink2);margin-top:4px">Shown in the service log
+        (<span class="mono">journalctl -u smokestack</span>) and in <span class="mono">/var/lib/smokestack/setup-code</span>.</div></div>
+    <div class="field"><label>Email address</label><input id="e" type="email" autocomplete="username"></div>
+    <div class="field"><label>Display name</label><input id="n" type="text"></div>
+    <div class="field"><label>Password (12 characters minimum)</label>
       <input id="p" type="password" autocomplete="new-password"></div>
-    <button class="btn p" id="go" style="width:100%">Créer le compte master</button>
+    <button class="btn p" id="go" style="width:100%">Create the master account</button>
   </div></div>`;
   const go=async()=>{
     try{
@@ -160,17 +168,16 @@ function gateLogin(){
   $("#app").innerHTML=`<div class="gate"><div class="gatebox">
     <div class="logo">S</div>
     <h1>Administration</h1>
-    <p class="sub">Connectez-vous pour accéder au back-office.</p>
-    <div class="field"><label>Adresse de courriel</label><input id="e" type="email" autocomplete="username"></div>
-    <div class="field"><label>Mot de passe</label><input id="p" type="password" autocomplete="current-password"></div>
-    <button class="btn p" id="go" style="width:100%">Se connecter</button>
+    <p class="sub">Sign in to access the back-office.</p>
+    <div class="field"><label>Email address</label><input id="e" type="email" autocomplete="username"></div>
+    <div class="field"><label>Password</label><input id="p" type="password" autocomplete="current-password"></div>
+    <button class="btn p" id="go" style="width:100%">Sign in</button>
     <p class="sub" style="margin:16px 0 0;font-size:12px">
-      <a href="/" style="color:var(--blue)">← Retour aux graphes publics</a></p>
+      <a href="/" style="color:var(--blue)">← Back to the public graphs</a></p>
   </div></div>`;
   const go=async()=>{
     try{
-      const r=await api("POST","/api/v1/auth/login",
-        {email:$("#e").value,password:$("#p").value});
+      const r=await api("POST","/api/v1/auth/login",{email:$("#e").value,password:$("#p").value});
       CSRF=r.csrf;ME=r.user;shell();
     }catch(e){toast(e.message,true);}
   };
@@ -178,23 +185,24 @@ function gateLogin(){
   $("#p").onkeydown=e=>{if(e.key==="Enter")go();};
 }
 
-/* ------------------------------------------------------ ossature */
+/* ------------------------------------------------------------ layout */
 const NAV=[
-  {grp:"Supervision"},
-  {id:"dash",  label:"Tableau de bord", min:1},
-  {id:"targets",label:"Cibles et catégories", min:2},
-  {grp:"Fédération"},
-  {id:"fed",   label:"Pairs et appairage", min:3, badge:true},
-  {id:"notify",label:"Alerting NOC", min:3},
+  {grp:"Monitoring"},
+  {id:"dash",   label:"Dashboard", min:1},
+  {id:"targets",label:"Targets and categories", min:2},
+  {id:"traces", label:"Traceroutes", min:1},
+  {grp:"Federation"},
+  {id:"fed",    label:"Peers and pairing", min:3, badge:true},
+  {id:"notify", label:"NOC alerting", min:3},
   {grp:"Instance"},
-  {id:"storage",label:"Stockage", min:3},
-  {id:"site",  label:"Page éditeur", min:3},
-  {id:"net",   label:"Réseau hôte", min:3},
-  {id:"langs", label:"Langues", min:3},
-  {id:"update",label:"Mise à jour", min:4},
-  {grp:"Comptes"},
-  {id:"users", label:"Utilisateurs", min:4},
-  {id:"audit", label:"Journal", min:3}
+  {id:"storage",label:"Storage", min:3},
+  {id:"site",   label:"Publisher page", min:3},
+  {id:"net",    label:"Host network", min:3},
+  {id:"langs",  label:"Languages", min:3},
+  {id:"update", label:"Updates", min:4},
+  {grp:"Accounts"},
+  {id:"users",  label:"Users", min:4},
+  {id:"audit",  label:"Audit log", min:3}
 ];
 const LVL={viewer:1,editor:2,admin:3,master:4};
 
@@ -213,8 +221,8 @@ function shell(){
       <span class="spacer"></span>
       <div class="who"><div>${esc(ME.display_name)}</div>
         <div><span class="badge b-n">${ME.role}</span></div></div>
-      <button class="btn s" id="pw">Mot de passe</button>
-      <button class="btn s" id="out">Quitter</button>
+      <button class="btn s" id="pw">Password</button>
+      <button class="btn s" id="out">Sign out</button>
     </div></div>
     <div class="shell"><nav class="side">${nav}</nav><main id="main"></main></div>`;
   $("#out").onclick=async()=>{await api("POST","/api/v1/auth/logout");location.reload();};
@@ -222,142 +230,131 @@ function shell(){
   document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>{VIEW=b.dataset.v;shell();});
   render();
 }
+function go(view){VIEW=view;shell();}
 
 async function changePassword(){
-  const cur=prompt("Mot de passe actuel");if(!cur) return;
-  const nw=prompt("Nouveau mot de passe (12 caractères minimum)");if(!nw) return;
+  const cur=prompt("Current password");if(!cur) return;
+  const nw=prompt("New password (12 characters minimum)");if(!nw) return;
   try{
     await api("POST","/api/v1/auth/password",{current:cur,new:nw});
-    toast("Mot de passe changé, reconnectez-vous");
+    toast("Password changed, please sign in again");
     setTimeout(()=>location.reload(),1200);
   }catch(e){toast(e.message,true);}
 }
 
 function render(){
   const m=$("#main");
-  if(VIEW==="dash") return viewDash(m);
-  if(VIEW==="targets") return viewTargets(m);
-  if(VIEW==="fed") return viewFed(m);
-  if(VIEW==="notify") return viewNotify(m);
-  if(VIEW==="storage") return viewStorage(m);
-  if(VIEW==="site") return viewSite(m);
-  if(VIEW==="net") return viewNet(m);
-  if(VIEW==="langs") return viewLangs(m);
-  if(VIEW==="update") return viewUpdate(m);
-  if(VIEW==="users") return viewUsers(m);
-  if(VIEW==="audit") return viewAudit(m);
+  const views={dash:viewDash,targets:viewTargets,traces:viewTraces,fed:viewFed,notify:viewNotify,
+    storage:viewStorage,site:viewSite,net:viewNet,langs:viewLangs,update:viewUpdate,users:viewUsers,audit:viewAudit};
+  return (views[VIEW]||viewDash)(m);
 }
 
-/* -------------------------------------------- tableau de bord */
-let PS=null;
+/* --------------------------------------------------------- dashboard */
 function probeCard(p){
   if(!p) return "";
   const age=p.last_seen_at?Math.round(Date.now()/1000-p.last_seen_at):null;
   const alive=age!=null&&age<120, W=p.writer;
-  const mode={external:"processus isolé",embedded:"intégrée au service",disabled:"désactivée"}[p.mode]||p.mode;
-  return `<div class="card"><h3>Chaîne de mesure
-    <span style="margin-left:auto">${p.mode==="disabled"?'<span class="badge b-n">désactivée</span>'
-      :alive?'<span class="badge b-ok">sonde active</span>':'<span class="badge b-crit">sonde muette</span>'}</span></h3><div class="body">
+  const mode={external:"isolated process",embedded:"embedded in the service",disabled:"disabled"}[p.mode]||p.mode;
+  return `<div class="card"><h3>Measurement pipeline
+    <span style="margin-left:auto">${p.mode==="disabled"?'<span class="badge b-n">disabled</span>'
+      :alive?'<span class="badge b-ok">probe active</span>':'<span class="badge b-crit">probe silent</span>'}</span></h3><div class="body">
     <table><tbody>
-      <tr><td style="width:240px">Mode de la sonde</td><td>${esc(mode)}${p.mode==="embedded"
-        ?' <span style="font-size:12px;color:var(--ink2)">— le mode isolé protège mieux les mesures sous forte charge</span>':""}</td></tr>
-      <tr><td>Dernière mesure reçue</td><td>${age==null?"—":"il y a "+age+" s"}</td></tr>
-      <tr><td>Mesures écrites / écartées</td><td>${W.written} / <span style="color:${W.dropped?"var(--crit)":"inherit"}">${W.dropped}</span></td></tr>
-      <tr><td>File d'écriture</td><td>${W.queued} / ${W.capacity} · dernier lot ${W.last_batch_ms.toFixed(1)} ms</td></tr>
-      <tr><td>Calcul de l'accueil</td><td>${p.overview_build_ms} ms, toutes les 30 s</td></tr>
+      <tr><td style="width:240px">Probe mode</td><td>${esc(mode)}${p.mode==="embedded"
+        ?' <span style="font-size:12px;color:var(--ink2)">— the isolated mode protects measurements better under heavy load</span>':""}</td></tr>
+      <tr><td>Last measurement received</td><td>${age==null?"—":ago(age)}</td></tr>
+      <tr><td>Measurements written / dropped</td><td>${W.written} / <span style="color:${W.dropped?"var(--crit)":"inherit"}">${W.dropped}</span></td></tr>
+      <tr><td>Write queue</td><td>${W.queued} / ${W.capacity} · last batch ${W.last_batch_ms.toFixed(1)} ms</td></tr>
+      <tr><td>Home page overview</td><td>built in ${p.overview_build_ms} ms, every 30 s</td></tr>
     </tbody></table></div></div>`;
 }
 async function viewDash(m){
-  m.innerHTML=`<h2>Tableau de bord</h2>
-    <p class="lead">État de l'instance, de la sonde et du stockage.</p>
-    <div id="d">Chargement…</div>`;
+  m.innerHTML=`<h2>Dashboard</h2>
+    <p class="lead">State of the instance, the probe and the storage.</p>
+    <div id="d">Loading…</div>`;
   try{
-    const [tree,st,peers]=await Promise.all([
+    const [tree,st,peers,ps]=await Promise.all([
       api("GET","/api/v1/tree"),
       api("GET","/api/v1/admin/storage").catch(()=>null),
       api("GET","/api/v1/fed/peers").catch(()=>[]),
       api("GET","/api/v1/admin/probe/status").catch(()=>null)
-    ]).then(r=>{PS=r[3];return r;});
+    ]);
     const nT=(tree||[]).reduce((a,c)=>a+(c.targets||[]).length,0);
     const rep=st&&st.report?st.report:{};
+    const stat=(k,v)=>`<div class="card"><div class="body"><div style="font-size:11px;color:var(--ink2)">${k}</div>
+      <div style="font-size:22px;font-weight:600">${v}</div></div></div>`;
     $("#d").innerHTML=`
-      <div class="row2">
-        <div class="card"><div class="body"><div style="font-size:11px;color:var(--ink2)">Catégories</div>
-          <div style="font-size:22px;font-weight:600">${(tree||[]).length}</div></div></div>
-        <div class="card"><div class="body"><div style="font-size:11px;color:var(--ink2)">Cibles</div>
-          <div style="font-size:22px;font-weight:600">${nT}</div></div></div>
-        <div class="card"><div class="body"><div style="font-size:11px;color:var(--ink2)">Pairs approuvés</div>
-          <div style="font-size:22px;font-weight:600">${(peers||[]).length}</div></div></div>
-        <div class="card"><div class="body"><div style="font-size:11px;color:var(--ink2)">Archive locale</div>
-          <div style="font-size:22px;font-weight:600">${gb(rep.local_bytes||0)}</div></div></div>
-      </div>
-      ${probeCard(PS)}
-      <div class="card"><h3>Stockage</h3><div class="body">
-        <table><tbody>
-          <tr><td>Mode</td><td><span class="badge b-n">${esc(rep.mode||"—")}</span></td></tr>
-          <tr><td>Occupation disque</td><td>${((rep.disk_used_pct||0)*100).toFixed(1)} %
-            ${rep.degraded?'<span class="badge b-crit">mode dégradé</span>':""}</td></tr>
-          <tr><td>Chunks locaux</td><td>${rep.chunks||0}</td></tr>
-          <tr><td>Uploads en attente</td><td>${rep.pending_uploads||0}</td></tr>
-          <tr><td>Rétention projetée</td><td>${rep.projected_days
-            ?rep.projected_days.toFixed(0)+" jours au rythme actuel":"—"}</td></tr>
-        </tbody></table></div></div>`;
+      <div class="row2">${stat("Categories",(tree||[]).length)}${stat("Targets",nT)}
+        ${stat("Approved peers",(peers||[]).length)}${stat("Local archive",gb(rep.local_bytes||0))}</div>
+      ${probeCard(ps)}
+      <div class="card"><h3>Storage</h3><div class="body"><table><tbody>
+        <tr><td style="width:240px">Mode</td><td><span class="badge b-n">${esc(rep.mode||"—")}</span></td></tr>
+        <tr><td>Disk usage</td><td>${((rep.disk_used_pct||0)*100).toFixed(1)} %
+          ${rep.degraded?'<span class="badge b-crit">degraded mode</span>':""}</td></tr>
+        <tr><td>Local chunks</td><td>${rep.chunks||0}</td></tr>
+        <tr><td>Pending uploads</td><td>${rep.pending_uploads||0}</td></tr>
+        <tr><td>Projected retention</td><td>${rep.projected_days?rep.projected_days.toFixed(0)+" days at the current rate":"—"}</td></tr>
+      </tbody></table></div></div>`;
   }catch(e){$("#d").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
 }
 
-/* ------------------------------------------------- cibles */
+/* ----------------------------------------------------------- targets */
+const FAMILY={0:"auto",4:"IPv4",6:"IPv6"};
 async function viewTargets(m){
-  m.innerHTML=`<h2>Cibles et catégories</h2>
-    <p class="lead">La rafale doit tenir dans l'intervalle :
-      paquets × espacement + délai d'attente doit rester sous 75 % de l'intervalle.
-      À 30 s, comptez 10 paquets espacés de 200 ms.</p>
-    <div class="card"><h3>Nouvelle catégorie</h3><div class="body">
+  m.innerHTML=`<h2>Targets and categories</h2>
+    <p class="lead">A burst must fit in its interval: packets × spacing + timeout must stay
+      below 75 % of the interval. At 30 s, use 10 packets spaced by 200 ms.</p>
+    <div class="card"><h3>New category</h3><div class="body">
       <div class="row2">
-        <div class="field"><label>Identifiant court</label><input id="cslug" placeholder="transitaires"></div>
-        <div class="field"><label>Libellé FR</label><input id="cfr" placeholder="Transitaires"></div>
-        <div class="field"><label>Libellé EN</label><input id="cen" placeholder="Transit"></div>
+        <div class="field"><label>Short identifier</label><input id="cslug" placeholder="transit"></div>
+        <div class="field"><label>English label</label><input id="cen" placeholder="Transit providers"></div>
+        <div class="field"><label>French label</label><input id="cfr" placeholder="Transitaires"></div>
       </div>
-      <button class="btn p" id="addcat">Créer la catégorie</button>
+      <button class="btn p" id="addcat">Create the category</button>
     </div></div>
-    <div class="card"><h3>Nouvelle cible</h3><div class="body">
+    <div class="card"><h3>New target</h3><div class="body">
       <div class="row2">
-        <div class="field"><label>Catégorie</label><select id="tcat"></select></div>
-        <div class="field"><label>Intitulé</label><input id="ttitle" placeholder="Cogent Paris"></div>
-        <div class="field"><label>Hôte ou IP</label><input id="thost" placeholder="38.0.0.1"></div>
-        <div class="field"><label>Protocole</label><select id="tproto">
-          <option value="icmp">ICMP</option><option value="tcp">TCP connect</option></select></div>
-        <div class="field"><label>Intervalle</label><select id="tiv">
+        <div class="field"><label>Category</label><select id="tcat"></select></div>
+        <div class="field"><label>Title</label><input id="ttitle" placeholder="Cogent Paris"></div>
+        <div class="field"><label>Host or IP address</label><input id="thost" placeholder="192.0.2.1 or 2001:db8::1"></div>
+        <div class="field"><label>Address family</label><select id="tfam">
+          <option value="0">Auto (literal address, else IPv4 then IPv6)</option>
+          <option value="4">IPv4 only</option><option value="6">IPv6 only</option></select></div>
+        <div class="field"><label>Protocol</label><select id="tproto">
+          <option value="icmp">ICMP</option><option value="tcp">TCP connect (host:port)</option></select></div>
+        <div class="field"><label>Interval</label><select id="tiv">
           <option value="30">30 s</option><option value="60" selected>60 s</option>
           <option value="300">5 min</option><option value="600">10 min</option></select></div>
-        <div class="field"><label>Paquets</label><input id="tpk" type="number" value="20"></div>
-        <div class="field"><label>Espacement (ms)</label><input id="tsp" type="number" value="500"></div>
-        <div class="field"><label>Délai d'attente (ms)</label><input id="tto" type="number" value="2000"></div>
+        <div class="field"><label>Packets</label><input id="tpk" type="number" value="20"></div>
+        <div class="field"><label>Spacing (ms)</label><input id="tsp" type="number" value="500"></div>
+        <div class="field"><label>Timeout (ms)</label><input id="tto" type="number" value="2000"></div>
       </div>
-      <button class="btn p" id="addtgt">Créer la cible</button>
+      <button class="btn p" id="addtgt">Create the target</button>
+      <div class="note" style="margin:12px 0 0">To monitor a destination over both IPv4 and IPv6,
+        create two targets with the same host, one per family.</div>
     </div></div>
-    <div class="card"><h3>Cibles actives</h3><div class="body" id="tlist">Chargement…</div></div>`;
+    <div class="card"><h3>Active targets</h3><div class="body" id="tlist">Loading…</div></div>`;
 
   const tree=await api("GET","/api/v1/tree").catch(()=>[]);
   $("#tcat").innerHTML=(tree||[]).map(c=>
-    `<option value="${c.id}">${esc(c.menu_fr)}</option>`).join("")||
-    `<option value="">— créez d'abord une catégorie —</option>`;
+    `<option value="${c.id}">${esc(c.menu_en||c.menu_fr)}</option>`).join("")||
+    `<option value="">— create a category first —</option>`;
 
   $("#addcat").onclick=async()=>{
     try{
       await api("POST","/api/v1/admin/categories",
-        {slug:$("#cslug").value,menu_fr:$("#cfr").value,menu_en:$("#cen").value});
-      toast("Catégorie créée");render();
+        {slug:$("#cslug").value,menu_en:$("#cen").value,menu_fr:$("#cfr").value||$("#cen").value});
+      toast("Category created");render();
     }catch(e){toast(e.message,true);}
   };
   $("#addtgt").onclick=async()=>{
     try{
       await api("POST","/api/v1/admin/targets",{
         category_id:parseInt($("#tcat").value,10),title:$("#ttitle").value,
-        host:$("#thost").value,proto:$("#tproto").value,
+        host:$("#thost").value,family:parseInt($("#tfam").value,10),proto:$("#tproto").value,
         interval_s:parseInt($("#tiv").value,10),packets:parseInt($("#tpk").value,10),
         spacing_ms:parseInt($("#tsp").value,10),timeout_ms:parseInt($("#tto").value,10),
         public:true,enabled:true});
-      toast("Cible créée");render();
+      toast("Target created");render();
     }catch(e){toast(e.message,true);}
   };
 
@@ -365,35 +362,122 @@ async function viewTargets(m){
     const [list,feat]=await Promise.all([api("GET","/api/v1/admin/targets"),api("GET","/api/v1/admin/featured").catch(()=>[])]);
     const F=new Set(feat||[]);
     $("#tlist").innerHTML=(list&&list.length)?`<table>
-      <thead><tr><th title="Cible critique : toujours affichée en tête de l'accueil">★</th><th>Intitulé</th><th>Hôte</th><th>Proto</th><th>Intervalle</th>
-      <th>Paquets</th><th></th></tr></thead><tbody>`+
-      list.map(t=>`<tr><td><button class="btn s" data-star="${t.id}" title="Cible critique"
+      <thead><tr><th title="Critical target: always shown at the top of the home page">★</th><th>Title</th><th>Host</th>
+      <th>Family</th><th>Proto</th><th>Interval</th><th>Packets</th><th></th></tr></thead><tbody>`+
+      list.map(t=>`<tr><td><button class="btn s" data-star="${t.id}" title="Critical target"
           style="color:${F.has(t.id)?"#d97706":"var(--ink3)"}">${F.has(t.id)?"★":"☆"}</button></td>
         <td>${esc(t.title)}</td><td class="mono">${esc(t.host)}</td>
-        <td>${esc(t.proto)}</td><td>${t.interval_s} s</td><td>${t.packets}</td>
-        <td style="text-align:right"><button class="btn d s" data-del="${t.id}">Supprimer</button></td>
-        </tr>`).join("")+`</tbody></table>`:`<div class="empty">Aucune cible.</div>`;
+        <td>${FAMILY[t.family||0]}</td><td>${esc(t.proto)}</td><td>${t.interval_s} s</td><td>${t.packets}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn s" data-trace="${t.id}">Traceroute</button>
+          <button class="btn d s" data-del="${t.id}">Delete</button></td>
+        </tr>`).join("")+`</tbody></table>`:`<div class="empty">No target yet.</div>`;
     document.querySelectorAll("[data-star]").forEach(b=>b.onclick=async()=>{
       const id=+b.dataset.star;F.has(id)?F.delete(id):F.add(id);
-      try{await api("PUT","/api/v1/admin/featured",[...F]);toast("Cibles critiques mises à jour");render();}
+      try{await api("PUT","/api/v1/admin/featured",[...F]);toast("Critical targets updated");render();}
       catch(e){toast(e.message,true);}
     });
+    document.querySelectorAll("[data-trace]").forEach(b=>b.onclick=()=>{TR_TARGET=+b.dataset.trace;go("traces");});
     document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
-      if(!confirm("Supprimer cette cible ? L'historique est conservé.")) return;
+      if(!confirm("Delete this target? Its measurement history is kept.")) return;
       try{await api("DELETE","/api/v1/admin/targets/"+b.dataset.del);
-        toast("Cible supprimée");render();}catch(e){toast(e.message,true);}
+        toast("Target deleted");render();}catch(e){toast(e.message,true);}
     });
   }catch(e){$("#tlist").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
 }
 
-/* ---------------------------------------------- fédération */
+/* ------------------------------------------------------- traceroutes */
+const KIND_BADGE={anomaly:"b-crit",reference:"b-ok",manual:"b-n"};
+function hopRTT(h){
+  if(!h.rtt_ms||!h.rtt_ms.length) return "* * *";
+  const v=h.rtt_ms,avg=v.reduce((a,b)=>a+b,0)/v.length;
+  return `${avg.toFixed(2)} ms <span style="color:var(--ink3)">(${Math.min(...v).toFixed(2)}–${Math.max(...v).toFixed(2)})</span>`;
+}
+function hopsTable(tr,ref){
+  const rows=[],n=Math.max(tr.hops.length,ref?ref.hops.length:0);
+  for(let i=0;i<n;i++){
+    const h=tr.hops[i],r=ref?ref.hops[i]:null;
+    const differs=ref&&r&&r.addr&&(!h||(h.addr||"")!==r.addr);
+    rows.push(`<tr class="${differs?"diff":""}"><td>${i+1}</td>
+      <td class="mono">${h?esc(h.addr||"*"):""}${h&&h.note?`<span class="hopnote" title="the router refused to forward">${esc(h.note)}</span>`:""}</td>
+      <td style="font-size:12px">${h?esc(h.name||""):""}</td>
+      <td class="mono" style="font-size:12px">${h?esc(h.asn||""):""}</td>
+      <td style="font-size:12px">${h?hopRTT(h):""}</td>
+      <td style="font-size:12px">${h?`${(h.rtt_ms||[]).length}/${h.sent}`:""}</td>
+      ${ref?`<td class="mono" style="font-size:12px;color:var(--ink2)">${r?esc(r.addr||"*"):"—"}</td>`:""}</tr>`);
+  }
+  return `<table style="margin-top:6px"><thead><tr><th>Hop</th><th>Address</th><th>Name</th><th>AS</th>
+    <th>RTT (avg, min–max)</th><th>Replies</th>${ref?`<th>Reference path, ${dt(ref.ts)}</th>`:""}</tr></thead>
+    <tbody>${rows.join("")}</tbody></table>
+    ${ref?`<div style="font-size:12px;color:var(--ink2);margin-top:6px">Highlighted rows: a router of the last healthy path is different or no longer answers.</div>`:""}`;
+}
+async function viewTraces(m){
+  m.innerHTML=`<h2>Traceroutes</h2>
+    <p class="lead">The probe runs a traceroute by itself when a target leaves its baseline
+      (packet loss above 3 %, or median above 1.4 × its usual value), at most once every
+      15 minutes per target and 30 times per hour overall. It also records a reference path
+      once a day while the target is healthy, so an anomaly can be compared with a known-good
+      path. Traceroutes are shown on public pages only if enabled in <a href="#" id="tosite">Publisher page</a>.</p>
+    <div class="card"><div class="body">
+      <div class="row2" style="align-items:end">
+        <div class="field" style="margin:0"><label>Target</label><select id="trt"></select></div>
+        <div style="display:flex;gap:7px"><button class="btn p" id="trrun">Run a traceroute now</button>
+          <button class="btn" id="trref">Refresh</button></div>
+      </div></div></div>
+    <div class="tabs" id="trtabs"></div>
+    <div class="card"><div class="body" id="trl">Loading…</div></div>`;
+  $("#tosite").onclick=e=>{e.preventDefault();go("site");};
+  const targets=await api("GET","/api/v1/admin/targets").catch(()=>[]);
+  if(!targets||!targets.length){$("#trl").innerHTML=`<div class="empty">No target yet.</div>`;return;}
+  if(!TR_TARGET||!targets.some(t=>t.id===TR_TARGET)) TR_TARGET=targets[0].id;
+  $("#trt").innerHTML=targets.map(t=>`<option value="${t.id}" ${t.id===TR_TARGET?"selected":""}>${esc(t.title)} — ${esc(t.host)}</option>`).join("");
+  let kind="", list=[], open=null;
+  const draw=()=>{
+    $("#trtabs").innerHTML=[["","All"],["anomaly","Anomalies"],["reference","References"],["manual","Manual"]]
+      .map(([k,l])=>`<button data-k="${k}" aria-pressed="${kind===k}">${l} (${k?list.filter(x=>x.kind===k).length:list.length})</button>`).join("");
+    document.querySelectorAll("[data-k]").forEach(b=>b.onclick=()=>{kind=b.dataset.k;draw();});
+    const shown=kind?list.filter(x=>x.kind===kind):list;
+    if(!shown.length){$("#trl").innerHTML=`<div class="empty">No traceroute yet for this target.</div>`;return;}
+    $("#trl").innerHTML=`<table><thead><tr><th>When</th><th>Kind</th><th>Reason</th><th>Destination</th>
+      <th>Result</th></tr></thead><tbody>`+shown.map(tr=>{
+        const last=tr.hops.length, lastHop=tr.hops[last-1]||{};
+        const result=tr.reached?`<span class="badge b-ok">reached in ${last} hops</span>`
+          :lastHop.note?`<span class="badge b-crit">refused at hop ${last} ${esc(lastHop.note)}</span>`
+          :`<span class="badge b-warn">not reached</span>`;
+        const ref=tr.kind==="reference"?null:list.find(x=>x.kind==="reference"&&x.ts<tr.ts);
+        return `<tr class="trrow" data-tr="${tr.id}"><td style="font-size:12px;white-space:nowrap">${dt(tr.ts)}</td>
+          <td><span class="badge ${KIND_BADGE[tr.kind]||"b-n"}">${esc(tr.kind)}</span></td>
+          <td style="font-size:12px">${esc(tr.reason)}</td>
+          <td class="mono" style="font-size:12px">${esc(tr.dest)} <span style="color:var(--ink3)">IPv${tr.family}</span></td>
+          <td>${result}</td></tr>`+
+          (open===tr.id?`<tr><td colspan="5" style="background:var(--panel)">${hopsTable(tr,ref)}</td></tr>`:"");
+      }).join("")+`</tbody></table>`;
+    document.querySelectorAll("[data-tr]").forEach(r=>r.onclick=()=>{const id=+r.dataset.tr;open=open===id?null:id;draw();});
+  };
+  const load=async()=>{
+    try{list=await api("GET","/api/v1/admin/traceroutes?target="+TR_TARGET+"&limit=100");
+      if(open===null&&list.length) open=(list.find(x=>x.kind!=="reference")||list[0]).id; draw();}
+    catch(e){$("#trl").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
+  };
+  $("#trt").onchange=()=>{TR_TARGET=+$("#trt").value;open=null;load();};
+  $("#trref").onclick=load;
+  $("#trrun").onclick=async()=>{
+    try{await api("POST","/api/v1/admin/traceroutes",{target_id:TR_TARGET});
+      toast("Traceroute requested: the result appears in about 10 seconds");
+      setTimeout(load,9000);setTimeout(load,16000);}
+    catch(e){toast(e.message,true);}
+  };
+  load();
+}
+
+/* -------------------------------------------------------- federation */
 async function viewFed(m){
-  m.innerHTML=`<h2>Pairs et appairage</h2>
-    <p class="lead">L'appairage demande un accord humain des deux côtés. Vous envoyez une demande
-      motivée à l'URL publique d'une autre instance ; son administrateur la voit arriver ici,
-      compare votre empreinte avec celle communiquée hors bande, lit votre justification, puis
-      accepte ou refuse. L'affichage public d'un appairage exige lui aussi l'accord des deux parties.</p>
-    <div id="f">Chargement…</div>`;
+  m.innerHTML=`<h2>Peers and pairing</h2>
+    <p class="lead">Pairing requires a human decision on both sides. You send a justified request
+      to the public URL of another instance; its administrator sees it here, compares your
+      fingerprint with the one exchanged out of band, reads your justification, then accepts
+      or declines. Showing a pairing publicly also requires both sides to agree.</p>
+    <div id="f">Loading…</div>`;
   try{
     const [id,pairings,peers,info]=await Promise.all([
       api("GET","/api/v1/admin/fed/identity"),
@@ -406,381 +490,211 @@ async function viewFed(m){
     const outbound=(pairings||[]).filter(p=>p.direction==="out");
     PENDING=inbound.length;
 
-    let html=`<div class="card"><h3>Notre identité</h3><div class="body">
-      <table><tbody>
-        <tr><td style="width:190px">Numéro d'AS</td><td class="mono">${esc(id.profile.asn||"— non renseigné —")}</td></tr>
+    let html=`<div class="card"><h3>Our identity</h3><div class="body"><table><tbody>
+        <tr><td style="width:210px">AS number</td><td class="mono">${esc(id.profile.asn||"— not set —")}</td></tr>
         <tr><td>Organisation</td><td>${esc(id.profile.org||"—")}</td></tr>
-        <tr><td>Page d'appairage à communiquer</td><td class="mono">${esc((id.profile.url||"")+"/pairing")}</td></tr>
-        <tr><td>Empreinte</td><td class="mono fp">${esc(id.fingerprint)}</td></tr>
-        <tr><td>Ancres déclarées</td><td class="mono">${(id.profile.anchors||[]).map(esc).join(", ")||"—"}</td></tr>
-      </tbody></table>
-    </div></div>`;
+        <tr><td>Pairing page to share</td><td class="mono">${esc((id.profile.url||"")+"/pairing")}</td></tr>
+        <tr><td>Fingerprint</td><td class="mono fp">${esc(id.fingerprint)}</td></tr>
+        <tr><td>Declared anchors</td><td class="mono">${(id.profile.anchors||[]).map(esc).join(", ")||"—"}</td></tr>
+      </tbody></table></div></div>`;
 
-    /* demandes reçues */
-    html+=`<div class="card"><h3>Demandes reçues`+
+    html+=`<div class="card"><h3>Incoming requests`+
       (inbound.length?` <span class="badge b-crit">${inbound.length}</span>`:"")+`</h3><div class="body">`;
     html+= inbound.length? inbound.map(p=>`<div class="pend">
       <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap">
-        <strong>${esc(p.org||"(sans nom)")}</strong><span class="mono">${esc(p.asn)}</span>
+        <strong>${esc(p.org||"(no name)")}</strong><span class="mono">${esc(p.asn)}</span>
         ${p.contact_name?`<span style="font-size:12px;color:var(--ink2)">· ${esc(p.contact_name)}</span>`:""}
         <span style="margin-left:auto;font-size:12px;color:var(--ink2)">${dt(p.created_at)}</span>
       </div>
       <div class="mono" style="font-size:12px;color:var(--ink2);margin-top:3px">${esc(p.url)}</div>
-      <div style="margin-top:8px;font-size:12px">Empreinte annoncée :
-        <span class="mono fp">${esc(p.fingerprint)}</span></div>
+      <div style="margin-top:8px;font-size:12px">Announced fingerprint: <span class="mono fp">${esc(p.fingerprint)}</span></div>
       <div class="quote"><span class="lbl">Justification</span>${esc(p.justification)}</div>
-      ${p.private_note?`<div class="quote priv"><span class="lbl">Note privée à votre attention</span>${esc(p.private_note)}</div>`:""}
-      <div style="font-size:12px;color:var(--ink2)">Ancres : <span class="mono">${(p.anchors||[]).map(esc).join(", ")||"—"}</span>
-        · Affichage public : ${p.public_listing?'<span class="badge b-ok">accepté par le demandeur</span>':'<span class="badge b-n">refusé par le demandeur</span>'}</div>
-      <div class="field" style="margin-top:11px"><label>Réponse privée au demandeur (facultative)</label>
-        <textarea rows="2" id="rep${p.id}" placeholder="Bienvenue ! Nos ancres sont joignables en v4 et v6."></textarea></div>
+      ${p.private_note?`<div class="quote priv"><span class="lbl">Private note for you</span>${esc(p.private_note)}</div>`:""}
+      <div style="font-size:12px;color:var(--ink2)">Anchors: <span class="mono">${(p.anchors||[]).map(esc).join(", ")||"—"}</span>
+        · Public listing: ${p.public_listing?'<span class="badge b-ok">accepted by the requester</span>':'<span class="badge b-n">declined by the requester</span>'}</div>
+      <div class="field" style="margin-top:11px"><label>Private reply to the requester (optional)</label>
+        <textarea rows="2" id="rep${p.id}" placeholder="Welcome! Our anchors answer over IPv4 and IPv6."></textarea></div>
       <label class="chk"><input type="checkbox" id="pub${p.id}" ${p.public_listing?"checked":"disabled"}>
-        <span>Afficher cet appairage sur notre page publique<small>${p.public_listing
-          ?"Le demandeur l'accepte. Il ne sera affiché que si vous cochez aussi."
-          :"Impossible : le demandeur ne l'a pas accepté."}</small></span></label>
+        <span>Show this pairing on our public page<small>${p.public_listing
+          ?"The requester agrees. It is shown only if you tick this too."
+          :"Not possible: the requester did not agree."}</small></span></label>
       <div class="acts">
-        <button class="btn p s" data-acc="${p.id}">Accepter l'appairage</button>
-        <button class="btn d s" data-rej="${p.id}">Refuser</button>
-      </div></div>`).join("") : `<div class="empty">Aucune demande en attente.</div>`;
+        <button class="btn p s" data-acc="${p.id}">Accept the pairing</button>
+        <button class="btn d s" data-rej="${p.id}">Decline</button>
+      </div></div>`).join("") : `<div class="empty">No pending request.</div>`;
     html+=`</div></div>`;
 
-    /* nouvelle demande */
-    html+=`<div class="card"><h3>Demander un appairage</h3><div class="body">
-      <div class="field"><label>URL publique de l'autre instance</label>
-        <input id="purl" placeholder="https://smokestack.monsite.fr/pairing"></div>
+    html+=`<div class="card"><h3>Request a pairing</h3><div class="body">
+      <div class="field"><label>Public URL of the other instance</label>
+        <input id="purl" placeholder="https://smokestack.example.net/pairing"></div>
       <div class="field"><label>Justification <span style="color:var(--crit)">*</span>
-        — visible par l'administrateur distant, ${MINJ} caractères minimum</label>
-        <textarea id="pjust" rows="3" placeholder="Nous peerons au France-IX Paris et à LyonIX et partageons de nombreux clients entreprises : un suivi croisé de nos ancres nous aiderait à qualifier les incidents plus vite."></textarea>
+        — shown to the remote administrator, ${MINJ} characters minimum</label>
+        <textarea id="pjust" rows="3" placeholder="We both peer at France-IX Paris and LyonIX and share many business customers: cross-monitoring our anchors would help us qualify incidents faster."></textarea>
         <div class="counter" id="pjc">0 / ${MINJ}</div></div>
-      <div class="field"><label>Note privée pour l'administrateur distant (facultative)</label>
-        <textarea id="pnote" rows="2" placeholder="Bonjour Julien, suite à notre échange au dernier FRnOG…"></textarea></div>
-      <div class="row2">
-        <div class="field"><label>Contact signataire</label><input id="pcontact" value="${esc(ME.display_name)}"></div>
-      </div>
+      <div class="field"><label>Private note for the remote administrator (optional)</label>
+        <textarea id="pnote" rows="2" placeholder="Hello, following our chat at the last RIPE meeting…"></textarea></div>
+      <div class="row2"><div class="field"><label>Signing contact</label><input id="pcontact" value="${esc(ME.display_name)}"></div></div>
       <label class="chk"><input type="checkbox" id="ppub" checked>
-        <span>Accepter que cet appairage soit affiché publiquement<small>Des deux côtés, l'affichage exige l'accord des deux parties.
-          Vous pourrez le masquer plus tard.</small></span></label>
-      <button class="btn p" id="pgo">Envoyer la demande</button>
-      <div class="note" style="margin-top:12px">La justification et la note privée ne sont transmises qu'à
-        l'administrateur distant. Elles n'apparaissent sur aucune page publique.</div>
+        <span>Agree to this pairing being listed publicly<small>On both sides, listing requires both parties to agree.
+          You can hide it later.</small></span></label>
+      <button class="btn p" id="pgo">Send the request</button>
+      <div class="note" style="margin-top:12px">The justification and the private note are only sent to the
+        remote administrator. They never appear on any public page.</div>
     </div></div>`;
 
-    /* demandes envoyées */
-    html+=`<div class="card"><h3>Demandes envoyées</h3><div class="body">`;
+    html+=`<div class="card"><h3>Sent requests</h3><div class="body">`;
     html+= outbound.length? outbound.map(p=>`<div style="padding:10px 0;border-top:1px solid var(--line2)">
       <div style="display:flex;gap:9px;align-items:baseline;flex-wrap:wrap">
         <span class="mono" style="font-weight:600">${esc(p.asn)}</span><span>${esc(p.org)}</span>
         <span class="badge ${p.state==="accepted"?"b-ok":p.state==="pending"?"b-warn":"b-crit"}">${esc(p.state)}</span>
         <span style="margin-left:auto;font-size:12px;color:var(--ink2)">${dt(p.created_at)}</span></div>
-      <div class="mono" style="font-size:11.5px;color:var(--ink3);margin-top:2px">empreinte distante ${esc(p.fingerprint)}</div>
-      <div class="quote"><span class="lbl">Votre justification</span>${esc(p.justification)}</div>
-      ${p.reply_note?`<div class="quote priv"><span class="lbl">Réponse de ${esc(p.org)}</span>${esc(p.reply_note)}</div>`:""}
+      <div class="mono" style="font-size:11.5px;color:var(--ink3);margin-top:2px">remote fingerprint ${esc(p.fingerprint)}</div>
+      <div class="quote"><span class="lbl">Your justification</span>${esc(p.justification)}</div>
+      ${p.reply_note?`<div class="quote priv"><span class="lbl">Reply from ${esc(p.org)}</span>${esc(p.reply_note)}</div>`:""}
       ${p.error?`<div style="font-size:12px;color:var(--crit)">${esc(p.error)}</div>`:""}
-    </div>`).join("") : `<div class="empty">Aucune demande envoyée.</div>`;
+    </div>`).join("") : `<div class="empty">No request sent.</div>`;
     html+=`</div></div>`;
 
-    /* pairs */
-    html+=`<div class="card"><h3>Pairs</h3><div class="body">`;
+    html+=`<div class="card"><h3>Peers</h3><div class="body">`;
     html+= (peers&&peers.length)?`<table><thead><tr><th>AS</th><th>Organisation</th>
-      <th>Empreinte</th><th>Public</th><th>Vu</th><th></th></tr></thead><tbody>`+
+      <th>Fingerprint</th><th>Public</th><th>Last seen</th><th></th></tr></thead><tbody>`+
       peers.map(p=>`<tr><td class="mono">${esc(p.asn)}</td><td>${esc(p.org)}
         <div style="font-size:11.5px;color:var(--ink3)">${esc(p.noc_email||"")}</div></td>
         <td class="mono" style="font-size:12px">${esc(p.fingerprint)}</td>
         <td><label class="chk" style="margin:0"><input type="checkbox" data-pubtog="${p.id}"
           ${p.public?"checked":""} ${p.peer_consent?"":"disabled"}>
-          <span style="font-size:12px">${p.peer_consent?(p.public?"affiché":"masqué"):"sans consentement"}</span></label></td>
+          <span style="font-size:12px">${p.peer_consent?(p.public?"listed":"hidden"):"no consent"}</span></label></td>
         <td style="font-size:12px">${dt(p.last_seen_at)}</td>
-        <td style="text-align:right"><button class="btn d s" data-pdel="${p.id}">Retirer</button></td></tr>`+
+        <td style="text-align:right"><button class="btn d s" data-pdel="${p.id}">Remove</button></td></tr>`+
         (p.last_error?`<tr><td colspan="6" style="font-size:11px;color:var(--crit);border-top:none;padding-top:0">${esc(p.last_error)}</td></tr>`:"")
-      ).join("")+`</tbody></table>`:`<div class="empty">Aucun pair.</div>`;
+      ).join("")+`</tbody></table>`:`<div class="empty">No peer yet.</div>`;
     html+=`</div></div>`;
-
     $("#f").innerHTML=html;
 
     const jc=()=>{const n=[...$("#pjust").value.trim()].length;
       $("#pjc").textContent=n+" / "+MINJ;$("#pjc").className="counter"+(n<MINJ?" bad":"");};
     $("#pjust").oninput=jc;jc();
-
     $("#pgo").onclick=async()=>{
       try{
         const r=await api("POST","/api/v1/admin/fed/pairing",{
           url:$("#purl").value,justification:$("#pjust").value,
           private_note:$("#pnote").value,contact_name:$("#pcontact").value,
           public_listing:$("#ppub").checked});
-        toast("Demande envoyée — empreinte distante "+r.pairing.fingerprint);render();
+        toast("Request sent, remote fingerprint "+r.pairing.fingerprint);render();
       }catch(e){toast(e.message,true);}
     };
     document.querySelectorAll("[data-acc]").forEach(b=>b.onclick=async()=>{
       const id=b.dataset.acc;
-      if(!confirm("Avez-vous vérifié l'empreinte hors bande ? Accepter approuve ce pair et commence à mesurer ses ancres.")) return;
+      if(!confirm("Did you check the fingerprint out of band? Accepting approves this peer and starts measuring its anchors.")) return;
       try{await api("POST","/api/v1/admin/fed/pairing/"+id+"/decide",
         {accept:true,reply:$("#rep"+id).value,public_listing:$("#pub"+id).checked});
-        toast("Appairage accepté");render();}catch(e){toast(e.message,true);}
+        toast("Pairing accepted");render();}catch(e){toast(e.message,true);}
     });
     document.querySelectorAll("[data-rej]").forEach(b=>b.onclick=async()=>{
       const id=b.dataset.rej;
       try{await api("POST","/api/v1/admin/fed/pairing/"+id+"/decide",
-        {accept:false,reply:$("#rep"+id).value});toast("Demande refusée");render();}
+        {accept:false,reply:$("#rep"+id).value});toast("Request declined");render();}
       catch(e){toast(e.message,true);}
     });
     document.querySelectorAll("[data-pubtog]").forEach(c=>c.onchange=async()=>{
       try{await api("PATCH","/api/v1/admin/fed/peers/"+c.dataset.pubtog,{public:c.checked});
-        toast(c.checked?"Pair affiché publiquement":"Pair masqué");render();}
+        toast(c.checked?"Peer listed publicly":"Peer hidden");render();}
       catch(e){toast(e.message,true);render();}
     });
     document.querySelectorAll("[data-pdel]").forEach(b=>b.onclick=async()=>{
-      if(!confirm("Retirer ce pair ? Les mesures vers ses ancres restent en base.")) return;
+      if(!confirm("Remove this peer? Measurements towards its anchors stay in the database.")) return;
       try{await api("DELETE","/api/v1/admin/fed/peers/"+b.dataset.pdel);
-        toast("Pair retiré");render();}catch(e){toast(e.message,true);}
+        toast("Peer removed");render();}catch(e){toast(e.message,true);}
     });
   }catch(e){$("#f").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
 }
 
-/* ---------------------------------------------- réseau hôte */
-async function viewNet(m){
-  m.innerHTML=`<h2>Réseau hôte</h2>
-    <p class="lead">Informations publiques sur l'AS qui héberge l'instance, issues de RIPEstat
-      (routage observé) et de PeeringDB (déclarations de l'exploitant). Mises en cache 24 h,
-      affichées sur la page publique <a href="/network" target="_blank">/network</a>.
-      Le numéro d'AS se règle dans la page éditeur.</p>
-    <div id="n">Chargement…</div>`;
-  const show=i=>{
-    const p=i.peeringdb;
-    $("#n").innerHTML=`<div class="card"><h3>AS${esc(i.asn)} — ${esc(i.holder||"?")}
-      <span style="margin-left:auto"><button class="btn s" id="rf">Actualiser</button></span></h3><div class="body">
-      <table><tbody>
-        <tr><td style="width:200px">Pays</td><td>${esc(i.country||"—")}</td></tr>
-        <tr><td>Préfixes annoncés</td><td>${i.prefixes_v4} IPv4 · ${i.prefixes_v6} IPv6</td></tr>
-        <tr><td>Voisins amont / aval</td><td>${i.nb_upstreams} / ${i.nb_downstreams}</td></tr>
-        <tr><td>Principaux voisins amont</td><td>${(i.upstreams||[]).map(u=>`AS${u.asn} ${esc(u.name||"")}`).join("<br>")||"—"}</td></tr>
-        <tr><td>Fiche PeeringDB</td><td>${p?`<a href="${esc(p.url)}" target="_blank">${esc(p.name)}</a> · ${esc(p.policy||"")}`:"absente"}</td></tr>
-        <tr><td>Points d'échange</td><td>${p?(p.ixs||[]).map(x=>esc(x.name)).join(", ")||"—":"—"}</td></tr>
-        <tr><td>Datacenters</td><td>${p?(p.facilities||[]).map(f=>esc(f.name)).join(", ")||"—":"—"}</td></tr>
-        <tr><td>Récupéré le</td><td>${dt(i.fetched_at)}</td></tr>
-      </tbody></table>
-      ${(i.errors&&i.errors.length)?`<div class="note" style="margin-top:12px;color:var(--crit)">${i.errors.map(esc).join("<br>")}</div>`:""}
-    </div></div>`;
-    $("#rf").onclick=async()=>{try{show(await api("POST","/api/v1/admin/asn/refresh"));toast("Actualisé");}
-      catch(e){toast(e.message,true);}};
-  };
-  try{show(await api("GET","/api/v1/asn"));}
-  catch(e){$("#n").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
-}
-
-
-/* ------------------------------------------------ mise à jour */
-async function viewUpdate(m){
-  m.innerHTML=`<h2>Mise à jour</h2>
-    <p class="lead">Téléversez le ZIP d'une nouvelle version : il est vérifié (signature, plateforme,
-      empreinte), testé, puis activé en un clic. L'ancienne version reste sur le disque et
-      reprend la main automatiquement si la nouvelle ne démarre pas.</p><div id="u">Chargement…</div>`;
-  let S;
-  try{S=await api("GET","/api/v1/admin/update");}catch(e){$("#u").innerHTML=`<div class="note">${esc(e.message)}</div>`;return;}
-  const staged=S.staged, av=S.available;
-  let h=`<div class="card"><h3>Version installée</h3><div class="body"><table><tbody>
-    <tr><td style="width:220px">Version</td><td><strong class="mono">${esc(S.version)}</strong> <span style="color:var(--ink3)">${esc(S.platform)} ${esc(S.build_date||"")}</span></td></tr>
-    <tr><td>Version précédente</td><td class="mono">${esc(S.previous||"—")}</td></tr>
-    <tr><td>Mises à jour en place</td><td>${S.managed?'<span class="badge b-ok">disponibles</span> <span class="mono" style="font-size:12px">'+esc(S.root)+'</span>'
-      :'<span class="badge b-crit">indisponibles</span> '+esc(S.reason)}</td></tr>
-    <tr><td>Clés de publication</td><td class="mono">${S.trusted_keys.length?S.trusted_keys.map(esc).join(", "):'<span style="color:var(--crit)">aucune</span>'}
-      ${S.allow_unsigned?' <span class="badge b-warn">paquets non signés autorisés</span>':""}</td></tr>
-    </tbody></table>
-    ${S.previous&&S.managed?`<div class="acts"><button class="btn d s" id="rb">Revenir à ${esc(S.previous)}</button></div>`:""}
-  </div></div>`;
-
-  h+=`<div class="card"><h3>Installer une version</h3><div class="body">
-    <div class="field"><label>Paquet ZIP (smokestack-VERSION-linux-ARCH.zip)</label>
-      <input type="file" id="pkg" accept=".zip,application/zip" ${S.managed?"":"disabled"}></div>
-    <button class="btn p" id="up" ${S.managed?"":"disabled"}>Vérifier le paquet</button>
-    <div id="stg" style="margin-top:14px"></div></div></div>`;
-
-  h+=`<div class="card"><h3>Mises à jour automatiques</h3><div class="body">
-    <label class="chk"><input type="checkbox" id="ac" ${S.auto_check?"checked":""}><span>Vérifier régulièrement si une nouvelle version existe
-      <small>Source : <span class="mono">${esc(S.manifest_url)}</span></small></span></label>
-    <label class="chk"><input type="checkbox" id="aa" ${S.auto_apply?"checked":""} ${S.managed?"":"disabled"}><span>Installer automatiquement les nouvelles versions
-      <small>Seuls les paquets signés par une clé de confiance sont installés automatiquement, sans exception.</small></span></label>
-    <div class="acts"><button class="btn s" id="chk">Vérifier maintenant</button></div>
-    <div id="avl" style="margin-top:10px;font-size:13px">${av?(av.newer?`<span class="badge b-warn">version ${esc(av.version)} disponible</span>`
-      :`<span class="badge b-ok">à jour</span> dernière version publiée : ${esc(av.version)}`):""}</div>
-  </div></div>`;
-
-  h+=`<div class="card"><h3>Historique</h3><div class="body">`+(S.history.length?`<table><thead><tr><th>Date</th><th>Action</th><th>De</th><th>Vers</th><th>Par</th></tr></thead><tbody>`+
-    S.history.map(x=>`<tr><td>${dt(x.ts)}</td><td>${x.action==="rollback"?"retour arrière":x.action==="auto_rollback"?'<span class="badge b-crit">restauration automatique</span>':"mise à jour"}</td><td class="mono">${esc(x.from||"—")}</td>
-      <td class="mono">${esc(x.to)}</td><td>${esc(x.by)}</td></tr>`).join("")+`</tbody></table>`:`<div class="empty">Aucune mise à jour.</div>`)+`</div></div>`;
-  $("#u").innerHTML=h;
-
-  const showStaged=st=>{$("#stg").innerHTML=`<div class="pend">
-    <div style="display:flex;gap:9px;align-items:baseline;flex-wrap:wrap"><strong>Version ${esc(st.version)}</strong>
-      ${st.signed?`<span class="badge b-ok">signée · clé ${esc(st.key_id)}</span>`:'<span class="badge b-warn">non signée</span>'}
-      ${st.newer?'<span class="badge b-ok">plus récente</span>':'<span class="badge b-warn">pas plus récente que '+esc(st.current)+'</span>'}</div>
-    <div style="font-size:12px;color:var(--ink2);margin-top:4px">${esc(st.os)}-${esc(st.arch)} · construite le ${esc(st.built_at||"?")}
-      · SHA-256 <span class="mono">${esc(st.sha256.slice(0,16))}…</span> · autotest réussi</div>
-    ${st.notes?`<div class="quote">${esc(st.notes)}</div>`:""}
-    ${st.newer?"":`<label class="chk"><input type="checkbox" id="frc"><span>Forcer l'installation d'une version antérieure ou identique</span></label>`}
-    <div class="acts"><button class="btn p" id="ap">Installer et redémarrer</button></div></div>`;
-    $("#ap").onclick=async()=>{
-      if(!confirm("Installer la version "+st.version+" ? Le service redémarre (quelques secondes).")) return;
-      try{await api("POST","/api/v1/admin/update/apply",{force:!!($("#frc")&&$("#frc").checked)});waitRestart(st.version);}
-      catch(e){toast(e.message,true);}
-    };
-  };
-  if(staged) showStaged(staged);
-  if($("#up")) $("#up").onclick=async()=>{
-    const f=$("#pkg").files[0]; if(!f){toast("Choisissez un fichier ZIP",true);return;}
-    const fd=new FormData(); fd.append("package",f);
-    $("#up").disabled=true;$("#up").textContent="Vérification…";
-    try{
-      const r=await fetch("/api/v1/admin/update/upload",{method:"POST",body:fd,headers:{"X-CSRF-Token":CSRF},credentials:"same-origin"});
-      const d=await r.json(); if(!r.ok) throw new Error(d.error||("HTTP "+r.status));
-      showStaged(d);
-    }catch(e){toast(e.message,true);}
-    $("#up").disabled=false;$("#up").textContent="Vérifier le paquet";
-  };
-  if($("#rb")) $("#rb").onclick=async()=>{
-    if(!confirm("Revenir à la version "+S.previous+" ?")) return;
-    try{await api("POST","/api/v1/admin/update/rollback");waitRestart(S.previous);}catch(e){toast(e.message,true);}
-  };
-  const save=async()=>{try{await api("PUT","/api/v1/admin/update/settings",{auto_check:$("#ac").checked,auto_apply:$("#aa").checked});toast("Préférences enregistrées");}
-    catch(e){toast(e.message,true);}};
-  $("#ac").onchange=save;$("#aa").onchange=save;
-  $("#chk").onclick=async()=>{try{await api("POST","/api/v1/admin/update/check");render();}catch(e){toast(e.message,true);}};
-}
-async function waitRestart(ver){
-  $("#u").innerHTML=`<div class="card"><div class="body"><strong>Redémarrage sur la version ${esc(ver)}…</strong>
-    <p class="lead" style="margin-top:6px">La page se rechargera d'elle-même.</p></div></div>`;
-  for(let i=0;i<60;i++){
-    await new Promise(r=>setTimeout(r,1500));
-    try{const v=await fetch("/api/v1/version",{cache:"no-store"}).then(r=>r.json());
-      if(v.version===ver){toast("Version "+ver+" active");render();return;}}catch(e){}
-  }
-  toast("Le service ne répond pas encore : vérifiez journalctl -u smokestack",true);
-}
-
-/* ---------------------------------------------------- langues */
-async function viewLangs(m){
-  m.innerHTML=`<h2>Langues</h2>
-    <p class="lead">Chaque langue est un fichier JSON. L'anglais est la référence obligatoire :
-      sans <code>en.json</code>, l'instance refuse de démarrer, et toute clé absente d'une
-      autre langue s'affiche en anglais. Pour ajouter ou corriger une langue sans recompiler,
-      déposez <code>xx.json</code> dans <code>/var/lib/smokestack/i18n/</code> puis rechargez.</p>
-    <div id="l">Chargement…</div>`;
-  try{
-    const meta=await api("GET","/api/v1/i18n");
-    $("#l").innerHTML=`<div class="card"><h3>Fichiers chargés
-      <span style="margin-left:auto"><button class="btn s" id="rl">Recharger</button></span></h3><div class="body">
-      <table><thead><tr><th>Code</th><th>Langue</th><th>Couverture</th><th>Source</th><th>Alertes</th><th></th></tr></thead><tbody>`+
-      meta.languages.map(l=>`<tr><td class="mono">${esc(l.code)}${l.code===meta.base?' <span class="badge b-n">référence</span>':""}
-        ${l.code===meta.default?' <span class="badge b-ok">par défaut</span>':""}</td>
-        <td>${esc(l.name)}</td>
-        <td><div style="display:flex;align-items:center;gap:8px"><div class="bar"><i style="width:${Math.round(l.coverage*100)}%;
-          ${l.coverage<1?"background:var(--warn)":""}"></i></div><span style="font-size:12px">${Math.round(l.coverage*100)} %</span></div></td>
-        <td style="font-size:12px">${esc(l.source)}</td>
-        <td style="font-size:12px">${(l.warnings||[]).length?`<span class="badge b-warn">${l.warnings.length}</span>`:"—"}</td>
-        <td style="text-align:right">${l.missing?`<button class="btn s" data-miss="${esc(l.code)}">${l.missing} manquantes</button>`:""}</td></tr>`).join("")+
-      `</tbody></table><div id="miss"></div></div></div>`;
-    $("#rl").onclick=async()=>{try{await api("POST","/api/v1/admin/i18n/reload");toast("Fichiers rechargés");render();}
-      catch(e){toast(e.message,true);}};
-    document.querySelectorAll("[data-miss]").forEach(b=>b.onclick=async()=>{
-      const r=await api("GET","/api/v1/admin/i18n/"+b.dataset.miss+"/missing");
-      $("#miss").innerHTML=`<div class="note" style="margin-top:12px"><strong>${esc(r.code)}</strong> — clés à traduire :
-        <div class="mono" style="font-size:12px;margin-top:6px">${r.missing.map(esc).join("<br>")}</div></div>`;
-    });
-  }catch(e){$("#l").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
-}
-
-/* ------------------------------------------------ alerting */
+/* ------------------------------------------------------ NOC alerting */
 async function viewNotify(m){
-  m.innerHTML=`<h2>Alerting NOC</h2>
-    <p class="lead">Une notification ne part que si quatre conditions sont réunies :
-      au moins trois observateurs indépendants ont corroboré, le préavis de cinq minutes
-      est écoulé, l'AS mis en cause n'a pas acquitté, et c'est un pair approuvé — donc
-      un opérateur qui a consenti en rejoignant. Aucun courriel non sollicité.</p>
-    <div id="n">Chargement…</div>`;
+  m.innerHTML=`<h2>NOC alerting</h2>
+    <p class="lead">A notification is sent only when four conditions are met: at least three
+      independent observers confirm the problem, the five-minute grace period has passed, the
+      AS concerned has not acknowledged, and it is an approved peer, that is an operator who
+      agreed to it by joining. No unsolicited email.</p>
+    <div id="n">Loading…</div>`;
   try{
     const id=await api("GET","/api/v1/admin/fed/identity");
     const c=id.notify||{};
     $("#n").innerHTML=`<div class="card"><h3>Transport</h3><div class="body">
-      <div class="field"><label>
-        <input type="checkbox" id="en" ${c.enabled?"checked":""} style="width:auto;margin-right:7px">
-        Notifications activées</label></div>
+      <label class="chk"><input type="checkbox" id="en" ${c.enabled?"checked":""}><span>Notifications enabled</span></label>
       <div class="row2">
-        <div class="field"><label>Serveur SMTP</label><input id="sh" value="${esc(c.smtp_host||"")}"></div>
+        <div class="field"><label>SMTP server</label><input id="sh" value="${esc(c.smtp_host||"")}"></div>
         <div class="field"><label>Port</label><input id="sp" type="number" value="${c.smtp_port||587}"></div>
-        <div class="field"><label>Utilisateur</label><input id="su" value="${esc(c.smtp_user||"")}"></div>
-        <div class="field"><label>Mot de passe</label><input id="sw" type="password" placeholder="inchangé"></div>
-        <div class="field"><label>Expéditeur</label><input id="sf" value="${esc(c.from||"")}"></div>
-        <div class="field"><label>Webhook (facultatif)</label><input id="wh" value="${esc(c.webhook_url||"")}"></div>
+        <div class="field"><label>User</label><input id="su" value="${esc(c.smtp_user||"")}"></div>
+        <div class="field"><label>Password</label><input id="sw" type="password" placeholder="unchanged"></div>
+        <div class="field"><label>Sender</label><input id="sf" value="${esc(c.from||"")}"></div>
+        <div class="field"><label>Webhook (optional)</label><input id="wh" value="${esc(c.webhook_url||"")}"></div>
       </div>
-      <button class="btn p" id="save">Enregistrer</button>
+      <button class="btn p" id="save">Save</button>
     </div></div>
-    <div class="card"><h3>Incidents fédérés</h3><div class="body" id="inc">Chargement…</div></div>`;
+    <div class="card"><h3>Federated incidents</h3><div class="body" id="inc">Loading…</div></div>`;
     $("#save").onclick=async()=>{
       try{
         await api("PUT","/api/v1/admin/fed/notify",{
           enabled:$("#en").checked,smtp_host:$("#sh").value,
           smtp_port:parseInt($("#sp").value,10),smtp_user:$("#su").value,
           smtp_pass:$("#sw").value,from:$("#sf").value,webhook_url:$("#wh").value});
-        toast("Enregistré");render();
+        toast("Saved");render();
       }catch(e){toast(e.message,true);}
     };
     const incs=await api("GET","/api/v1/fed/incidents").catch(()=>[]);
-    $("#inc").innerHTML=(incs&&incs.length)?`<table><thead><tr><th>AS visé</th>
-      <th>Cible</th><th>Constat</th><th>Corrob.</th><th>État</th><th>Ouvert</th>
+    $("#inc").innerHTML=(incs&&incs.length)?`<table><thead><tr><th>AS concerned</th>
+      <th>Target</th><th>Finding</th><th>Confirmed by</th><th>State</th><th>Opened</th>
       </tr></thead><tbody>`+incs.map(i=>`<tr><td class="mono">${esc(i.suspect_asn)}</td>
       <td class="mono">${esc(i.target)}</td><td style="font-size:12px">${esc(i.detail)}</td>
       <td>${i.corroborated}</td>
       <td><span class="badge ${i.ack_at?"b-ok":i.notified_at?"b-crit":"b-warn"}">
-        ${i.ack_at?"acquitté":i.notified_at?"NOC notifié":"préavis"}</span></td>
+        ${i.ack_at?"acknowledged":i.notified_at?"NOC notified":"grace period"}</span></td>
       <td style="font-size:12px">${dt(i.opened_at)}</td></tr>`).join("")+`</tbody></table>`
-      :`<div class="empty">Aucun incident.</div>`;
+      :`<div class="empty">No incident.</div>`;
   }catch(e){$("#n").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
 }
 
-/* ------------------------------------------------- stockage */
+/* ----------------------------------------------------------- storage */
 async function viewStorage(m){
-  m.innerHTML=`<h2>Stockage</h2>
-    <p class="lead">Les agrégats horaires et journaliers ne sont jamais évincés.
-      Seule l'archive brute est soumise à rotation, et les chunks déjà présents sur S3
-      partent en premier puisqu'ils restent récupérables.</p>
-    <div id="s">Chargement…</div>`;
+  m.innerHTML=`<h2>Storage</h2>
+    <p class="lead">Hourly and daily aggregates are never evicted. Only the raw archive is
+      rotated, and chunks already stored on S3 go first since they remain retrievable.</p>
+    <div id="s">Loading…</div>`;
   try{
     const d=await api("GET","/api/v1/admin/storage");
     const c=d.config,r=d.report||{},s3=c.s3||{},lo=c.local||{};
     $("#s").innerHTML=`<div class="card"><h3>Mode</h3><div class="body">
-      <div class="field"><label>Politique</label><select id="mode">
-        <option value="local" ${c.mode==="local"?"selected":""}>Local uniquement (rotation par capacité)</option>
-        <option value="s3" ${c.mode==="s3"?"selected":""}>S3 en priorité</option>
-        <option value="hybrid" ${c.mode==="hybrid"?"selected":""}>Hybride (local puis S3)</option>
+      <div class="field"><label>Policy</label><select id="mode">
+        <option value="local" ${c.mode==="local"?"selected":""}>Local only (capacity-based rotation)</option>
+        <option value="s3" ${c.mode==="s3"?"selected":""}>S3 first</option>
+        <option value="hybrid" ${c.mode==="hybrid"?"selected":""}>Hybrid (local, then S3)</option>
       </select></div></div></div>
-      <div class="card"><h3>Cible S3</h3><div class="body"><div class="row2">
+      <div class="card"><h3>S3 target</h3><div class="body"><div class="row2">
         <div class="field"><label>Endpoint</label><input id="ep" value="${esc(s3.endpoint||"")}" placeholder="s3.fr-par.scw.cloud"></div>
         <div class="field"><label>Bucket</label><input id="bk" value="${esc(s3.bucket||"")}"></div>
-        <div class="field"><label>Préfixe</label><input id="px" value="${esc(s3.prefix||"")}"></div>
-        <div class="field"><label>Région</label><input id="rg" value="${esc(s3.region||"")}"></div>
-        <div class="field"><label>Clé d'accès</label><input id="ak" value="${esc(s3.access_key||"")}"></div>
-        <div class="field"><label>Clé secrète</label><input id="sk" type="password" placeholder="inchangée"></div>
-        <div class="field"><label>Classe de stockage</label><input id="cl" value="${esc(s3.storage_class||"")}"></div>
-        <div class="field"><label><input type="checkbox" id="ps" ${s3.path_style?"checked":""}
-          style="width:auto;margin-right:7px">Path-style (MinIO, Ceph)</label></div>
+        <div class="field"><label>Prefix</label><input id="px" value="${esc(s3.prefix||"")}"></div>
+        <div class="field"><label>Region</label><input id="rg" value="${esc(s3.region||"")}"></div>
+        <div class="field"><label>Access key</label><input id="ak" value="${esc(s3.access_key||"")}"></div>
+        <div class="field"><label>Secret key</label><input id="sk" type="password" placeholder="unchanged"></div>
+        <div class="field"><label>Storage class</label><input id="cl" value="${esc(s3.storage_class||"")}"></div>
+        <label class="chk"><input type="checkbox" id="ps" ${s3.path_style?"checked":""}><span>Path-style URLs (MinIO, Ceph)</span></label>
       </div></div></div>
-      <div class="card"><h3>Rotation locale</h3><div class="body"><div class="row2">
-        <div class="field"><label>Quota (Go)</label><input id="q" type="number" step="0.5"
+      <div class="card"><h3>Local rotation</h3><div class="body"><div class="row2">
+        <div class="field"><label>Quota (GB)</label><input id="q" type="number" step="0.5"
           value="${((lo.quota_bytes||0)/1073741824).toFixed(1)}"></div>
-        <div class="field"><label>Seuil haut</label><input id="hw" type="number" step="0.01"
-          value="${lo.high_watermark||0.85}"></div>
-        <div class="field"><label>Seuil bas</label><input id="lw" type="number" step="0.01"
-          value="${lo.low_watermark||0.7}"></div>
-        <div class="field"><label>Conservation locale (h)</label><input id="kl" type="number"
-          value="${lo.keep_local_hours||48}"></div>
+        <div class="field"><label>High watermark</label><input id="hw" type="number" step="0.01" value="${lo.high_watermark||0.85}"></div>
+        <div class="field"><label>Low watermark</label><input id="lw" type="number" step="0.01" value="${lo.low_watermark||0.7}"></div>
+        <div class="field"><label>Keep locally (hours)</label><input id="kl" type="number" value="${lo.keep_local_hours||48}"></div>
       </div>
-      <button class="btn p" id="save">Enregistrer</button></div></div>
-      <div class="card"><h3>État</h3><div class="body"><table><tbody>
-        <tr><td style="width:210px">Archive locale</td><td>${gb(r.local_bytes||0)} / ${gb(r.quota_bytes||0)}</td></tr>
-        <tr><td>Occupation du disque</td><td>${((r.disk_used_pct||0)*100).toFixed(1)} %
-          ${r.degraded?'<span class="badge b-crit">mode dégradé</span>':""}</td></tr>
+      <button class="btn p" id="save">Save</button></div></div>
+      <div class="card"><h3>Status</h3><div class="body"><table><tbody>
+        <tr><td style="width:210px">Local archive</td><td>${gb(r.local_bytes||0)} / ${gb(r.quota_bytes||0)}</td></tr>
+        <tr><td>Disk usage</td><td>${((r.disk_used_pct||0)*100).toFixed(1)} %
+          ${r.degraded?'<span class="badge b-crit">degraded mode</span>':""}</td></tr>
         <tr><td>Chunks</td><td>${r.chunks||0}</td></tr>
-        <tr><td>Uploads en attente</td><td>${r.pending_uploads||0}</td></tr>
-        <tr><td>Rétention projetée</td><td>${r.projected_days?r.projected_days.toFixed(0)+" jours":"—"}</td></tr>
+        <tr><td>Pending uploads</td><td>${r.pending_uploads||0}</td></tr>
+        <tr><td>Projected retention</td><td>${r.projected_days?r.projected_days.toFixed(0)+" days":"—"}</td></tr>
       </tbody></table></div></div>`;
     $("#save").onclick=async()=>{
       try{
@@ -793,137 +707,289 @@ async function viewStorage(m){
                  high_watermark:parseFloat($("#hw").value),
                  low_watermark:parseFloat($("#lw").value),
                  keep_local_hours:parseInt($("#kl").value,10)}});
-        toast("Enregistré");render();
+        toast("Saved");render();
       }catch(e){toast(e.message,true);}
     };
   }catch(e){$("#s").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
 }
 
-/* -------------------------------------------- page éditeur */
+/* ---------------------------------------------------- publisher page */
 async function viewSite(m){
-  m.innerHTML=`<h2>Page éditeur</h2>
-    <p class="lead">Ces informations alimentent la page publique /about.html.
-      Le téléphone du NOC n'y apparaît jamais : il n'est renvoyé qu'aux appels authentifiés.</p>
-    <div id="s">Chargement…</div>`;
+  m.innerHTML=`<h2>Publisher page</h2>
+    <p class="lead">This information feeds the public <a href="/about" target="_blank">/about</a> page.
+      The NOC phone number never appears there: it is only returned to authenticated calls.</p>
+    <div id="s">Loading…</div>`;
   try{
     const s=await api("GET","/api/v1/site");
     LANGS=(await api("GET","/api/v1/i18n").catch(()=>({languages:[]}))).languages;
     const f=(id,lab,val,ph)=>`<div class="field"><label>${lab}</label>
       <input id="${id}" value="${esc(val||"")}" placeholder="${esc(ph||"")}"></div>`;
-    $("#s").innerHTML=`<div class="card"><h3>Identité</h3><div class="body"><div class="row2">
-      ${f("title","Titre de l'instance",s.title)}
+    $("#s").innerHTML=`<div class="card"><h3>Identity</h3><div class="body"><div class="row2">
+      ${f("title","Instance title",s.title)}
       ${f("org","Organisation",s.org)}
-      ${f("asn","Numéro d'AS",s.asn,"AS64500")}
-      ${f("owner","Responsable",s.owner)}
-      ${f("location","Localisation",s.location,"Paris, FR")}
-      ${f("timezone","Fuseau horaire",s.timezone,"Europe/Paris")}
-      <div class="field"><label>Langue par défaut des pages publiques</label>
+      ${f("asn","AS number",s.asn,"AS64500")}
+      ${f("owner","Maintainer",s.owner)}
+      ${f("location","Location",s.location,"Paris, FR")}
+      ${f("timezone","Time zone",s.timezone,"Europe/Paris")}
+      <div class="field"><label>Default language of public pages</label>
         <select id="default_lang">${(LANGS||[]).map(l=>`<option value="${esc(l.code)}" ${l.code===(s.default_lang||"en")?"selected":""}>${esc(l.name)}</option>`).join("")}</select></div>
     </div></div></div>
     <div class="card"><h3>Contacts</h3><div class="body"><div class="row2">
-      ${f("email","Courriel général",s.email)}
-      ${f("noc_email","Courriel du NOC",s.noc_email)}
-      ${f("noc_phone","Téléphone du NOC",s.noc_phone)}
-      ${f("url","Site web",s.url)}
-      ${f("peeringdb","Fiche PeeringDB",s.peeringdb)}
+      ${f("email","General email",s.email)}
+      ${f("noc_email","NOC email",s.noc_email)}
+      ${f("noc_phone","NOC phone",s.noc_phone)}
+      ${f("url","Website",s.url)}
+      ${f("peeringdb","PeeringDB record",s.peeringdb)}
     </div></div></div>
-    <div class="card"><h3>Textes</h3><div class="body">
+    <div class="card"><h3>Public traceroutes</h3><div class="body">
+      <label class="chk"><input type="checkbox" id="public_traceroutes" ${s.public_traceroutes?"checked":""}>
+        <span>Show traceroutes on the public target pages<small>Off by default: hops reveal the inside
+          of your network (router addresses, reverse names). When on, visitors see the traceroutes
+          taken during anomalies and the reference paths.</small></span></label>
+    </div></div>
+    <div class="card"><h3>Texts</h3><div class="body">
       <div class="field"><label>Description</label><textarea id="description" rows="3">${esc(s.description||"")}</textarea></div>
-      <div class="field"><label>Mentions</label><textarea id="legal" rows="2">${esc(s.legal||"")}</textarea></div>
-      <button class="btn p" id="save">Enregistrer</button>
+      <div class="field"><label>Legal notice</label><textarea id="legal" rows="2">${esc(s.legal||"")}</textarea></div>
+      <button class="btn p" id="save">Save</button>
     </div></div>`;
     $("#save").onclick=async()=>{
       const ids=["title","org","asn","owner","location","timezone","email",
                  "noc_email","noc_phone","url","peeringdb","description","legal","default_lang"];
       const body={};ids.forEach(k=>body[k]=$("#"+k).value);
-      try{await api("PUT","/api/v1/admin/site",body);toast("Enregistré");}
+      body.public_traceroutes=$("#public_traceroutes").checked;
+      try{await api("PUT","/api/v1/admin/site",body);toast("Saved");}
       catch(e){toast(e.message,true);}
     };
   }catch(e){$("#s").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
 }
 
-/* ---------------------------------------------- utilisateurs */
-async function viewUsers(m){
-  m.innerHTML=`<h2>Utilisateurs</h2>
-    <p class="lead"><strong>master</strong> gère les comptes et tout le reste.
-      <strong>admin</strong> gère la configuration, la fédération et le stockage, mais pas les comptes.
-      <strong>editor</strong> ne touche qu'aux cibles et catégories. <strong>viewer</strong> lit seulement.
-      Il doit toujours rester au moins un master actif.</p>
-    <div class="card"><h3>Nouveau compte</h3><div class="body"><div class="row2">
-      <div class="field"><label>Courriel</label><input id="ue" type="email"></div>
-      <div class="field"><label>Nom affiché</label><input id="un"></div>
-      <div class="field"><label>Mot de passe</label><input id="up" type="password"></div>
-      <div class="field"><label>Rôle</label><select id="ur">
-        <option value="viewer">viewer</option><option value="editor">editor</option>
-        <option value="admin">admin</option><option value="master">master</option></select></div>
-    </div><button class="btn p" id="add">Créer le compte</button></div></div>
-    <div class="card"><h3>Comptes</h3><div class="body" id="l">Chargement…</div></div>`;
-  $("#add").onclick=async()=>{
-    try{
-      await api("POST","/api/v1/admin/users",{email:$("#ue").value,name:$("#un").value,
-        password:$("#up").value,role:$("#ur").value});
-      toast("Compte créé");render();
-    }catch(e){toast(e.message,true);}
+/* ------------------------------------------------------ host network */
+async function viewNet(m){
+  m.innerHTML=`<h2>Host network</h2>
+    <p class="lead">Public information about the AS hosting this instance, from RIPEstat
+      (observed routing) and PeeringDB (declared by the operator). Cached for 24 h and shown on
+      the public page <a href="/network" target="_blank">/network</a>. The AS number is set in the
+      Publisher page.</p>
+    <div id="n">Loading…</div>`;
+  const show=i=>{
+    const p=i.peeringdb;
+    $("#n").innerHTML=`<div class="card"><h3>AS${esc(i.asn)} — ${esc(i.holder||"?")}
+      <span style="margin-left:auto"><button class="btn s" id="rf">Refresh</button></span></h3><div class="body">
+      <table><tbody>
+        <tr><td style="width:220px">Country</td><td>${esc(i.country||"—")}</td></tr>
+        <tr><td>Announced prefixes</td><td>${i.prefixes_v4} IPv4 · ${i.prefixes_v6} IPv6</td></tr>
+        <tr><td>Upstream / downstream neighbours</td><td>${i.nb_upstreams} / ${i.nb_downstreams}</td></tr>
+        <tr><td>Main upstream neighbours</td><td>${(i.upstreams||[]).map(u=>`AS${u.asn} ${esc(u.name||"")}`).join("<br>")||"—"}</td></tr>
+        <tr><td>PeeringDB record</td><td>${p?`<a href="${esc(p.url)}" target="_blank">${esc(p.name)}</a> · ${esc(p.policy||"")}`:"none"}</td></tr>
+        <tr><td>Internet exchanges</td><td>${p?(p.ixs||[]).map(x=>esc(x.name)).join(", ")||"—":"—"}</td></tr>
+        <tr><td>Facilities</td><td>${p?(p.facilities||[]).map(f=>esc(f.name)).join(", ")||"—":"—"}</td></tr>
+        <tr><td>Fetched</td><td>${dt(i.fetched_at)}</td></tr>
+      </tbody></table>
+      ${(i.errors&&i.errors.length)?`<div class="note" style="margin-top:12px;color:var(--crit)">${i.errors.map(esc).join("<br>")}</div>`:""}
+    </div></div>`;
+    $("#rf").onclick=async()=>{try{show(await api("POST","/api/v1/admin/asn/refresh"));toast("Refreshed");}
+      catch(e){toast(e.message,true);}};
   };
+  try{show(await api("GET","/api/v1/asn"));}
+  catch(e){$("#n").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
+}
+
+/* --------------------------------------------------------- languages */
+async function viewLangs(m){
+  m.innerHTML=`<h2>Languages</h2>
+    <p class="lead">Public pages are translated by JSON language files. English is the mandatory
+      reference: without <code>en.json</code> the instance refuses to start, and any key missing
+      from another language is shown in English. To add or fix a language without rebuilding,
+      drop <code>xx.json</code> into <code>/var/lib/smokestack/i18n/</code> and reload.</p>
+    <div id="l">Loading…</div>`;
   try{
-    const list=await api("GET","/api/v1/admin/users");
-    $("#l").innerHTML=`<table><thead><tr><th>Courriel</th><th>Nom</th><th>Rôle</th>
-      <th>Dernière connexion</th><th></th></tr></thead><tbody>`+
-      list.map(u=>`<tr class="${u.disabled?"dis":""}">
-        <td>${esc(u.email)}${u.id===ME.id?' <span class="badge b-n">vous</span>':""}</td>
-        <td>${esc(u.display_name)}</td>
-        <td><select data-role="${u.id}" style="width:auto;padding:3px 7px">`+
-          ["viewer","editor","admin","master"].map(r=>
-          `<option ${u.role===r?"selected":""}>${r}</option>`).join("")+`</select></td>
-        <td style="font-size:12px">${dt(u.last_login_at)}</td>
-        <td style="text-align:right">
-          <button class="btn s" data-dis="${u.id}" data-on="${u.disabled?0:1}">
-            ${u.disabled?"Réactiver":"Désactiver"}</button>
-          <button class="btn s" data-rst="${u.id}">Mot de passe</button>
-          ${u.id!==ME.id?`<button class="btn d s" data-udel="${u.id}">Supprimer</button>`:""}
-        </td></tr>`).join("")+`</tbody></table>`;
-    document.querySelectorAll("[data-role]").forEach(s=>s.onchange=async()=>{
-      try{await api("PATCH","/api/v1/admin/users/"+s.dataset.role,{role:s.value});
-        toast("Rôle modifié");render();}catch(e){toast(e.message,true);render();}
-    });
-    document.querySelectorAll("[data-dis]").forEach(b=>b.onclick=async()=>{
-      try{await api("PATCH","/api/v1/admin/users/"+b.dataset.dis,
-        {disabled:b.dataset.on==="1"});toast("Compte mis à jour");render();}
-      catch(e){toast(e.message,true);}
-    });
-    document.querySelectorAll("[data-rst]").forEach(b=>b.onclick=async()=>{
-      const pw=prompt("Nouveau mot de passe (12 caractères minimum)");if(!pw) return;
-      try{await api("PATCH","/api/v1/admin/users/"+b.dataset.rst,{password:pw});
-        toast("Mot de passe réinitialisé, sessions fermées");}catch(e){toast(e.message,true);}
-    });
-    document.querySelectorAll("[data-udel]").forEach(b=>b.onclick=async()=>{
-      if(!confirm("Supprimer ce compte ?")) return;
-      try{await api("DELETE","/api/v1/admin/users/"+b.dataset.udel);
-        toast("Compte supprimé");render();}catch(e){toast(e.message,true);}
+    const meta=await api("GET","/api/v1/i18n");
+    $("#l").innerHTML=`<div class="card"><h3>Loaded files
+      <span style="margin-left:auto"><button class="btn s" id="rl">Reload</button></span></h3><div class="body">
+      <table><thead><tr><th>Code</th><th>Language</th><th>Coverage</th><th>Source</th><th>Warnings</th><th></th></tr></thead><tbody>`+
+      meta.languages.map(l=>`<tr><td class="mono">${esc(l.code)}${l.code===meta.base?' <span class="badge b-n">reference</span>':""}
+        ${l.code===meta.default?' <span class="badge b-ok">default</span>':""}</td>
+        <td>${esc(l.name)}</td>
+        <td><div style="display:flex;align-items:center;gap:8px"><div class="bar"><i style="width:${Math.round(l.coverage*100)}%;
+          ${l.coverage<1?"background:var(--warn)":""}"></i></div><span style="font-size:12px">${Math.round(l.coverage*100)} %</span></div></td>
+        <td style="font-size:12px">${esc(l.source)}</td>
+        <td style="font-size:12px">${(l.warnings||[]).length?`<span class="badge b-warn">${l.warnings.length}</span>`:"—"}</td>
+        <td style="text-align:right">${l.missing?`<button class="btn s" data-miss="${esc(l.code)}">${l.missing} missing</button>`:""}</td></tr>`).join("")+
+      `</tbody></table><div id="miss"></div></div></div>`;
+    $("#rl").onclick=async()=>{try{await api("POST","/api/v1/admin/i18n/reload");toast("Language files reloaded");render();}
+      catch(e){toast(e.message,true);}};
+    document.querySelectorAll("[data-miss]").forEach(b=>b.onclick=async()=>{
+      const r=await api("GET","/api/v1/admin/i18n/"+b.dataset.miss+"/missing");
+      $("#miss").innerHTML=`<div class="note" style="margin-top:12px"><strong>${esc(r.code)}</strong>: keys to translate
+        <div class="mono" style="font-size:12px;margin-top:6px">${r.missing.map(esc).join("<br>")}</div></div>`;
     });
   }catch(e){$("#l").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
 }
 
-/* ---------------------------------------------------- journal */
+/* ----------------------------------------------------------- updates */
+async function viewUpdate(m){
+  m.innerHTML=`<h2>Updates</h2>
+    <p class="lead">Upload the ZIP of a new version: it is verified (signature, platform,
+      checksum), tested, then activated in one click. The previous version stays on disk and
+      takes over automatically if the new one fails to start.</p><div id="u">Loading…</div>`;
+  let S;
+  try{S=await api("GET","/api/v1/admin/update");}catch(e){$("#u").innerHTML=`<div class="note">${esc(e.message)}</div>`;return;}
+  const staged=S.staged, av=S.available;
+  let h=`<div class="card"><h3>Installed version</h3><div class="body"><table><tbody>
+    <tr><td style="width:220px">Version</td><td><strong class="mono">${esc(S.version)}</strong> <span style="color:var(--ink3)">${esc(S.platform)} ${esc(S.build_date||"")}</span></td></tr>
+    <tr><td>Previous version</td><td class="mono">${esc(S.previous||"—")}</td></tr>
+    <tr><td>In-place updates</td><td>${S.managed?'<span class="badge b-ok">available</span> <span class="mono" style="font-size:12px">'+esc(S.root)+'</span>'
+      :'<span class="badge b-crit">unavailable</span> '+esc(S.reason)}</td></tr>
+    <tr><td>Release keys</td><td class="mono">${S.trusted_keys.length?S.trusted_keys.map(esc).join(", "):'<span style="color:var(--crit)">none</span>'}
+      ${S.allow_unsigned?' <span class="badge b-warn">unsigned packages allowed</span>':""}</td></tr>
+    </tbody></table>
+    ${S.previous&&S.managed?`<div class="acts"><button class="btn d s" id="rb">Revert to ${esc(S.previous)}</button></div>`:""}
+  </div></div>`;
+  h+=`<div class="card"><h3>Install a version</h3><div class="body">
+    <div class="field"><label>ZIP package (smokestack-VERSION-linux-ARCH.zip)</label>
+      <input type="file" id="pkg" accept=".zip,application/zip" ${S.managed?"":"disabled"}></div>
+    <button class="btn p" id="up" ${S.managed?"":"disabled"}>Verify the package</button>
+    <div id="stg" style="margin-top:14px"></div></div></div>`;
+  h+=`<div class="card"><h3>Automatic updates</h3><div class="body">
+    <label class="chk"><input type="checkbox" id="ac" ${S.auto_check?"checked":""}><span>Check regularly for new versions
+      <small>Source: <span class="mono">${esc(S.manifest_url)}</span></small></span></label>
+    <label class="chk"><input type="checkbox" id="aa" ${S.auto_apply?"checked":""} ${S.managed?"":"disabled"}><span>Install new versions automatically
+      <small>Only packages signed by a trusted key are installed automatically, without exception.</small></span></label>
+    <div class="acts"><button class="btn s" id="chk">Check now</button></div>
+    <div style="margin-top:10px;font-size:13px">${av?(av.newer?`<span class="badge b-warn">version ${esc(av.version)} available</span>`
+      :`<span class="badge b-ok">up to date</span> latest published version: ${esc(av.version)}`):""}</div>
+  </div></div>`;
+  const ACT={update:"update",rollback:"rollback",auto_rollback:'<span class="badge b-crit">automatic rollback</span>'};
+  h+=`<div class="card"><h3>History</h3><div class="body">`+(S.history.length?`<table><thead><tr><th>Date</th><th>Action</th><th>From</th><th>To</th><th>By</th></tr></thead><tbody>`+
+    S.history.map(x=>`<tr><td>${dt(x.ts)}</td><td>${ACT[x.action]||esc(x.action)}</td><td class="mono">${esc(x.from||"—")}</td>
+      <td class="mono">${esc(x.to)}</td><td>${esc(x.by)}</td></tr>`).join("")+`</tbody></table>`:`<div class="empty">No update yet.</div>`)+`</div></div>`;
+  $("#u").innerHTML=h;
+
+  const showStaged=st=>{$("#stg").innerHTML=`<div class="pend">
+    <div style="display:flex;gap:9px;align-items:baseline;flex-wrap:wrap"><strong>Version ${esc(st.version)}</strong>
+      ${st.signed?`<span class="badge b-ok">signed · key ${esc(st.key_id)}</span>`:'<span class="badge b-warn">unsigned</span>'}
+      ${st.newer?'<span class="badge b-ok">newer</span>':'<span class="badge b-warn">not newer than '+esc(st.current)+'</span>'}</div>
+    <div style="font-size:12px;color:var(--ink2);margin-top:4px">${esc(st.os)}-${esc(st.arch)} · built ${esc(st.built_at||"?")}
+      · SHA-256 <span class="mono">${esc(st.sha256.slice(0,16))}…</span> · self-test passed</div>
+    ${st.notes?`<div class="quote">${esc(st.notes)}</div>`:""}
+    ${st.newer?"":`<label class="chk"><input type="checkbox" id="frc"><span>Force installing an older or identical version</span></label>`}
+    <div class="acts"><button class="btn p" id="ap">Install and restart</button></div></div>`;
+    $("#ap").onclick=async()=>{
+      if(!confirm("Install version "+st.version+"? The service restarts (a few seconds).")) return;
+      try{await api("POST","/api/v1/admin/update/apply",{force:!!($("#frc")&&$("#frc").checked)});waitRestart(st.version);}
+      catch(e){toast(e.message,true);}
+    };
+  };
+  if(staged) showStaged(staged);
+  if($("#up")) $("#up").onclick=async()=>{
+    const f=$("#pkg").files[0]; if(!f){toast("Choose a ZIP file",true);return;}
+    const fd=new FormData(); fd.append("package",f);
+    $("#up").disabled=true;$("#up").textContent="Verifying…";
+    try{
+      const r=await fetch("/api/v1/admin/update/upload",{method:"POST",body:fd,headers:{"X-CSRF-Token":CSRF},credentials:"same-origin"});
+      const d=await r.json(); if(!r.ok) throw new Error(d.error||("HTTP "+r.status));
+      showStaged(d);
+    }catch(e){toast(e.message,true);}
+    $("#up").disabled=false;$("#up").textContent="Verify the package";
+  };
+  if($("#rb")) $("#rb").onclick=async()=>{
+    if(!confirm("Revert to version "+S.previous+"?")) return;
+    try{await api("POST","/api/v1/admin/update/rollback");waitRestart(S.previous);}catch(e){toast(e.message,true);}
+  };
+  const save=async()=>{try{await api("PUT","/api/v1/admin/update/settings",{auto_check:$("#ac").checked,auto_apply:$("#aa").checked});toast("Preferences saved");}
+    catch(e){toast(e.message,true);}};
+  $("#ac").onchange=save;$("#aa").onchange=save;
+  $("#chk").onclick=async()=>{try{await api("POST","/api/v1/admin/update/check");render();}catch(e){toast(e.message,true);}};
+}
+async function waitRestart(ver){
+  $("#u").innerHTML=`<div class="card"><div class="body"><strong>Restarting on version ${esc(ver)}…</strong>
+    <p class="lead" style="margin-top:6px">This page reloads by itself.</p></div></div>`;
+  for(let i=0;i<60;i++){
+    await new Promise(r=>setTimeout(r,1500));
+    try{const v=await fetch("/api/v1/version",{cache:"no-store"}).then(r=>r.json());
+      if(v.version===ver){toast("Version "+ver+" is running");render();return;}}catch(e){}
+  }
+  toast("The service is not answering yet: check journalctl -u smokestack",true);
+}
+
+/* ------------------------------------------------------------- users */
+async function viewUsers(m){
+  m.innerHTML=`<h2>Users</h2>
+    <p class="lead"><strong>master</strong> manages accounts and everything else.
+      <strong>admin</strong> manages configuration, federation and storage, but not accounts.
+      <strong>editor</strong> only manages targets and categories. <strong>viewer</strong> is read-only.
+      At least one active master account must always remain.</p>
+    <div class="card"><h3>New account</h3><div class="body"><div class="row2">
+      <div class="field"><label>Email</label><input id="ue" type="email"></div>
+      <div class="field"><label>Display name</label><input id="un"></div>
+      <div class="field"><label>Password</label><input id="up" type="password"></div>
+      <div class="field"><label>Role</label><select id="ur">
+        <option value="viewer">viewer</option><option value="editor">editor</option>
+        <option value="admin">admin</option><option value="master">master</option></select></div>
+    </div><button class="btn p" id="add">Create the account</button></div></div>
+    <div class="card"><h3>Accounts</h3><div class="body" id="l">Loading…</div></div>`;
+  $("#add").onclick=async()=>{
+    try{
+      await api("POST","/api/v1/admin/users",{email:$("#ue").value,name:$("#un").value,
+        password:$("#up").value,role:$("#ur").value});
+      toast("Account created");render();
+    }catch(e){toast(e.message,true);}
+  };
+  try{
+    const list=await api("GET","/api/v1/admin/users");
+    $("#l").innerHTML=`<table><thead><tr><th>Email</th><th>Name</th><th>Role</th>
+      <th>Last sign-in</th><th></th></tr></thead><tbody>`+
+      list.map(u=>`<tr class="${u.disabled?"dis":""}">
+        <td>${esc(u.email)}${u.id===ME.id?' <span class="badge b-n">you</span>':""}</td>
+        <td>${esc(u.display_name)}</td>
+        <td><select data-role="${u.id}" style="width:auto;padding:3px 7px">`+
+          ["viewer","editor","admin","master"].map(r=>`<option ${u.role===r?"selected":""}>${r}</option>`).join("")+`</select></td>
+        <td style="font-size:12px">${dt(u.last_login_at)}</td>
+        <td style="text-align:right;white-space:nowrap">
+          <button class="btn s" data-dis="${u.id}" data-on="${u.disabled?0:1}">${u.disabled?"Enable":"Disable"}</button>
+          <button class="btn s" data-rst="${u.id}">Reset password</button>
+          ${u.id!==ME.id?`<button class="btn d s" data-udel="${u.id}">Delete</button>`:""}
+        </td></tr>`).join("")+`</tbody></table>`;
+    document.querySelectorAll("[data-role]").forEach(s=>s.onchange=async()=>{
+      try{await api("PATCH","/api/v1/admin/users/"+s.dataset.role,{role:s.value});
+        toast("Role changed");render();}catch(e){toast(e.message,true);render();}
+    });
+    document.querySelectorAll("[data-dis]").forEach(b=>b.onclick=async()=>{
+      try{await api("PATCH","/api/v1/admin/users/"+b.dataset.dis,{disabled:b.dataset.on==="1"});
+        toast("Account updated");render();}catch(e){toast(e.message,true);}
+    });
+    document.querySelectorAll("[data-rst]").forEach(b=>b.onclick=async()=>{
+      const pw=prompt("New password (12 characters minimum)");if(!pw) return;
+      try{await api("PATCH","/api/v1/admin/users/"+b.dataset.rst,{password:pw});
+        toast("Password reset, sessions closed");}catch(e){toast(e.message,true);}
+    });
+    document.querySelectorAll("[data-udel]").forEach(b=>b.onclick=async()=>{
+      if(!confirm("Delete this account?")) return;
+      try{await api("DELETE","/api/v1/admin/users/"+b.dataset.udel);
+        toast("Account deleted");render();}catch(e){toast(e.message,true);}
+    });
+  }catch(e){$("#l").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
+}
+
+/* --------------------------------------------------------- audit log */
 async function viewAudit(m){
-  m.innerHTML=`<h2>Journal</h2>
-    <p class="lead">Deux cents dernières actions d'administration, connexions et échecs de
-      connexion compris.</p>
-    <div class="card"><div class="body" id="l">Chargement…</div></div>`;
+  m.innerHTML=`<h2>Audit log</h2>
+    <p class="lead">The last two hundred administrative actions, including sign-ins and failed sign-ins.</p>
+    <div class="card"><div class="body" id="l">Loading…</div></div>`;
   try{
     const list=await api("GET","/api/v1/admin/audit");
-    $("#l").innerHTML=(list&&list.length)?`<table><thead><tr><th>Date</th><th>Compte</th>
-      <th>Action</th><th>Objet</th><th>IP</th></tr></thead><tbody>`+
+    $("#l").innerHTML=(list&&list.length)?`<table><thead><tr><th>Date</th><th>Account</th>
+      <th>Action</th><th>Object</th><th>IP</th></tr></thead><tbody>`+
       list.map(e=>`<tr><td style="font-size:12px">${dt(e.ts)}</td>
         <td style="font-size:12px">${esc(e.email||"—")}</td>
         <td><span class="badge ${e.action==="login_failed"?"b-crit":"b-n"}">${esc(e.action)}</span></td>
         <td style="font-size:12px">${esc(e.entity)} ${esc(e.entity_id)}</td>
         <td class="mono" style="font-size:12px">${esc(e.ip)}</td></tr>`).join("")+
-      `</tbody></table>`:`<div class="empty">Journal vide.</div>`;
+      `</tbody></table>`:`<div class="empty">The log is empty.</div>`;
   }catch(e){$("#l").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
 }
 
-/* -------------------------------------------------- démarrage */
+/* ----------------------------------------------------------- startup */
 (async()=>{
   try{
     const st=await api("GET","/api/v1/auth/state");
@@ -935,7 +1001,7 @@ async function viewAudit(m){
     gateLogin();
   }catch(e){
     $("#app").innerHTML=`<div class="gate"><div class="gatebox">
-      <h1>Instance injoignable</h1><p class="sub">${esc(e.message)}</p></div></div>`;
+      <h1>Instance unreachable</h1><p class="sub">${esc(e.message)}</p></div></div>`;
   }
 })();
 </script>

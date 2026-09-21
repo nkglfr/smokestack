@@ -202,5 +202,24 @@
     "peeringdb": "PeeringDB",
     "bgptools": "bgp.tools",
     "rights": "All measurements are published as-is, without warranty."
+  },
+  "trace": {
+    "title": "Traceroutes",
+    "sub": "Taken automatically when the target leaves its baseline, and once a day on a healthy path for comparison.",
+    "anomaly": "anomaly",
+    "reference": "reference path",
+    "manual": "manual",
+    "reached": "reached in {n} hops",
+    "refused": "refused at hop {n}",
+    "not_reached": "not reached",
+    "hop": "Hop",
+    "address": "Address",
+    "name": "Name",
+    "as": "AS",
+    "rtt": "RTT",
+    "replies": "Replies",
+    "ref_col": "Healthy path",
+    "changed": "Highlighted rows: a router of the last healthy path is different or no longer answers.",
+    "none": "No traceroute yet for this target."
   }
 }

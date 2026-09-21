@@ -203,7 +203,7 @@ func (f *Federation) loadKey() error {
 	if err := os.WriteFile(path, []byte(enc), 0o600); err != nil {
 		return err
 	}
-	log.Printf("identite federation creee, empreinte %s", f.Fingerprint())
+	log.Printf("federation identity created, fingerprint %s", f.Fingerprint())
 	return nil
 }
 
@@ -283,11 +283,11 @@ func (f *Federation) readSigned(r *http.Request) (sigHeaders, []byte, error) {
 	h.nonce = r.Header.Get("X-Fed-Nonce")
 	sigB64 := r.Header.Get("X-Fed-Signature")
 	if h.asn == "" || h.nonce == "" || sigB64 == "" {
-		return h, body, fmt.Errorf("en-tetes de signature manquants")
+		return h, body, fmt.Errorf("missing signature headers")
 	}
 	now := time.Now().Unix()
 	if h.ts < now-fedClockSkew || h.ts > now+fedClockSkew {
-		return h, body, fmt.Errorf("horodatage hors tolerance")
+		return h, body, fmt.Errorf("timestamp outside tolerance")
 	}
 	sig, err := base64.StdEncoding.DecodeString(sigB64)
 	if err != nil {
@@ -303,7 +303,7 @@ func (f *Federation) readSigned(r *http.Request) (sigHeaders, []byte, error) {
 		}
 	}
 	if _, seen := f.nonces[h.nonce]; seen {
-		return h, body, fmt.Errorf("nonce deja vu")
+		return h, body, fmt.Errorf("nonce already seen")
 	}
 	f.nonces[h.nonce] = now
 	return h, body, nil
@@ -312,10 +312,10 @@ func (f *Federation) readSigned(r *http.Request) (sigHeaders, []byte, error) {
 func (f *Federation) checkSig(pub ed25519.PublicKey, r *http.Request,
 	h sigHeaders, body []byte) error {
 	if len(pub) != ed25519.PublicKeySize {
-		return fmt.Errorf("cle publique absente")
+		return fmt.Errorf("missing public key")
 	}
 	if !ed25519.Verify(pub, canonical(r.Method, r.URL.Path, h.ts, h.nonce, body), h.sig) {
-		return fmt.Errorf("signature invalide")
+		return fmt.Errorf("invalid signature")
 	}
 	return nil
 }
@@ -331,7 +331,7 @@ func (f *Federation) verify(r *http.Request) (*Peer, []byte, error) {
 		return nil, nil, fmt.Errorf("pair inconnu: %s", h.asn)
 	}
 	if peer.State != "trusted" {
-		return nil, nil, fmt.Errorf("pair non approuve")
+		return nil, nil, fmt.Errorf("peer not approved")
 	}
 	if err := f.checkSig(peer.pubkey, r, h, body); err != nil {
 		return nil, nil, err
@@ -417,7 +417,7 @@ func (f *Federation) trustedPeers() []*Peer {
 func (f *Federation) AddPeer(url string) (*Peer, error) {
 	url = strings.TrimSuffix(strings.TrimSpace(url), "/")
 	if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") {
-		return nil, fmt.Errorf("l'URL doit commencer par https://")
+		return nil, fmt.Errorf("the URL must start with https://")
 	}
 	resp, err := f.client.Get(url + "/api/v1/fed/profile")
 	if err != nil {
@@ -432,11 +432,11 @@ func (f *Federation) AddPeer(url string) (*Peer, error) {
 		return nil, err
 	}
 	if prof.ASN == "" || prof.PubKey == "" {
-		return nil, fmt.Errorf("profil distant incomplet (asn ou cle absente)")
+		return nil, fmt.Errorf("incomplete remote profile (missing AS or key)")
 	}
 	raw, err := base64.StdEncoding.DecodeString(prof.PubKey)
 	if err != nil || len(raw) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("cle publique distante invalide")
+		return nil, fmt.Errorf("invalid remote public key")
 	}
 	sum := sha256.Sum256(raw)
 	h := hex.EncodeToString(sum[:8])
@@ -501,7 +501,7 @@ func (f *Federation) ensureAnchorTargets(p *Peer) error {
 		}
 		if _, err := f.store.CreateTarget(t); err != nil &&
 			!strings.Contains(err.Error(), "UNIQUE") {
-			log.Printf("cible ancre %s: %v", anchor, err)
+			log.Printf("anchor target %s: %v", anchor, err)
 		}
 	}
 	return nil
@@ -699,7 +699,7 @@ func (f *Federation) detect() {
 			inc := Incident{
 				ID: newIncidentID(), OpenedAt: now, ObserverASN: me,
 				SuspectASN: p.ASN, Target: anchor, Severity: "warning",
-				Detail: fmt.Sprintf("perte %.1f%% sur 10 min, mediane %.2f ms", loss, med),
+				Detail: fmt.Sprintf("loss %.1f%% over 10 min, median %.2f ms", loss, med),
 				MedMs:  med, LossPct: loss,
 			}
 			due := now + int64(fedNoticeDelay.Seconds())
@@ -707,7 +707,7 @@ func (f *Federation) detect() {
 			f.saveIncident(inc)
 			f.addCorroboration(inc.ID, me, med, loss, inc.Detail)
 			f.broadcastIncident(inc)
-			log.Printf("incident %s ouvert vers %s (%s)", inc.ID, p.ASN, anchor)
+			log.Printf("incident %s opened towards %s (%s)", inc.ID, p.ASN, anchor)
 		}
 	}
 }
@@ -734,7 +734,7 @@ func (f *Federation) addCorroboration(id, asn string, med, loss float64, detail 
 func (f *Federation) broadcastIncident(i Incident) {
 	for _, p := range f.trustedPeers() {
 		if err := f.postSigned(p, "/api/v1/fed/incident", i); err != nil {
-			log.Printf("diffusion incident vers %s: %v", p.ASN, err)
+			log.Printf("sending incident to %s: %v", p.ASN, err)
 		}
 	}
 }
@@ -794,7 +794,7 @@ func (f *Federation) notifyDue() {
 			continue
 		}
 		f.store.cfg.Exec(`UPDATE fed_incidents SET notified_at=? WHERE id=?`, now, i.ID)
-		log.Printf("NOC %s notifie pour l'incident %s", peer.ASN, i.ID)
+		log.Printf("NOC %s notified for incident %s", peer.ASN, i.ID)
 	}
 }
 
@@ -809,7 +809,7 @@ func (f *Federation) notifyConfig() NotifyConfig {
 func (f *Federation) sendNOC(peer *Peer, i Incident) error {
 	cfg := f.notifyConfig()
 	if !cfg.Enabled {
-		return fmt.Errorf("notifications desactivees")
+		return fmt.Errorf("notifications disabled")
 	}
 	me := f.Profile()
 	rows, _ := f.store.cfg.Query(
@@ -821,41 +821,41 @@ func (f *Federation) sendNOC(peer *Peer, i Incident) error {
 			var asn string
 			var loss, med float64
 			if rows.Scan(&asn, &loss, &med) == nil {
-				obs = append(obs, fmt.Sprintf("  %-10s perte %5.1f%%  mediane %6.2f ms",
+				obs = append(obs, fmt.Sprintf("  %-10s loss %5.1f%%  median %6.2f ms",
 					asn, loss, med))
 			}
 		}
 		rows.Close()
 	}
 
-	body := fmt.Sprintf(`Bonjour,
+	body := fmt.Sprintf(`Hello,
 
-Observation corroboree de degradation vers %s (%s), remontee par le
-reseau de mesure auquel votre AS participe.
+Corroborated observation of a degradation towards %s (%s), reported by
+the measurement network your AS takes part in.
 
-Cible            : %s
-Ouvert a         : %s UTC
-Observateurs     : %d reseaux independants
-Constat initial  : %s
+Target           : %s
+Opened at        : %s UTC
+Observers        : %d independent networks
+Initial finding  : %s
 
-Detail par observateur :
+Per observer:
 %s
 
-Ceci est une observation automatisee, pas un diagnostic. Les chemins de
-retour ne sont pas visibles depuis nos points de mesure.
+This is an automated observation, not a diagnosis. Return paths are not
+visible from our measurement points.
 
-Dossier complet : %s/#incident=%s
-Emetteur         : %s (%s) — %s
+Full record      : %s/#incident=%s
+Sender           : %s (%s) - %s
 
-Pour acquitter ou signaler une maintenance en cours, votre instance peut
-repondre sur /api/v1/fed/ack, ou repondez simplement a ce message.
+To acknowledge or report ongoing maintenance, your instance can answer on
+/api/v1/fed/ack, or simply reply to this message.
 `,
 		peer.ASN, peer.Org, i.Target,
 		time.Unix(i.OpenedAt, 0).UTC().Format("2006-01-02 15:04"),
 		i.Corroborated, i.Detail, strings.Join(obs, "\n"),
 		me.URL, i.ID, me.Org, me.ASN, me.NOCEmail)
 
-	subject := fmt.Sprintf("[smokestack] Degradation observee vers %s — %s",
+	subject := fmt.Sprintf("[smokestack] Degradation observed towards %s - %s",
 		peer.ASN, i.Target)
 
 	if cfg.WebhookURL != "" {
@@ -895,7 +895,7 @@ func (f *Federation) Loop(stop <-chan struct{}) {
 	watch := time.NewTicker(time.Minute)
 	defer push.Stop()
 	defer watch.Stop()
-	log.Printf("federation active — empreinte %s", f.Fingerprint())
+	log.Printf("federation enabled, fingerprint %s", f.Fingerprint())
 	for {
 		select {
 		case <-stop:

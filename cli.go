@@ -106,13 +106,13 @@ func cmdSelftest() error {
 	}
 	if _, err := db.Exec(`CREATE TABLE t(x INTEGER)`); err != nil {
 		db.Close()
-		return fmt.Errorf("pilote SQLite : %w", err)
+		return fmt.Errorf("SQLite driver: %w", err)
 	}
 	db.Close()
 	sk := NewSketch()
 	sk.Add(1000)
 	if UnmarshalSketch(sk.MarshalBinary()).Count() != 1 {
-		return fmt.Errorf("sketch : aller-retour incorrect")
+		return fmt.Errorf("sketch: round trip mismatch")
 	}
 	return json.NewEncoder(os.Stdout).Encode(map[string]any{
 		"ok": true, "version": Version, "platform": runtime.GOOS + "-" + runtime.GOARCH,

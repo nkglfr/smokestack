@@ -122,7 +122,7 @@ func normalizeASN(s string) (string, error) {
 	s = strings.TrimPrefix(s, "AS")
 	n, err := strconv.ParseUint(s, 10, 32)
 	if err != nil || n == 0 {
-		return "", fmt.Errorf("numero d'AS invalide")
+		return "", fmt.Errorf("invalid AS number")
 	}
 	return strconv.FormatUint(n, 10), nil
 }
@@ -143,7 +143,7 @@ func (s *ASNService) getJSON(url string, pdb bool, out any) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 429 {
-		return fmt.Errorf("limite de requetes atteinte (429)")
+		return fmt.Errorf("rate limit reached (429)")
 	}
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
@@ -375,7 +375,7 @@ func (s *ASNService) Refresh(asn string) (*ASNInfo, error) {
 		if c := s.cached(asn); c != nil {
 			return c, nil
 		}
-		return nil, fmt.Errorf("actualisation trop rapprochee, reessayez plus tard")
+		return nil, fmt.Errorf("refreshed too recently, try again later")
 	}
 	s.attempts[asn] = now
 	s.mu.Unlock()
@@ -480,7 +480,7 @@ func (a *API) ASNRoutes(mux *http.ServeMux) {
 func (a *API) asnOurs(w http.ResponseWriter, r *http.Request) {
 	asn := a.asn.ourASN()
 	if asn == "" {
-		writeErr(w, 404, "numero d'AS non renseigne")
+		writeErr(w, 404, "AS number not set")
 		return
 	}
 	info, err := a.asn.Get(asn)
@@ -499,7 +499,7 @@ func (a *API) asnOne(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !a.asn.allowed(asn) {
-		writeErr(w, 404, "AS hors du perimetre de cette instance")
+		writeErr(w, 404, "AS outside the scope of this instance")
 		return
 	}
 	info, err := a.asn.Get(asn)
@@ -519,7 +519,7 @@ func (a *API) asnRefresh(w http.ResponseWriter, r *http.Request, u *User) {
 		}
 	}
 	if asn == "" {
-		writeErr(w, 400, "numero d'AS non renseigne")
+		writeErr(w, 400, "AS number not set")
 		return
 	}
 	info, err := a.asn.Refresh(asn)

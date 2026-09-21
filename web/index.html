@@ -112,6 +112,12 @@ canvas{display:block;width:100%}
 .st .k{font-size:11px;color:var(--ink-2);text-transform:uppercase;letter-spacing:.04em}
 .st .v{font-size:21px;font-weight:700;letter-spacing:-.02em}
 .st .u{font-size:11.5px;color:var(--ink-3);font-weight:500;margin-left:3px}
+.trl{width:100%;border-collapse:collapse;font-size:13px}
+.trl td,.trl th{padding:8px 10px;border-top:1px solid var(--line-2);text-align:left}
+.trl th{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;font-weight:550;border-top:none}
+.trl tr.tr-row{cursor:pointer}.trl tr.tr-row:hover td{background:var(--bg-soft)}
+.trl tr.diff td{background:var(--warn-soft)}
+.hopnote{color:var(--crit);font-weight:650;margin-left:6px}
 </style>
 </head>
 <body>
@@ -351,6 +357,8 @@ function renderDetail() {
       <div class="hbar-l"><span>−24 h</span><span>−12 h</span><span>${esc(t("common.updated"))}</span></div>
       <div class="lbl" style="margin:12px 0 3px">${esc(t("detail.navigator"))}</div><canvas id="nv" height="58"></canvas></div></div>
     <div class="stats" id="stats"></div><p class="faint" style="font-size:12.5px;margin-top:12px">${esc(t("detail.hint"))}</p>
+    <section class="section" id="trsec" hidden style="margin-top:22px"><div class="section-h"><h2>${esc(t("trace.title"))}</h2>
+      <span class="sub">${esc(t("trace.sub"))}</span></div><div class="card"><div class="card-b scroll-x" id="trbox"></div></div></section>
   </div></div></div>`;
   bindRail();
   $("#bk").onclick = e => { e.preventDefault(); S.view = "home"; writeHash(); renderHome(); };
@@ -361,13 +369,17 @@ function renderDetail() {
 async function paint() {
   const tg = S.target, acc = color(tg._ci), now = Math.floor(Date.now() / 1000);
   const q = `/api/v1/series?target=${tg.id}&from=${S.from}&to=${S.to}&points=1500`;
-  const [cur, ev, nav] = await Promise.all([
+  const [cur, ev, nav, traces] = await Promise.all([
     fetch(q).then(r => r.json()),
     fetch(`/api/v1/events?from=${S.from}&to=${S.to}`).then(r => r.ok ? r.json() : []).catch(() => []),
-    S.nav ? Promise.resolve(S.nav) : fetch(`/api/v1/series?target=${tg.id}&from=${now - 365 * 86400}&to=${now}&points=600`).then(r => r.json())
+    S.nav ? Promise.resolve(S.nav) : fetch(`/api/v1/series?target=${tg.id}&from=${now - 365 * 86400}&to=${now}&points=600`).then(r => r.json()),
+    fetch(`/api/v1/traceroutes?target=${tg.id}&limit=40`).then(r => r.ok ? r.json() : []).catch(() => [])
   ]);
   if (S.view !== "detail" || S.target !== tg) return;
-  S.cur = cur; S.events = ev || []; S.nav = nav;
+  S.cur = cur; S.nav = nav; S.traces = traces || [];
+  // Anomaly traceroutes are marked on the chart next to the annotated events.
+  S.events = (ev || []).concat(S.traces.filter(x => x.kind === "anomaly").map(x => ({ ts_start: x.ts, title: "traceroute" })));
+  renderTraces();
   $("#res").textContent = `${cur.resolution} · ${cur.step_s || tg.interval_s}s · ${cur.t.length} pts`;
   S.g = draw($("#ch"), cur, { height: 330, loss: 1, events: S.events, accent: acc, from: S.from, to: S.to });
   S.ng = draw($("#nv"), nav, { height: 58, bare: 1, accent: acc, from: now - 365 * 86400, to: now }); sel();
@@ -378,6 +390,50 @@ async function paint() {
     st("metric.jitter", n2(avg(jit)), "ms") + st("metric.uptime", loss == null ? "—" : n1(100 - loss), "%");
   document.querySelectorAll("[data-p]").forEach(b => b.setAttribute("aria-pressed", String(S.preset === +b.dataset.p)));
 }
+
+/* ------------------------------------------------------------ traceroutes */
+function hopRTT(h) {
+  if (!h.rtt_ms || !h.rtt_ms.length) return "* * *";
+  return n2(h.rtt_ms.reduce((a, b) => a + b, 0) / h.rtt_ms.length) + " ms";
+}
+function hopsHTML(tr, ref) {
+  const n = Math.max(tr.hops.length, ref ? ref.hops.length : 0); let rows = "";
+  for (let i = 0; i < n; i++) {
+    const h = tr.hops[i], r = ref ? ref.hops[i] : null;
+    const diff = ref && r && r.addr && (!h || (h.addr || "") !== r.addr);
+    rows += `<tr class="${diff ? "diff" : ""}"><td>${i + 1}</td>
+      <td class="mono">${h ? esc(h.addr || "*") : ""}${h && h.note ? `<span class="hopnote">${esc(h.note)}</span>` : ""}</td>
+      <td class="faint">${h ? esc(h.name || "") : ""}</td><td class="mono">${h ? esc(h.asn || "") : ""}</td>
+      <td>${h ? hopRTT(h) : ""}</td><td class="faint">${h ? (h.rtt_ms || []).length + "/" + h.sent : ""}</td>
+      ${ref ? `<td class="mono faint">${r ? esc(r.addr || "*") : "—"}</td>` : ""}</tr>`;
+  }
+  return `<table class="trl"><thead><tr><th>${esc(t("trace.hop"))}</th><th>${esc(t("trace.address"))}</th><th>${esc(t("trace.name"))}</th>
+    <th>${esc(t("trace.as"))}</th><th>${esc(t("trace.rtt"))}</th><th>${esc(t("trace.replies"))}</th>
+    ${ref ? `<th>${esc(t("trace.ref_col"))}, ${esc(I18N.date(ref.ts))}</th>` : ""}</tr></thead><tbody>${rows}</tbody></table>
+    ${ref ? `<p class="faint" style="font-size:12px;margin:8px 10px 0">${esc(t("trace.changed"))}</p>` : ""}`;
+}
+function renderTraces() {
+  const sec = $("#trsec"), box = $("#trbox"), list = S.traces || [];
+  if (!sec) return;
+  sec.hidden = !list.length; if (!list.length) return;
+  if (S.trOpen === undefined || !list.some(x => x.id === S.trOpen)) {
+    const first = list.find(x => x.kind !== "reference"); S.trOpen = first ? first.id : null;
+  }
+  box.innerHTML = `<table class="trl"><tbody>` + list.map(tr => {
+    const last = tr.hops.length, lh = tr.hops[last - 1] || {};
+    const res = tr.reached ? `<span class="badge b-ok">${esc(t("trace.reached", { n: last }))}</span>`
+      : lh.note ? `<span class="badge b-crit">${esc(t("trace.refused", { n: last }))} ${esc(lh.note)}</span>`
+      : `<span class="badge b-warn">${esc(t("trace.not_reached"))}</span>`;
+    const kind = { anomaly: "b-crit", reference: "b-ok", manual: "b-n" }[tr.kind] || "b-n";
+    const ref = tr.kind === "reference" ? null : list.find(x => x.kind === "reference" && x.ts < tr.ts);
+    return `<tr class="tr-row" data-tr="${tr.id}"><td class="faint" style="white-space:nowrap">${esc(I18N.date(tr.ts))}</td>
+      <td><span class="badge ${kind}">${esc(t("trace." + tr.kind))}</span></td><td>${esc(tr.reason)}</td>
+      <td class="mono faint">${esc(tr.dest)}</td><td>${res}</td></tr>` +
+      (S.trOpen === tr.id ? `<tr><td colspan="5" style="background:var(--bg-soft);padding:6px 0 12px">${hopsHTML(tr, ref)}</td></tr>` : "");
+  }).join("") + `</tbody></table>`;
+  box.querySelectorAll("[data-tr]").forEach(r => r.onclick = () => { const id = +r.dataset.tr; S.trOpen = S.trOpen === id ? null : id; renderTraces(); });
+}
+
 function sel() {
   const g = S.ng; if (!g) return; const c = $("#nv").getContext("2d"), a = g.X(Math.max(g.x0, S.from)), b = g.X(Math.min(g.x1, S.to)), ac = cssv("--accent");
   c.fillStyle = rgba(ac.startsWith("#") ? ac : "#2458e6", .14); c.fillRect(a, 2, Math.max(3, b - a), g.h - 4); c.strokeStyle = ac; c.strokeRect(Math.round(a) + .5, 2.5, Math.max(3, b - a), g.h - 5);

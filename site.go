@@ -25,17 +25,20 @@ type Site struct {
 	Legal       string `json:"legal"`
 	Timezone    string `json:"timezone"`
 	DefaultLang string `json:"default_lang"`
+	// PublicTraceroutes shows anomaly traceroutes on public pages. Off by
+	// default: hops reveal the inside of the operator's network.
+	PublicTraceroutes bool `json:"public_traceroutes"`
 }
 
 func defaultSite() Site {
 	return Site{
-		Title:       "Supervision de latence",
+		Title:       "Latency monitoring",
 		Org:         "",
 		Owner:       "",
 		Email:       "",
 		Timezone:    "Europe/Paris",
 		DefaultLang: "en",
-		Description: "Mesures de latence et de perte depuis notre réseau vers des destinations publiques.",
+		Description: "Latency and packet loss measured from our network to public destinations.",
 	}
 }
 

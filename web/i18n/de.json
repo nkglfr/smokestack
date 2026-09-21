@@ -202,5 +202,24 @@
     "peeringdb": "PeeringDB",
     "bgptools": "bgp.tools",
     "rights": "Alle Messwerte werden ohne Gewähr veröffentlicht."
+  },
+  "trace": {
+    "title": "Traceroutes",
+    "sub": "Automatisch erstellt, wenn das Ziel seinen Referenzbereich verlässt, und einmal täglich auf einem gesunden Pfad zum Vergleich.",
+    "anomaly": "Anomalie",
+    "reference": "Referenzpfad",
+    "manual": "manuell",
+    "reached": "erreicht in {n} Hops",
+    "refused": "abgewiesen bei Hop {n}",
+    "not_reached": "nicht erreicht",
+    "hop": "Hop",
+    "address": "Adresse",
+    "name": "Name",
+    "as": "AS",
+    "rtt": "RTT",
+    "replies": "Antworten",
+    "ref_col": "Gesunder Pfad",
+    "changed": "Hervorgehobene Zeilen: Ein Router des letzten gesunden Pfads hat sich geändert oder antwortet nicht mehr.",
+    "none": "Noch kein Traceroute für dieses Ziel."
   }
 }

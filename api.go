@@ -169,7 +169,7 @@ func (a *API) series(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	targetID, err := strconv.ParseInt(q.Get("target"), 10, 64)
 	if err != nil {
-		writeErr(w, 400, "parametre target manquant")
+		writeErr(w, 400, "missing target parameter")
 		return
 	}
 	probeID := a.probeID
@@ -182,7 +182,7 @@ func (a *API) series(w http.ResponseWriter, r *http.Request) {
 	from := parseTime(q.Get("from"), now-3*3600)
 	to := parseTime(q.Get("to"), now)
 	if to <= from {
-		writeErr(w, 400, "la fenetre demandee est vide")
+		writeErr(w, 400, "the requested time window is empty")
 		return
 	}
 
@@ -190,7 +190,7 @@ func (a *API) series(w http.ResponseWriter, r *http.Request) {
 	// reponse depuis le cache.
 	if t, err := a.store.TargetByID(targetID); err != nil ||
 		(!t.Public && r.Header.Get("Authorization") == "") {
-		writeErr(w, 404, "cible introuvable")
+		writeErr(w, 404, "target not found")
 		return
 	}
 	points, _ := strconv.Atoi(q.Get("points"))
@@ -314,7 +314,7 @@ func (a *API) eventsPost(w http.ResponseWriter, r *http.Request) {
 func (a *API) live(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeErr(w, 500, "streaming non supporte")
+		writeErr(w, 500, "streaming not supported")
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -357,7 +357,7 @@ func (a *API) ingest(w http.ResponseWriter, r *http.Request) {
 		`SELECT id, COALESCE(token_hash,'') FROM probes WHERE slug=? AND enabled=1`,
 		body.Probe).Scan(&id, &hash)
 	if err != nil {
-		writeErr(w, 404, "sonde inconnue")
+		writeErr(w, 404, "unknown probe")
 		return
 	}
 	// Une sonde sans jeton ne peut rien envoyer par HTTP : sans cette
@@ -365,7 +365,7 @@ func (a *API) ingest(w http.ResponseWriter, r *http.Request) {
 	// graphes publics. La sonde locale passe par le socket Unix.
 	if hash == "" || tok == "" ||
 		subtle.ConstantTimeCompare([]byte(hashToken(tok)), []byte(hash)) != 1 {
-		writeErr(w, 401, "jeton de sonde invalide")
+		writeErr(w, 401, "invalid probe token")
 		return
 	}
 	n := 0
@@ -394,7 +394,7 @@ func (a *API) storagePut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if c.Mode != "s3" && c.Mode != "local" && c.Mode != "hybrid" {
-		writeErr(w, 400, "mode doit valoir s3, local ou hybrid")
+		writeErr(w, 400, "mode must be s3, local or hybrid")
 		return
 	}
 	if c.S3.SecretKey == "" {
@@ -427,7 +427,7 @@ func (a *API) targetsPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if t.Host == "" || t.Title == "" || t.CategoryID == 0 {
-		writeErr(w, 400, "title, host et category_id sont requis")
+		writeErr(w, 400, "title, host and category_id are required")
 		return
 	}
 	if t.Slug == "" {
@@ -445,7 +445,7 @@ func (a *API) targetsPost(w http.ResponseWriter, r *http.Request) {
 func (a *API) targetsDelete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeErr(w, 400, "identifiant invalide")
+		writeErr(w, 400, "invalid identifier")
 		return
 	}
 	if err := a.store.DeleteTarget(id); err != nil {
@@ -462,7 +462,7 @@ func (a *API) categoriesPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if c.Slug == "" || c.MenuFR == "" {
-		writeErr(w, 400, "slug et menu_fr sont requis")
+		writeErr(w, 400, "slug and menu_fr are required")
 		return
 	}
 	if c.MenuEN == "" {

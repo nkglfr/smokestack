@@ -14,9 +14,10 @@ probes a few hundred targets.
 5. [Updating](#5-updating)
 6. [Publishing your own releases](#6-publishing-your-own-releases)
 7. [Backups](#7-backups)
-10. [Probe isolation and performance](#10-probe-isolation-and-performance)
 8. [Troubleshooting](#8-troubleshooting)
 9. [Uninstalling](#9-uninstalling)
+10. [Probe isolation and performance](#10-probe-isolation-and-performance)
+11. [IPv6 and traceroutes](#11-ipv6-and-traceroutes)
 
 ---
 
@@ -132,15 +133,12 @@ limiting applies to the proxy's address.
 
 ## 4. First steps
 
-> The back-office is in French for now; menu names are given below with their
-> French label.
-
 1. Open `https://latency.example.net/admin` and log in with the printed credentials.
-2. **Publisher page** (*Page éditeur*): organisation, **AS number**, NOC contact, default language.
+2. **Publisher page**: organisation, **AS number**, NOC contact, default language.
    The AS number enables the *Host network* page (RIPEstat + PeeringDB).
-3. **Targets and categories** (*Cibles et catégories*): add your targets; the star marks *critical
+3. **Targets and categories**: add your targets; the star marks *critical
    targets*, always shown at the top of the home page.
-4. **Users** (*Utilisateurs*): create accounts for your team (roles: viewer, editor, admin, master).
+4. **Users**: create accounts for your team (roles: viewer, editor, admin, master).
 
 If you skipped the installer's account creation, the service prints a one-time
 setup code: `journalctl -u smokestack | grep setup` — or run
@@ -158,9 +156,9 @@ Every update is a signed `.zip` package. Whatever the method, smokestack:
 
 ### From the back-office
 
-*Instance → Mise à jour*: upload the package, review version and signature, click
-**Installer et redémarrer**. The page reloads when the new version answers.
-A **Revenir à X** button returns to the previous version at any time.
+*Instance → Updates*: upload the package, review version and signature, click
+**Install and restart**. The page reloads when the new version answers.
+A **Revert to X** button returns to the previous version at any time.
 
 ### From the command line
 
@@ -171,7 +169,7 @@ sudo smokestack rollback
 
 ### Automatically
 
-In *Instance → Mise à jour*, tick **Installer automatiquement les nouvelles versions**.
+In *Instance → Updates*, tick **Install new versions automatically**.
 The service checks the release feed every 6 hours (`update.manifest_url`, by
 default the project's GitHub releases) and installs new versions. Automatic
 updates **always require a trusted signature**, even if unsigned packages
@@ -250,9 +248,9 @@ the following release.
 | Symptom | Check |
 |---|---|
 | Service does not start | `journalctl -u smokestack -u smokestack-probe -n 50` |
-| Probe log says `la sonde a besoin de CAP_NET_RAW` | The probe unit was edited: `AmbientCapabilities=CAP_NET_RAW` is required |
-| Is the probe healthy? | Back-office dashboard, *Chaîne de mesure* card: last measurement age, dropped measurements |
-| All targets at 100 % loss | Outbound ICMP filtered? `ping -c3 1.1.1.1` from the host. The log says `sonde ICMP indisponible` if the raw socket was refused. |
+| Probe log says `the probe needs CAP_NET_RAW` | The probe unit was edited: `AmbientCapabilities=CAP_NET_RAW` is required |
+| Is the probe healthy? | Back-office dashboard, *Measurement pipeline* card: last measurement age, dropped measurements |
+| All targets at 100 % loss | Outbound ICMP filtered? `ping -c3 1.1.1.1` from the host. The log says `ICMP probe unavailable` if the raw socket was refused. |
 | "In-place updates unavailable" | The binary must run from `/opt/smokestack/releases/<v>/`: re-run the installer |
 | Package rejected: unknown signature | The signing key is not in `release.pub` nor `/etc/smokestack/release-keys.pub` |
 | Upload fails behind nginx | `client_max_body_size 210m;` |
@@ -313,3 +311,36 @@ in user space. Prefer the default isolated mode for public measurements.
 
 To switch an existing installation, set `"mode": "external"` in the
 `probe` section of `/etc/smokestack/config.json` and re-run the installer.
+
+## 11. IPv6 and traceroutes
+
+**IPv6.** Each target has an address family: *auto* (a literal address decides,
+a name tries IPv4 then IPv6), *IPv4 only* or *IPv6 only*. To follow a
+destination over both families, create two targets with the same host. The
+host needs IPv6 connectivity; without it, the probe logs `IPv6 unavailable`
+and keeps running on IPv4.
+
+**Traceroute on anomalies.** After each pass, the probe compares loss and
+median with the target's own moving baseline. When a target leaves it (loss
+above 3 %, or median above 1.4 × baseline and at least 1 ms more), the probe
+runs an ICMP traceroute and stores it. Safeguards: at most one anomaly
+traceroute every 15 minutes per target, 30 per hour in total, one at a time,
+on dedicated sockets so the other measurements are not disturbed. A reference
+path is also recorded once a day while each target is healthy, and the
+back-office (*Monitoring → Traceroutes*) highlights the routers that changed
+or stopped answering compared with it. Hops are enriched with reverse DNS and
+origin AS (Team Cymru DNS service).
+
+Traceroutes are **not public by default**, since hops reveal the inside of your
+network; enable them in *Instance → Publisher page*.
+
+```json
+"probe": {
+  "mode": "external",
+  "traceroute": { "disabled": false, "max_hops": 30, "reference_hours": 24, "per_hour": 30 }
+}
+```
+
+Firewall: the probe must receive ICMP *Time Exceeded* and *Destination
+Unreachable* messages (a stateful firewall lets them through as related
+traffic), and resolve DNS for the hop enrichment.

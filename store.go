@@ -198,6 +198,7 @@ func OpenStore(dir string) (*Store, error) {
 	if _, err := cfg.Exec(configSchema); err != nil {
 		return nil, fmt.Errorf("schema config: %w", err)
 	}
+	addColumn(cfg, "targets", "family INTEGER NOT NULL DEFAULT 0")
 
 	// Deux pools sur metrics.db : l'ecriture des mesures dispose de sa
 	// propre connexion et ne fait jamais la queue derriere des lectures de
@@ -215,6 +216,9 @@ func OpenStore(dir string) (*Store, error) {
 	}
 	if _, err := mxw.Exec(metricsExtraSchema); err != nil {
 		return nil, fmt.Errorf("schema metrics: %w", err)
+	}
+	if _, err := mxw.Exec(tracerouteSchema); err != nil {
+		return nil, fmt.Errorf("schema traceroutes: %w", err)
 	}
 	mx, err := sql.Open("sqlite", dsn(filepath.Join(dir, "metrics.db")))
 	if err != nil {
@@ -251,6 +255,9 @@ type Target struct {
 	TimeoutMs  int    `json:"timeout_ms"`
 	Public     bool   `json:"public"`
 	Enabled    bool   `json:"enabled"`
+	// Family : 0 = automatique (adresse litterale, sinon IPv4 puis IPv6),
+	// 4 = IPv4 seulement, 6 = IPv6 seulement.
+	Family int `json:"family"`
 }
 
 type Category struct {
@@ -287,7 +294,7 @@ func (s *Store) TouchProbe(id int64) {
 func (s *Store) ActiveTargets() ([]*Target, error) {
 	rows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled
+		        spacing_ms,timeout_ms,public,enabled,family
 		   FROM targets WHERE enabled=1 ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -303,7 +310,7 @@ func scanTargets(rows *sql.Rows) ([]*Target, error) {
 		var pub, en int
 		if err := rows.Scan(&t.ID, &t.CategoryID, &t.Slug, &t.Title, &t.Host,
 			&t.Proto, &t.IntervalS, &t.Packets, &t.SpacingMs, &t.TimeoutMs,
-			&pub, &en); err != nil {
+			&pub, &en, &t.Family); err != nil {
 			return nil, err
 		}
 		t.Public, t.Enabled = pub == 1, en == 1
@@ -347,7 +354,7 @@ func (s *Store) Tree(publicOnly bool) ([]*Category, error) {
 
 	trows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled
+		        spacing_ms,timeout_ms,public,enabled,family
 		   FROM targets ORDER BY title`)
 	if err != nil {
 		return nil, err
@@ -371,7 +378,7 @@ func (s *Store) Tree(publicOnly bool) ([]*Category, error) {
 func (s *Store) TargetByID(id int64) (*Target, error) {
 	rows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled
+		        spacing_ms,timeout_ms,public,enabled,family
 		   FROM targets WHERE id=?`, id)
 	if err != nil {
 		return nil, err
@@ -404,21 +411,24 @@ func (s *Store) CreateCategory(slug, fr, en string, public bool) (int64, error) 
 
 func (s *Store) CreateTarget(t *Target) (int64, error) {
 	if t.IntervalS != 30 && t.IntervalS != 60 && t.IntervalS != 300 && t.IntervalS != 600 {
-		return 0, fmt.Errorf("interval_s doit valoir 30, 60, 300 ou 600")
+		return 0, fmt.Errorf("interval_s must be 30, 60, 300 or 600")
+	}
+	if t.Family != 0 && t.Family != 4 && t.Family != 6 {
+		return 0, fmt.Errorf("family must be 0 (auto), 4 or 6")
 	}
 	if t.Packets < 3 || t.Packets > 50 {
-		return 0, fmt.Errorf("packets doit etre compris entre 3 et 50")
+		return 0, fmt.Errorf("packets must be between 3 and 50")
 	}
 	// La rafale doit tenir dans l'intervalle, avec une marge.
 	if int64(t.Packets*t.SpacingMs+t.TimeoutMs) > t.IntervalS*1000*3/4 {
-		return 0, fmt.Errorf("packets x spacing_ms + timeout_ms depasse 75%% de l'intervalle")
+		return 0, fmt.Errorf("packets x spacing_ms + timeout_ms exceeds 75%% of the interval")
 	}
 	res, err := s.cfg.Exec(
 		`INSERT INTO targets(category_id,slug,title,host,proto,interval_s,packets,
-		                     spacing_ms,timeout_ms,public,enabled,created_at)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+		                     spacing_ms,timeout_ms,public,enabled,created_at,family)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.CategoryID, t.Slug, t.Title, t.Host, t.Proto, t.IntervalS, t.Packets,
-		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), time.Now().Unix())
+		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), time.Now().Unix(), t.Family)
 	if err != nil {
 		return 0, err
 	}
@@ -631,6 +641,7 @@ func (s *Store) RollupTick(now int64) error {
 }
 
 func (s *Store) Purge(now int64) error {
+	s.PurgeTraceroutes(now)
 	for _, g := range cascade {
 		if g.keep == 0 {
 			continue

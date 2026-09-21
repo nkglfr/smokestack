@@ -324,7 +324,7 @@ func (c *overviewCache) Loop(stop <-chan struct{}) {
 	defer t.Stop()
 	for {
 		if err := c.build(); err != nil {
-			log.Printf("vue d'ensemble : %v", err)
+			log.Printf("overview: %v", err)
 		}
 		select {
 		case <-stop:
@@ -364,7 +364,7 @@ func (a *API) overview(w http.ResponseWriter, r *http.Request) {
 func (a *API) featuredPut(w http.ResponseWriter, r *http.Request, u *User) {
 	var ids []int64
 	if err := json.NewDecoder(r.Body).Decode(&ids); err != nil {
-		writeErr(w, 400, "liste d'identifiants attendue")
+		writeErr(w, 400, "a list of identifiers is expected")
 		return
 	}
 	b, _ := json.Marshal(ids)
