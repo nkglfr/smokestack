@@ -16,13 +16,13 @@ var (
 
 // Adresses du projet, ecrites en dur dans le binaire : le lien vers le
 // site officiel figure dans le pied de page de toutes les instances et ne
-// se configure pas depuis le back-office. Elles sont fixees a la
-// compilation (make OFFICIAL_URL=... REPO_URL=...) ; RepoURL sert aussi
-// de source aux mises a jour automatiques. `make release` refuse de
-// publier tant qu'elles contiennent CHANGE-ME.
+// se configure pas depuis le back-office. RepoURL sert aussi de source aux
+// mises a jour automatiques. Tant qu'il n'existe pas de site dedie, le
+// site officiel est le depot GitHub ; pour le changer a la compilation :
+// make dist OFFICIAL_URL=https://...
 var (
-	OfficialURL = "https://smokestack.CHANGE-ME"
-	RepoURL     = "https://github.com/CHANGE-ME/smokestack"
+	RepoURL     = "https://github.com/nkglfr/smokestack"
+	OfficialURL = "https://github.com/nkglfr/smokestack"
 )
 
 // Cles publiques de publication, une par ligne ("ed25519:<base64>").

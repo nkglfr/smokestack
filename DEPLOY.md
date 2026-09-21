@@ -37,7 +37,7 @@ being measured**. Run it inside the AS whose latency you want to publish.
 From a release package:
 
 ```sh
-curl -fsSLO https://github.com/OWNER/smokestack/releases/latest/download/install.sh
+curl -fsSLO https://github.com/nkglfr/smokestack/releases/latest/download/install.sh
 sudo sh install.sh --admin-email noc@example.net
 ```
 
@@ -185,7 +185,7 @@ are allowed for manual uploads.
   "auto_check": true,
   "auto_apply": false,
   "check_interval_hours": 6,
-  "manifest_url": "https://github.com/OWNER/smokestack/releases/latest/download/latest.json",
+  "manifest_url": "https://github.com/nkglfr/smokestack/releases/latest/download/latest.json",
   "trusted_keys_file": "/etc/smokestack/release-keys.pub",
   "allow_unsigned": false
 }
@@ -208,7 +208,8 @@ make release-key                 # creates release.key (secret) and prints the p
   binary built afterwards trusts that key;
 - in the GitHub repository settings, add the **secret**
   `SMOKESTACK_RELEASE_KEY` with the content of `release.key`, and the
-  **variable** `OFFICIAL_URL` with your website address;
+  optional **variable** `OFFICIAL_URL` with your website address (the
+  footer links to the GitHub repository until you set it);
 - store `release.key` offline and delete it from the build machine.
   **Never commit it** (it is in `.gitignore`).
 

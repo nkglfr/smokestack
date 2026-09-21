@@ -12,7 +12,7 @@
 set -eu
 
 # Filled in by `make release`; override with SMOKESTACK_MANIFEST_URL.
-MANIFEST_URL="${SMOKESTACK_MANIFEST_URL:-https://github.com/CHANGE-ME/smokestack/releases/latest/download/latest.json}"
+MANIFEST_URL="${SMOKESTACK_MANIFEST_URL:-https://github.com/nkglfr/smokestack/releases/latest/download/latest.json}"
 
 ROOT=/opt/smokestack
 ETC=/etc/smokestack
@@ -214,7 +214,7 @@ CPUWeight=50"
   cat > "$UNIT" <<EOF
 [Unit]
 Description=smokestack latency monitoring (web service)
-Documentation=https://github.com/CHANGE-ME/smokestack
+Documentation=https://github.com/nkglfr/smokestack
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=0

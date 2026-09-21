@@ -26,7 +26,7 @@ jobs:
         run: |
           test -n "$SMOKESTACK_RELEASE_KEY" || { echo "secret SMOKESTACK_RELEASE_KEY is missing"; exit 1; }
           make dist VERSION="${GITHUB_REF_NAME#v}" \
-                    OFFICIAL_URL="${{ vars.OFFICIAL_URL }}" \
+                    OFFICIAL_URL="${{ vars.OFFICIAL_URL || format('https://github.com/{0}', github.repository) }}" \
                     REPO_URL="https://github.com/${{ github.repository }}"
       - name: Publish the GitHub release
         env:

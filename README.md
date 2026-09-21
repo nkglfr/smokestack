@@ -17,7 +17,7 @@ between operators who measure each other.
 On any Linux server with systemd (amd64 or arm64):
 
 ```sh
-curl -fsSLO https://github.com/OWNER/smokestack/releases/latest/download/install.sh
+curl -fsSLO https://github.com/nkglfr/smokestack/releases/latest/download/install.sh
 sudo sh install.sh --admin-email noc@example.net
 ```
 
@@ -165,7 +165,7 @@ Rate limit: 20 requests/s per client IP, bursts of 80.
 Requires Go 1.22.
 
 ```sh
-git clone https://github.com/OWNER/smokestack && cd smokestack
+git clone https://github.com/nkglfr/smokestack && cd smokestack
 go mod tidy
 make test
 make build                              # ./dist/smokestack

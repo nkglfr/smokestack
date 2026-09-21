@@ -6,12 +6,13 @@
 #   make release-key     create the release signing key pair (once)
 #
 # The official website and repository URLs are compiled into the binary:
-#   make dist OFFICIAL_URL=https://smokestack.example.org REPO_URL=https://github.com/acme/smokestack
+#   make dist OFFICIAL_URL=https://smokestack.example.org
+# (by default the official website is the GitHub repository)
 
 VERSION      ?= $(shell git describe --tags --always --dirty 2>/dev/null | sed 's/^v//' || echo dev)
 DATE         := $(shell date -u +%Y-%m-%d)
-OFFICIAL_URL ?= https://smokestack.CHANGE-ME
-REPO_URL     ?= https://github.com/CHANGE-ME/smokestack
+REPO_URL     ?= https://github.com/nkglfr/smokestack
+OFFICIAL_URL ?= $(REPO_URL)
 RELEASE_KEY  ?= release.key
 ARCHS        ?= amd64 arm64
 
@@ -54,7 +55,7 @@ dist: check-branding test
 	   -base-url $(REPO_URL)/releases/download/v$(VERSION) \
 	   -notes-url $(REPO_URL)/releases/tag/v$(VERSION) \
 	   dist/smokestack-$(VERSION)-linux-*.zip > dist/latest.json
-	sed 's#https://github.com/CHANGE-ME/smokestack#$(REPO_URL)#g' install.sh > dist/install.sh
+	sed 's#https://github.com/nkglfr/smokestack#$(REPO_URL)#g' install.sh > dist/install.sh
 	cd dist && sha256sum *.zip install.sh latest.json > SHA256SUMS
 	@rm -f dist/smokestack-linux-*
 	@echo "==> release files in ./dist"; ls -1 dist

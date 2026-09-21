@@ -1,4 +1,4 @@
-module smokestack
+module github.com/nkglfr/smokestack
 
 go 1.22
 

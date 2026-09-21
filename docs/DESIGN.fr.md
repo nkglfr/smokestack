@@ -88,7 +88,7 @@ instances en mise à jour automatique l'installent dans les heures qui suivent.
 
 Les adresses du site officiel et du dépôt sont compilées dans le binaire
 (`make dist OFFICIAL_URL=... REPO_URL=...`) ; la publication refuse de se
-faire tant qu'elles contiennent `CHANGE-ME`.
+faire tant qu'elles contiennent `CHANGE-ME` (aujourd'hui : dépôt `github.com/nkglfr/smokestack`, qui sert aussi de site officiel).
 
 ## Isolation de la sonde
 
