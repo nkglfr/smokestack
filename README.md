@@ -209,7 +209,7 @@ Working and tested, not yet 1.0. Known gaps:
 - Latency-triggered traceroutes are covered by unit tests; loss-triggered ones were tested on a multi-hop lab network
 - Remote probes on another machine (same-host isolation is done)
 
-Design notes (in French): [docs/DESIGN.fr.md](docs/DESIGN.fr.md).
+Design notes: [docs/DESIGN.md](docs/DESIGN.md) (French version: [DESIGN.fr.md](docs/DESIGN.fr.md)).
 
 ---
 

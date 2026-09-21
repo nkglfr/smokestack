@@ -1,4 +1,7 @@
-# smokestack
+# smokestack — notes de conception (version française)
+
+> La version de référence, plus complète et à jour, est en anglais :
+> [DESIGN.md](DESIGN.md).
 
 Supervision de latence type SmokePing : sonde ICMP/TCP, agrégats à
 percentiles fusionnables, archive brute sur S3 ou en local avec rotation
@@ -59,7 +62,7 @@ l'utilisateur du service, même lancée avec `sudo`.
 
 Une version est un ZIP contenant le binaire, un `manifest.json` (version,
 plateforme, SHA-256) et la signature Ed25519 du manifeste. Qu'elle soit
-installée depuis le back-office (*Instance → Mise à jour*), en ligne de
+installée depuis le back-office (*Instance → Updates*), en ligne de
 commande ou automatiquement :
 
 1. signature, plateforme et empreinte sont vérifiées ; un paquet non signé
@@ -179,7 +182,7 @@ Public :
 
 ```
 GET  /api/v1/tree
-GET  /api/v1/series?target=42&from=now-3h&to=now
+GET  /api/v1/series?target=42&from=-3h
 GET  /api/v1/charts?from=now-24h
 GET  /api/v1/events?from=now-7d
 GET  /api/v1/live                      (SSE)
@@ -187,7 +190,7 @@ GET  /healthz
 ```
 
 `from` et `to` acceptent un epoch, une date RFC3339 ou une expression
-relative (`now-3h`, `now-45d`).
+relative (`now-3h` ou sa forme courte `-3h`).
 
 Administration, avec `Authorization: Bearer <admin_token>` :
 
@@ -223,7 +226,7 @@ curl -s -X POST localhost:8080/api/v1/admin/categories \
 
 curl -s -X POST localhost:8080/api/v1/admin/targets \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"category_id":2,"title":"Cogent Paris","host":"38.0.0.1",
+  -d '{"category_id":2,"title":"Transitaire exemple","host":"192.0.2.1",
        "interval_s":30,"packets":10,"spacing_ms":200,"timeout_ms":1500}'
 
 curl -s -X PUT localhost:8080/api/v1/admin/storage \
@@ -257,7 +260,7 @@ plutôt que les 20 paquets par seconde de SmokePing.
 ## Page éditeur
 
 `GET /api/v1/site` expose les métadonnées de l'instance, rendues par
-`/about.html` en FR/EN. Le téléphone du NOC n'apparaît jamais sur la page
+`/about` dans les quatre langues. Le téléphone du NOC n'apparaît jamais sur la page
 publique : il n'est renvoyé qu'aux appels authentifiés.
 
 ```bash
@@ -297,7 +300,7 @@ derrière n'importe quel reverse proxy sans plomberie de certificats.
   "asn": "AS64500",
   "org": "Exemple Télécom SAS",
   "base_url": "https://latence.example.net",
-  "anchors": ["93.29.0.1", "2a01:xxxx::1"]
+  "anchors": ["192.0.2.1", "2001:db8::1"]
 }
 ```
 
@@ -357,8 +360,9 @@ là non plus — il faut d'abord que la matrice tourne en production.
 `https://votre-instance/admin`
 
 Au premier accès, aucun compte n'existe : l'écran d'amorçage crée le compte
-**master**. La fenêtre se referme dès qu'un compte existe — l'endpoint
-`/api/v1/auth/setup` renvoie 409 ensuite.
+**master**, à condition de saisir le code d'installation affiché dans le journal
+du service (et écrit dans `setup-code`). La fenêtre se referme dès qu'un compte
+existe — l'endpoint `/api/v1/auth/setup` renvoie 409 ensuite.
 
 ### Rôles
 
@@ -428,7 +432,7 @@ curl -s localhost:8080/api/v1/admin/fed/identity \
 # demander un appairage
 curl -s -X POST localhost:8080/api/v1/admin/fed/pairing \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"url":"https://smokestack.autre.fr/pairing","message":"AS64500 souhaite échanger"}'
+  -d '{"url":"https://smokestack.autre.fr/pairing","justification":"Nous peerons sur les mêmes IX et partageons des clients.","public_listing":true}'
 
 # lister les demandes, puis décider
 curl -s localhost:8080/api/v1/admin/fed/pairing -H "Authorization: Bearer $TOKEN" | jq
@@ -449,13 +453,13 @@ Chaque langue est un fichier JSON dans `web/i18n/` (embarqué dans le binaire).
 **L'anglais (`en.json`) est la référence obligatoire** : sans lui, smokestack
 refuse de démarrer. Toute clé absente d'une autre langue s'affiche en anglais.
 
-Livrées : `en` (référence), `fr`, `de`, `es` — 162 clés, toutes complètes.
+Livrées : `en` (référence), `fr`, `de`, `es`, toutes complètes.
 
 Ajouter ou corriger une langue sans recompiler :
 
 ```sh
 cp web/i18n/en.json /var/lib/smokestack/i18n/it.json   # puis traduire
-# back-office → Langues → Recharger
+# back-office → Languages → Reload
 ```
 
 Les fichiers acceptent des objets imbriqués (`{"home":{"faults":"…"}}` → `home.faults`)
@@ -509,7 +513,7 @@ curl https://smokestack.exemple.fr/api/v1/asn/64501    # un pair approuvé
 
 | Page | Contenu |
 |---|---|
-| `/` | graphes (refonte sur la maquette v3 à venir) |
+| `/` | état général, défauts, cibles critiques, catégories, détail avec zoom |
 | `/federation` | pairs publics, latence dans les deux sens, matrice inter-AS |
 | `/network` | réseau hôte, RIPEstat + PeeringDB |
 | `/pairing` | identité, empreinte, marche à suivre |

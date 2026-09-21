@@ -75,6 +75,10 @@ func parseTime(s string, def int64) int64 {
 	if s == "" {
 		return def
 	}
+	// "-30h" is a shorthand for "now-30h".
+	if strings.HasPrefix(s, "-") || strings.HasPrefix(s, "+") {
+		s = "now" + s
+	}
 	if strings.HasPrefix(s, "now") {
 		rest := strings.TrimPrefix(s, "now")
 		if rest == "" {

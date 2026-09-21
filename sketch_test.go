@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 func exact(v []float64, q float64) float64 {
@@ -202,5 +203,18 @@ func TestJustification(t *testing.T) {
 	}
 	if _, err := checkJustification(strings.Repeat("é", 19)); err == nil {
 		t.Error("le decompte doit se faire en caracteres, pas en octets")
+	}
+}
+
+func TestParseTimeShorthand(t *testing.T) {
+	def := int64(42)
+	for _, in := range []string{"-30h", "now-30h"} {
+		got := parseTime(in, def)
+		if d := time.Now().Unix() - got; d < 30*3600-5 || d > 30*3600+5 {
+			t.Errorf("parseTime(%q) = %d, expected now-30h", in, got)
+		}
+	}
+	if parseTime("-3x", def) != def {
+		t.Error("an invalid unit must return the default")
 	}
 }
