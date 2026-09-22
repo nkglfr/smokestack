@@ -21,8 +21,12 @@
     try { localStorage.setItem("smokestack.lang", code); } catch (e) {}
   }
 
+  // Browser codes that should map to a shipped language.
+  const ALIASES = { no: "nb", nn: "nb", "pt-br": "pt", "pt-pt": "pt" };
+
   function pick(available) {
     const has = c => available.some(l => l.code === c);
+    const alias = c => ALIASES[(c || "").toLowerCase()];
     const q = new URLSearchParams(location.search).get("lang");
     if (q && has(q)) return q;
     const r = remembered();
@@ -31,6 +35,8 @@
       if (has(nav)) return nav;
       const short = nav.split("-")[0];
       if (has(short)) return short;
+      const a = alias(nav) || alias(short);
+      if (a && has(a)) return a;
     }
     return has(S.def) ? S.def : S.base;
   }

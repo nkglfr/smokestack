@@ -61,6 +61,7 @@ smokestack [-config F] [-ip IP] [-port P]    lance le service web
 smokestack probe [-config FICHIER]           lance la sonde isolée
 smokestack version | selftest
 smokestack user add -email E [-role master]  crée un compte (mot de passe généré)
+smokestack languages [-default CODE]         liste les langues, choisit la langue par défaut
 smokestack update [-force] PAQUET.zip        installe une version
 smokestack rollback                          revient à la version précédente
 smokestack release keygen | pack | latest    outils de publication
@@ -276,7 +277,7 @@ plutôt que les 20 paquets par seconde de SmokePing.
 ## Page éditeur
 
 `GET /api/v1/site` expose les métadonnées de l'instance, rendues par
-`/about` dans les quatre langues. Le téléphone du NOC n'apparaît jamais sur la page
+`/about` dans les dix langues. Le téléphone du NOC n'apparaît jamais sur la page
 publique : il n'est renvoyé qu'aux appels authentifiés.
 
 ```bash
@@ -469,7 +470,7 @@ Chaque langue est un fichier JSON dans `web/i18n/` (embarqué dans le binaire).
 **L'anglais (`en.json`) est la référence obligatoire** : sans lui, smokestack
 refuse de démarrer. Toute clé absente d'une autre langue s'affiche en anglais.
 
-Livrées : `en` (référence), `fr`, `de`, `es`, toutes complètes.
+Livrées, toutes complètes : `en` (référence), `da` (danois), `de` (allemand), `es` (espagnol), `fr`, `it` (italien), `nb` (norvégien bokmål), `nl` (néerlandais), `pt` (portugais), `sv` (suédois). `smokestack languages` les liste et `-default CODE` choisit la langue par défaut de l'instance.
 
 Ajouter ou corriger une langue sans recompiler :
 

@@ -440,7 +440,7 @@ raises the anonymous rate limits.
 Public pages are translated by JSON files in `web/i18n/`, embedded in the
 binary. **English (`en.json`) is the mandatory reference**: without it,
 smokestack refuses to start, and any key missing from another language is
-shown in English. Shipped: English, French, German and Spanish, all complete.
+shown in English. Shipped, all complete: English (reference), Danish, Dutch, French, German, Italian, Norwegian (Bokmål), Portuguese, Spanish and Swedish.
 
 Files accept nested objects (`{"home":{"faults":"…"}}` becomes `home.faults`)
 and placeholders (`{n}`, `{total}`). At load time each language is compared
@@ -448,7 +448,9 @@ with English: missing keys, unknown keys and **mismatched placeholders** are
 reported in the back-office. The `TestI18nFiles` test fails if a shipped
 language is incomplete.
 
-To add or fix a language without rebuilding, drop `xx.json` into
+`smokestack languages` lists them and `-default CODE` sets the instance
+default. Browser codes `no` and `nn` map to Norwegian Bokmål, `pt-BR` to
+Portuguese. To add or fix a language without rebuilding, drop `xx.json` into
 `/var/lib/smokestack/i18n/` and reload it from the back-office. In the browser,
 the language is chosen from `?lang=`, the remembered choice, the browser
 languages, the instance default (publisher page), then English.

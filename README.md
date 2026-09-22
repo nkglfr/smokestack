@@ -11,7 +11,7 @@ between operators who measure each other.
 - 📈 **Latency, jitter and loss** to your transits, exchanges, DNS resolvers and clouds
 - 🔍 **Zoom from one year down to 30 seconds**, percentiles stay exact at every level
 - 🧭 **Traceroute on anomalies**, compared with the last healthy path, over IPv4 and IPv6
-- 🌍 **Public status page** in English, French, German and Spanish, with a private back-office
+- 🌍 **Public status page in 10 languages**, with a private back-office
 - 🤝 **Federation**: pair with other operators, measure each other, get notified of incidents
 - 📦 **One static binary**, SQLite inside, optional S3 archive, installs in under a minute
 
@@ -136,7 +136,7 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 - Anomaly traceroutes marked on the graph (optional, off by default)
 - Host network page: your AS from RIPEstat and PeeringDB
 - Federation page: paired networks and inter-AS latency matrix
-- Light and dark themes, responsive, translated
+- Light and dark themes, responsive, in 10 languages (the visitor's browser language is picked automatically)
 
 **Back-office**
 - Accounts with four roles (viewer, editor, admin, master) and an audit log
@@ -201,6 +201,32 @@ flags win over environment variables, which win over `config.json`.
 
 Everything else (targets, storage, S3, languages, federation, users) is set
 from the back-office.
+
+---
+
+## Languages
+
+Public pages are available in:
+
+| Code | Language | Code | Language |
+|---|---|---|---|
+| `en` | English (reference) | `it` | Italiano |
+| `da` | Dansk | `nb` | Norsk bokmål |
+| `de` | Deutsch | `nl` | Nederlands |
+| `es` | Español | `pt` | Português |
+| `fr` | Français | `sv` | Svenska |
+
+The visitor's browser language is used automatically, and a selector lets
+them switch. Choose the default language of your instance at install time
+(`--lang fr`) or later:
+
+```sh
+smokestack languages                 # list the available languages
+smokestack languages -default fr     # set the default language of public pages
+```
+
+Adding a language is a single JSON file, without rebuilding: see
+[DEPLOY.md § 4](DEPLOY.md#4-first-steps). The back-office is in English.
 
 ---
 

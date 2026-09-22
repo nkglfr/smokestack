@@ -6,6 +6,7 @@
 #   sudo ./install.sh --package ./smokestack           # a binary you built yourself
 #   sudo ./install.sh --admin-email noc@example.net --ip 0.0.0.0 --port 8080
 #   sudo ./install.sh --embedded          # probe inside the web service (small servers)
+#   sudo ./install.sh --lang fr           # default language of the public pages
 #   sudo ./install.sh --uninstall [--purge]
 #
 # Re-running the script on an installed server upgrades it in place.
@@ -21,7 +22,7 @@ USER_NAME=smokestack
 UNIT=/etc/systemd/system/smokestack.service
 PROBE_UNIT=/etc/systemd/system/smokestack-probe.service
 
-PACKAGE=""; ADMIN_EMAIL=""; LISTEN_IP=""; LISTEN_PORT=""; PUBLIC_URL=""
+PACKAGE=""; ADMIN_EMAIL=""; LISTEN_IP=""; LISTEN_PORT=""; PUBLIC_URL=""; PUBLIC_LANG=""
 ENVFILE=/etc/smokestack/smokestack.env
 NO_SERVICE=0; UNINSTALL=0; PURGE=0; EMBEDDED=0
 
@@ -35,6 +36,7 @@ while [ $# -gt 0 ]; do
     --admin-email) ADMIN_EMAIL="$2"; shift 2 ;;
     --ip)          LISTEN_IP="$2"; shift 2 ;;
     --port)        LISTEN_PORT="$2"; shift 2 ;;
+    --lang)        PUBLIC_LANG="$2"; shift 2 ;;
     --listen)      # older form ip:port, also [ipv6]:port
                    LISTEN_PORT="${2##*:}"; LISTEN_IP=$(printf '%s' "${2%:*}" | tr -d '[]'); shift 2 ;;
     --public-url)  PUBLIC_URL="$2"; shift 2 ;;
@@ -42,7 +44,7 @@ while [ $# -gt 0 ]; do
     --embedded)    EMBEDDED=1; shift ;;
     --uninstall)   UNINSTALL=1; shift ;;
     --purge)       PURGE=1; shift ;;
-    -h|--help)     sed -n '2,13p' "$0"; exit 0 ;;
+    -h|--help)     sed -n '2,14p' "$0"; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
 done
@@ -125,6 +127,9 @@ chmod 0755 "$BIN"
 # The binary checks itself: embedded assets, English language file, SQLite.
 "$BIN" selftest >/dev/null 2>"$TMP/selftest.err" || { cat "$TMP/selftest.err" >&2; die "selftest failed"; }
 VERSION=$("$BIN" version | awk '{print $2}')
+if [ -n "$PUBLIC_LANG" ] && ! "$BIN" languages -config /nonexistent 2>/dev/null | grep -q "^$PUBLIC_LANG "; then
+  die "unknown language '$PUBLIC_LANG'; available: $("$BIN" languages -config /nonexistent 2>/dev/null | awk '{print $1}' | tr '\n' ' ')"
+fi
 [ -n "$VERSION" ] || die "cannot read the version of the binary"
 say "Installing smokestack $VERSION (linux-$ARCH)"
 
@@ -343,6 +348,15 @@ if [ $FRESH -eq 1 ]; then
   fi
 fi
 
+# Default language of the public pages (visitors can still switch).
+SS="runuser -u $USER_NAME -- $ROOT/current/smokestack"
+if [ -n "$PUBLIC_LANG" ]; then
+  $SS languages -config "$ETC/config.json" -default "$PUBLIC_LANG" >/dev/null 2>&1 ||
+    warn "could not set the default language to $PUBLIC_LANG"
+fi
+LANGS=$($SS languages -config "$ETC/config.json" -names 2>/dev/null)
+DEFLANG=$($SS languages -config "$ETC/config.json" 2>/dev/null | awk '/\(default\)/{print $2; exit}')
+
 echo
 say "smokestack $VERSION is installed"
 echo "    web interface  $URL"
@@ -353,5 +367,7 @@ if [ -n "$CREDS" ]; then
   echo "$CREDS" | sed 's/^/    /'
   echo "    -> write this password down now, it is not stored in clear anywhere"
 fi
+[ -n "$LANGS" ] && echo "    languages      $LANGS"
+[ -n "$DEFLANG" ] && echo "                   public pages default to $DEFLANG (change: smokestack languages -default CODE)"
 echo "    logs           journalctl -u smokestack -u smokestack-probe -f"
 echo "    update         sudo smokestack update smokestack-X.Y.Z-linux-$ARCH.zip   (or from the back-office)"

@@ -86,6 +86,7 @@ Options:
 | `--port PORT` | `8080` | Listen port |
 | `--listen IP:PORT` | — | Older combined form of `--ip` and `--port` |
 | `--public-url URL` | — | Public address, used by federation |
+| `--lang CODE` | `en` | Default language of the public pages: `en`, `da`, `de`, `es`, `fr`, `it`, `nb`, `nl`, `pt`, `sv` |
 | `--embedded` | — | Run the probe inside the web service (one process, for very small servers) |
 | `--no-service` | — | Skip systemd (containers, custom supervisors) |
 
@@ -186,6 +187,19 @@ limiting applies to the proxy's address.
 3. **Targets and categories**: add your targets; the star marks *critical
    targets*, always shown at the top of the home page.
 4. **Users**: create accounts for your team (roles: viewer, editor, admin, master).
+5. **Language**: public pages exist in English (reference), Danish, Dutch, French, German, Italian, Norwegian (Bokmål), Portuguese, Spanish and Swedish. Visitors get their
+   browser's language automatically; the default for everyone else is set in
+   the *Publisher page*, at install time (`--lang fr`) or from the command line:
+
+   ```sh
+   smokestack languages                 # available languages and the current default
+   smokestack languages -default fr
+   ```
+
+   To add or fix a language without rebuilding, copy `en.json` from the
+   repository (`web/i18n/`) to `/var/lib/smokestack/i18n/xx.json`, translate it,
+   then click **Reload** in *Instance → Languages*: missing keys fall back to
+   English and are listed there.
 
 If you skipped the installer's account creation, the service prints a one-time
 setup code: `journalctl -u smokestack | grep setup` — or run

@@ -27,6 +27,7 @@ Usage:
   smokestack [-config FILE] [-ip IP] [-port PORT]   run the service (default)
                                                (also SMOKESTACK_LISTEN_IP / SMOKESTACK_LISTEN_PORT)
   smokestack probe [-config FILE]               run the isolated probe (probe.mode "external")
+  smokestack languages [-default CODE] [-names]  list languages, set the public default
   smokestack version                            print version
   smokestack selftest                           check the binary is sound
   smokestack user add -email E -name N [-role master|admin|editor|viewer] [-password P]
@@ -52,6 +53,8 @@ func runCLI(args []string) bool {
 		fmt.Printf("smokestack %s %s-%s %s\n", Version, runtime.GOOS, runtime.GOARCH, BuildDate)
 	case "selftest":
 		err = cmdSelftest()
+	case "languages":
+		err = cmdLanguages(args[1:])
 	case "probe":
 		err = runProbe(args[1:])
 	case "user":
@@ -397,4 +400,71 @@ func releaseLatest(args []string) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	return enc.Encode(rel)
+}
+
+// cmdLanguages lists the languages of the public pages (embedded files
+// plus any override in <data_dir>/i18n) and can set the default one.
+func cmdLanguages(args []string) error {
+	fsn := flag.NewFlagSet("languages", flag.ExitOnError)
+	cfgPath := cliConfig(fsn)
+	def := fsn.String("default", "", "set the default language of public pages (language code)")
+	names := fsn.Bool("names", false, "print the language names on one line")
+	fsn.Parse(args)
+	dataDir := os.TempDir()
+	cfg, cfgErr := loadConfig(*cfgPath)
+	if cfgErr == nil {
+		dataDir = cfg.DataDir
+	}
+	sub, err := fs.Sub(webFS, "web")
+	if err != nil {
+		return err
+	}
+	i18n, err := NewI18n(sub, dataDir)
+	if err != nil {
+		return err
+	}
+	langs := i18n.Languages()
+	current := ""
+	if cfgErr == nil {
+		if store, err := OpenStore(cfg.DataDir); err == nil {
+			defer store.Close()
+			if *def != "" {
+				if !i18n.Has(*def) {
+					return fmt.Errorf("unknown language %q (see: smokestack languages)", *def)
+				}
+				site := store.Site()
+				site.DefaultLang = *def
+				if err := store.SetSite(site); err != nil {
+					return err
+				}
+				fmt.Printf("default language of public pages: %s\n", *def)
+				return nil
+			}
+			current = store.Site().DefaultLang
+		}
+	} else if *def != "" {
+		return cfgErr
+	}
+	if current == "" {
+		current = baseLang
+	}
+	if *names {
+		out := []string{}
+		for _, l := range langs {
+			out = append(out, l.Name)
+		}
+		fmt.Println(strings.Join(out, ", "))
+		return nil
+	}
+	for _, l := range langs {
+		mark := ""
+		if l.Code == baseLang {
+			mark += " (reference)"
+		}
+		if l.Code == current {
+			mark += " (default)"
+		}
+		fmt.Printf("%-6s %-16s %3.0f %%  %s%s\n", l.Code, l.Name, l.Coverage*100, l.Source, mark)
+	}
+	return nil
 }
