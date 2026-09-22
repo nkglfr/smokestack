@@ -46,7 +46,9 @@ type FedConfig struct {
 
 type Config struct {
 	PeeringDBKey string        `json:"peeringdb_api_key"`
-	Listen       string        `json:"listen"`
+	Listen       string        `json:"listen,omitempty"` // older combined form, see listen.go
+	ListenIP     string        `json:"listen_ip,omitempty"`
+	ListenPort   int           `json:"listen_port,omitempty"`
 	DataDir      string        `json:"data_dir"`
 	AdminToken   string        `json:"admin_token"`
 	Probe        ProbeConfig   `json:"probe"`
@@ -57,7 +59,7 @@ type Config struct {
 
 func defaultConfig() Config {
 	return Config{
-		Listen:  "127.0.0.1:8080",
+
 		DataDir: "/var/lib/smokestack",
 		Probe: ProbeConfig{
 			Enabled: true, Slug: "local-01",
@@ -146,7 +148,9 @@ func main() {
 	}
 	fl := flag.NewFlagSet("smokestack", flag.ExitOnError)
 	cfgPath := fl.String("config", "/etc/smokestack/config.json", "configuration file")
-	listen := fl.String("listen", "", "override the listen address")
+	listen := fl.String("listen", "", "listen address, ip:port")
+	flagIP := fl.String("ip", "", "listen IP (* for all interfaces)")
+	flagPort := fl.String("port", "", "listen port")
 	fl.Usage = func() { fmt.Fprintf(os.Stderr, usage, Version) }
 	fl.Parse(args)
 	log.Printf("smokestack %s (%s-%s)", Version, runtime.GOOS, runtime.GOARCH)
@@ -155,9 +159,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("configuration: %v", err)
 	}
-	if *listen != "" {
-		cfg.Listen = *listen
+	addr, err := resolveListen(cfg, listenSource{flagListen: *listen, flagIP: *flagIP,
+		flagPort: *flagPort, getenv: os.Getenv})
+	if err != nil {
+		log.Fatalf("listen address: %v", err)
 	}
+	cfg.Listen = addr
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
 		log.Fatalf("data directory: %v", err)
 	}
@@ -315,7 +322,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("listening on %s", cfg.Listen)
+		log.Printf("listening on http://%s (%s)", cfg.Listen, listenNote(cfg.Listen))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("http: %v", err)
 		}

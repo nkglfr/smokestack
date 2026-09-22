@@ -51,6 +51,15 @@ They talk over a Unix socket (`probe.sock` in the data directory, mode 0660).
 A single-process mode (`"probe": {"mode": "embedded"}`) exists for very small
 servers.
 
+**Listen address.** The web service listens on `127.0.0.1:8080` by default,
+behind a reverse proxy. The IP and the port are separate settings, so IPv6
+addresses need no brackets: flags `-ip` and `-port`, then the environment
+variables `SMOKESTACK_LISTEN_IP` and `SMOKESTACK_LISTEN_PORT` (kept by the
+installer in `/etc/smokestack/smokestack.env`), then `config.json`
+(`listen_ip`, `listen_port`, or the older combined `listen`). An invalid value
+stops the service with a message naming the faulty setting, and the log
+states whether the address is reachable from the network.
+
 Background loops in the web service:
 
 | Loop | Period | Role |

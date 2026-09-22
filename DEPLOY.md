@@ -48,8 +48,21 @@ Or with a package you already downloaded:
 sudo sh install.sh --package smokestack-1.2.0-linux-amd64.zip --admin-email noc@example.net
 ```
 
+Already logged in as root, as on a fresh Debian or Ubuntu server? Run the
+same commands without `sudo` (a minimal Debian does not even ship it).
+
 It takes under a minute. At the end, the installer prints the back-office
 address and the **master account password — write it down, it is shown once**.
+
+No release published yet, or you prefer to build it yourself? Install from
+source (Go 1.22 or later):
+
+```sh
+apt install -y git make golang-go
+git clone https://github.com/nkglfr/smokestack && cd smokestack
+make build
+sudo sh install.sh --package dist/smokestack --admin-email noc@example.net
+```
 
 ### What the installer does
 
@@ -69,7 +82,9 @@ Options:
 |---|---|---|
 | `--package FILE` | latest release | A `.zip` package or a binary you built |
 | `--admin-email ADDR` | `admin@<hostname>` | Master account login |
-| `--listen ADDR:PORT` | `127.0.0.1:8080` | Keep it on localhost behind a reverse proxy |
+| `--ip IP` | `127.0.0.1` | Listen IP of the web interface: keep it on localhost behind a reverse proxy; `0.0.0.0` (IPv4) or `::` (IPv4 and IPv6) for all interfaces |
+| `--port PORT` | `8080` | Listen port |
+| `--listen IP:PORT` | — | Older combined form of `--ip` and `--port` |
 | `--public-url URL` | — | Public address, used by federation |
 | `--embedded` | — | Run the probe inside the web service (one process, for very small servers) |
 | `--no-service` | — | Skip systemd (containers, custom supervisors) |
@@ -84,6 +99,7 @@ and keeps the configuration and the data.
 /opt/smokestack/current -> releases/1.2.0    active version
 /opt/smokestack/previous -> releases/1.1.0   rollback target
 /etc/smokestack/config.json                  configuration (root:smokestack 0640)
+/etc/smokestack/smokestack.env               listen IP and port of the web interface
 /etc/smokestack/release-keys.pub             extra trusted release keys
 /var/lib/smokestack/                         databases, archive spool, keys, backups
 ```
@@ -93,7 +109,38 @@ interface is embedded in the binary, there is no document root.
 
 ## 3. Put it behind HTTPS
 
-smokestack listens on `127.0.0.1:8080` and expects a TLS reverse proxy in front.
+By default smokestack listens on `127.0.0.1:8080` (this machine only) and
+expects a TLS reverse proxy in front.
+
+### Changing the listen address
+
+The listen IP and port live in `/etc/smokestack/smokestack.env`:
+
+```sh
+SMOKESTACK_LISTEN_IP=127.0.0.1
+SMOKESTACK_LISTEN_PORT=8080
+```
+
+| `SMOKESTACK_LISTEN_IP` | Meaning |
+|---|---|
+| `127.0.0.1` | this machine only (default, behind a reverse proxy) |
+| `0.0.0.0` or `*` | all IPv4 interfaces |
+| `::` | all IPv4 and IPv6 interfaces |
+| an address, e.g. `192.0.2.10` or `2001:db8::10` | that address only (no brackets needed for IPv6) |
+
+Edit the file, then `systemctl restart smokestack`; the log confirms the
+address in use (`journalctl -u smokestack | grep listening`). Re-running the
+installer with `--ip` or `--port` rewrites the file; without them it keeps
+it. Ports below 1024 work too, the service is allowed to bind them.
+
+The same settings can be given as flags (`-ip`, `-port`) or in
+`config.json` (`listen_ip`, `listen_port`). Flags win over environment
+variables, which win over `config.json`. An invalid value stops the service
+with a message naming the faulty setting.
+
+Exposing the interface directly (`0.0.0.0`) is fine on a trusted network or
+for a test. On the Internet, keep `127.0.0.1` and use a reverse proxy: the
+session cookie is only marked `Secure` over HTTPS.
 
 **Caddy** (automatic certificates) — `/etc/caddy/Caddyfile`:
 
@@ -196,10 +243,11 @@ change when you re-run the installer.
 
 Releases are built and signed by GitHub Actions when you push a tag.
 
-**Once:**
+**Once** (on any machine with Go, a GitHub Codespace works well):
 
 ```sh
 make release-key                 # creates release.key (secret) and prints the public key
+                                 # without make: go run . release keygen -out .
 ```
 
 - append the printed `ed25519:...` line to `release.pub` and commit it: every
@@ -216,6 +264,12 @@ make release-key                 # creates release.key (secret) and prints the p
 ```sh
 git tag v1.3.0 && git push origin v1.3.0
 ```
+
+Pushing the tag is all it takes. Do **not** create the release with the
+*Create a new release* button of the GitHub interface: the workflow creates
+it itself and would fail if it already exists. Follow the build in the
+**Actions** tab; when it is green, the release page lists the two packages,
+`install.sh`, `latest.json` and `SHA256SUMS`.
 
 The `release` workflow runs the tests, builds linux amd64 and arm64, signs
 the packages and publishes them with `latest.json`, `install.sh` and
@@ -256,6 +310,10 @@ the following release.
 | Upload fails behind nginx | `client_max_body_size 210m;` |
 | Lost the admin password | `sudo smokestack user add -email other@example.net` creates another master |
 | Health check | `curl -s http://127.0.0.1:8080/healthz` → `ok` |
+| Interface unreachable from a browser | By default it listens on `127.0.0.1` only: set `SMOKESTACK_LISTEN_IP=0.0.0.0` in `/etc/smokestack/smokestack.env` and restart, or use a reverse proxy. Check the firewall too. |
+| `listen address: ... invalid` in the log | Fix the value named in the message in `/etc/smokestack/smokestack.env` |
+| `curl: (22) ... 404` when downloading `install.sh` | No release has been published yet: install from source (section 2) or publish one (section 6) |
+| `sudo: command not found` | You are root already: run the command without `sudo` |
 
 ## 9. Uninstalling
 

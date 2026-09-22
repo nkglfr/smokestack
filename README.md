@@ -1,5 +1,9 @@
 # smokestack
 
+[![CI](https://github.com/nkglfr/smokestack/actions/workflows/ci.yml/badge.svg)](https://github.com/nkglfr/smokestack/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/nkglfr/smokestack)](https://github.com/nkglfr/smokestack/releases/latest)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
 **Public latency monitoring for network operators.** A modern take on
 SmokePing: one binary, fast graphs, exact percentiles, and a federation
 between operators who measure each other.
@@ -24,8 +28,13 @@ curl -fsSLO https://github.com/nkglfr/smokestack/releases/latest/download/instal
 sudo sh install.sh --admin-email noc@example.net
 ```
 
-The installer prints the back-office address and the admin password.
-Put a TLS reverse proxy in front of it, for example with Caddy:
+Already root, as on a fresh Debian? Drop `sudo`. The installer prints the
+back-office address and the admin password.
+
+By default the web interface listens on `127.0.0.1:8080`, this machine only.
+To reach it directly from your network while testing, add `--ip 0.0.0.0`
+(and `--port 80` for instance). For production, put a TLS reverse proxy in
+front, for example with Caddy:
 
 ```
 latency.example.net {
@@ -167,13 +176,23 @@ restored automatically.
 
 ```json
 {
-  "listen": "127.0.0.1:8080",
   "data_dir": "/var/lib/smokestack",
   "probe": { "enabled": true, "mode": "external", "slug": "par-01", "name": "Paris",
              "traceroute": { "max_hops": 30, "reference_hours": 24 } },
   "update": { "auto_check": true, "auto_apply": false }
 }
 ```
+
+The listen address has its own small file, `/etc/smokestack/smokestack.env`:
+
+```sh
+SMOKESTACK_LISTEN_IP=127.0.0.1      # * or 0.0.0.0 for all IPv4 interfaces, :: for IPv4 and IPv6
+SMOKESTACK_LISTEN_PORT=8080
+```
+
+Edit it, then `systemctl restart smokestack`. The same settings exist as
+flags (`-ip`, `-port`) and in `config.json` (`listen_ip`, `listen_port`);
+flags win over environment variables, which win over `config.json`.
 
 Everything else (targets, storage, S3, languages, federation, users) is set
 from the back-office.
@@ -202,25 +221,26 @@ Rate limit: 20 requests/s per client IP, bursts of 80.
 
 ## Building from source
 
-Requires Go 1.22.
+Requires Go 1.22 or later. On Debian or Ubuntu:
 
 ```sh
+apt install -y git make golang-go
 git clone https://github.com/nkglfr/smokestack && cd smokestack
-go mod tidy
 make test
 make build                              # ./dist/smokestack
-sudo ./install.sh --package dist/smokestack
+sudo sh install.sh --package dist/smokestack --admin-email noc@example.net
 ```
 
 ### Releasing
 
 ```sh
-make release-key                        # once: signing key pair
+make release-key                        # once: signing key pair (see DEPLOY.md § 6)
 git tag v1.3.0 && git push origin v1.3.0
 ```
 
-GitHub Actions builds linux/amd64 and linux/arm64, signs the packages and
-publishes the release. Instances with automatic updates install it within a
+Pushing the tag is all it takes: GitHub Actions runs the tests, builds
+linux/amd64 and linux/arm64, signs the packages and publishes the release
+(do not create the release by hand in the GitHub interface). Instances with automatic updates install it within a
 few hours. See [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
 ---

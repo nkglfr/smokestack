@@ -4,7 +4,7 @@
 #   sudo ./install.sh                                   # latest published release
 #   sudo ./install.sh --package smokestack-1.2.0-linux-amd64.zip
 #   sudo ./install.sh --package ./smokestack           # a binary you built yourself
-#   sudo ./install.sh --admin-email noc@example.net --listen 0.0.0.0:8080
+#   sudo ./install.sh --admin-email noc@example.net --ip 0.0.0.0 --port 8080
 #   sudo ./install.sh --embedded          # probe inside the web service (small servers)
 #   sudo ./install.sh --uninstall [--purge]
 #
@@ -21,7 +21,8 @@ USER_NAME=smokestack
 UNIT=/etc/systemd/system/smokestack.service
 PROBE_UNIT=/etc/systemd/system/smokestack-probe.service
 
-PACKAGE=""; ADMIN_EMAIL=""; LISTEN="127.0.0.1:8080"; PUBLIC_URL=""
+PACKAGE=""; ADMIN_EMAIL=""; LISTEN_IP=""; LISTEN_PORT=""; PUBLIC_URL=""
+ENVFILE=/etc/smokestack/smokestack.env
 NO_SERVICE=0; UNINSTALL=0; PURGE=0; EMBEDDED=0
 
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
@@ -32,13 +33,16 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --package)     PACKAGE="$2"; shift 2 ;;
     --admin-email) ADMIN_EMAIL="$2"; shift 2 ;;
-    --listen)      LISTEN="$2"; shift 2 ;;
+    --ip)          LISTEN_IP="$2"; shift 2 ;;
+    --port)        LISTEN_PORT="$2"; shift 2 ;;
+    --listen)      # older form ip:port, also [ipv6]:port
+                   LISTEN_PORT="${2##*:}"; LISTEN_IP=$(printf '%s' "${2%:*}" | tr -d '[]'); shift 2 ;;
     --public-url)  PUBLIC_URL="$2"; shift 2 ;;
     --no-service)  NO_SERVICE=1; shift ;;
     --embedded)    EMBEDDED=1; shift ;;
     --uninstall)   UNINSTALL=1; shift ;;
     --purge)       PURGE=1; shift ;;
-    -h|--help)     sed -n '2,12p' "$0"; exit 0 ;;
+    -h|--help)     sed -n '2,13p' "$0"; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
 done
@@ -152,7 +156,6 @@ if [ ! -f "$ETC/config.json" ]; then
   HOST=$(hostname -s 2>/dev/null || echo probe)
   cat > "$ETC/config.json" <<EOF
 {
-  "listen": "$LISTEN",
   "data_dir": "$DATA",
   "probe": { "enabled": true, "mode": "$( [ $EMBEDDED -eq 1 ] && echo embedded || echo external )", "slug": "$HOST", "name": "$HOST", "location": "" },
   "federation": { "enabled": false, "base_url": "$PUBLIC_URL", "anchors": [] },
@@ -168,6 +171,45 @@ EOF
   chown root:"$USER_NAME" "$ETC/config.json"; chmod 0640 "$ETC/config.json"
   say "Configuration written to $ETC/config.json"
 fi
+# Listen address of the web service, in its own small file so that it is
+# easy to change later: edit it, then `systemctl restart smokestack`.
+if [ -n "$LISTEN_IP$LISTEN_PORT" ] || [ ! -f "$ENVFILE" ]; then
+  OLD_IP=""; OLD_PORT=""
+  if [ -f "$ENVFILE" ]; then
+    OLD_IP=$(sed -n 's/^SMOKESTACK_LISTEN_IP=//p' "$ENVFILE")
+    OLD_PORT=$(sed -n 's/^SMOKESTACK_LISTEN_PORT=//p' "$ENVFILE")
+  fi
+  # An older installation kept the address in config.json ("listen"):
+  # carry it over rather than silently falling back to the default.
+  if [ -z "$OLD_IP$OLD_PORT" ] && [ -f "$ETC/config.json" ]; then
+    L=$(sed -n 's/.*"listen": *"\([^"]*\)".*/\1/p' "$ETC/config.json" | head -1)
+    if [ -n "$L" ]; then OLD_PORT="${L##*:}"; OLD_IP=$(printf '%s' "${L%:*}" | tr -d '[]'); fi
+  fi
+  IP="${LISTEN_IP:-${OLD_IP:-127.0.0.1}}"; PORT="${LISTEN_PORT:-${OLD_PORT:-8080}}"
+  case "$PORT" in ''|*[!0-9]*) die "invalid port: $PORT" ;; esac
+  [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || die "invalid port: $PORT"
+  cat > "$ENVFILE" <<EOF
+# Listen address of the smokestack web service.
+# After a change:  systemctl restart smokestack
+#   127.0.0.1   this machine only (behind a reverse proxy, recommended)
+#   0.0.0.0     all IPv4 interfaces      ::   all IPv4 and IPv6 interfaces
+SMOKESTACK_LISTEN_IP=$IP
+SMOKESTACK_LISTEN_PORT=$PORT
+EOF
+  chown root:"$USER_NAME" "$ENVFILE"; chmod 0640 "$ENVFILE"
+fi
+# Effective address, for the checks and the summary below.
+IP=$(sed -n 's/^SMOKESTACK_LISTEN_IP=//p' "$ENVFILE"); PORT=$(sed -n 's/^SMOKESTACK_LISTEN_PORT=//p' "$ENVFILE")
+IP="${IP:-127.0.0.1}"; PORT="${PORT:-8080}"
+case "$IP" in *:*) SHOWN="[$IP]:$PORT" ;; *) SHOWN="$IP:$PORT" ;; esac
+case "$IP" in
+  0.0.0.0|::|'*'|'')
+    CHECK="127.0.0.1:$PORT"
+    HOSTIP=$(hostname -I 2>/dev/null | awk '{print $1}')
+    URL="http://${HOSTIP:-<server-address>}:$PORT" ;;
+  *) CHECK="$SHOWN"; URL="http://$SHOWN" ;;
+esac
+
 [ -f "$ETC/release-keys.pub" ] || {
   printf '# Extra trusted release keys, one per line: ed25519:BASE64\n' > "$ETC/release-keys.pub"
   chmod 0644 "$ETC/release-keys.pub"
@@ -222,6 +264,7 @@ StartLimitIntervalSec=0
 [Service]
 User=$USER_NAME
 Group=$USER_NAME
+EnvironmentFile=-$ENVFILE
 ExecStart=$ROOT/current/smokestack -config $ETC/config.json
 Restart=always
 RestartSec=3
@@ -278,11 +321,9 @@ EOF
   fi
 
   say "Waiting for the service"
-  PORT=${LISTEN##*:}; HOSTPART=${LISTEN%:*}
-  [ "$HOSTPART" = "0.0.0.0" ] || [ -z "$HOSTPART" ] && HOSTPART=127.0.0.1
   i=0; OK=0
   while [ $i -lt 30 ]; do
-    if command -v curl >/dev/null 2>&1 && curl -fs "http://$HOSTPART:$PORT/healthz" >/dev/null 2>&1; then OK=1; break; fi
+    if command -v curl >/dev/null 2>&1 && curl -fsg "http://$CHECK/healthz" >/dev/null 2>&1; then OK=1; break; fi
     if ! command -v curl >/dev/null 2>&1 && systemctl is-active --quiet smokestack; then OK=1; break; fi
     i=$((i+1)); sleep 1
   done
@@ -304,8 +345,10 @@ fi
 
 echo
 say "smokestack $VERSION is installed"
-echo "    listening on   http://$LISTEN   (put a TLS reverse proxy in front, see DEPLOY.md)"
-echo "    back-office    http://$LISTEN/admin"
+echo "    web interface  $URL"
+echo "    back-office    $URL/admin"
+echo "    listen address $SHOWN   (change it in $ENVFILE, then: systemctl restart smokestack)"
+case "$IP" in 127.*|::1) echo "                   reachable from this machine only: put a TLS reverse proxy in front (DEPLOY.md)" ;; esac
 if [ -n "$CREDS" ]; then
   echo "$CREDS" | sed 's/^/    /'
   echo "    -> write this password down now, it is not stored in clear anywhere"

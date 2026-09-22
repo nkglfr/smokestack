@@ -43,10 +43,21 @@ make build
 # le code d'installation du compte master s'affiche dans le journal
 ```
 
+## Adresse d'écoute
+
+Par défaut, le service web écoute sur `127.0.0.1:8080`, derrière un reverse
+proxy. L'IP et le port sont deux réglages séparés, sans crochets pour l'IPv6 :
+options `-ip` et `-port`, puis variables `SMOKESTACK_LISTEN_IP` et
+`SMOKESTACK_LISTEN_PORT` (placées par l'installeur dans
+`/etc/smokestack/smokestack.env`), puis `config.json` (`listen_ip`,
+`listen_port`, ou l'ancien `listen`). Après modification du fichier :
+`systemctl restart smokestack`. Une valeur invalide arrête le service avec un
+message qui nomme le réglage fautif.
+
 ## Ligne de commande
 
 ```
-smokestack [-config FICHIER]                 lance le service web
+smokestack [-config F] [-ip IP] [-port P]    lance le service web
 smokestack probe [-config FICHIER]           lance la sonde isolée
 smokestack version | selftest
 smokestack user add -email E [-role master]  crée un compte (mot de passe généré)

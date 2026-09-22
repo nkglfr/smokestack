@@ -24,7 +24,8 @@ import (
 const usage = `smokestack %s — latency monitoring
 
 Usage:
-  smokestack [-config FILE] [-listen ADDR]      run the service (default)
+  smokestack [-config FILE] [-ip IP] [-port PORT]   run the service (default)
+                                               (also SMOKESTACK_LISTEN_IP / SMOKESTACK_LISTEN_PORT)
   smokestack probe [-config FILE]               run the isolated probe (probe.mode "external")
   smokestack version                            print version
   smokestack selftest                           check the binary is sound
