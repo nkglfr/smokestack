@@ -297,10 +297,12 @@ After editing the file, restart the service: `systemctl restart smokestack`.
 
 ### Notes on versions
 
-- **0.1.1** introduces `/etc/smokestack/smokestack.env` for the listen address.
-  Version 0.1.0 does not read it: after a rollback to 0.1.0, the service would
-  listen on the address in `config.json` (`listen`), or on the default
-  `127.0.0.1:8080`.
+- **0.1.2** introduces `/etc/smokestack/smokestack.env` for the listen address.
+  Versions 0.1.1 and earlier do not read it: after a rollback to one of them,
+  the service would listen on the address in `config.json` (`listen`), or on
+  the default `127.0.0.1:8080`.
+- **0.1.1** contains the same code as 0.1.0 (it was tagged before the changes
+  were pushed). Use 0.1.2 or later.
 
 ## 6. Publishing your own releases
 
