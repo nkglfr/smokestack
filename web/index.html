@@ -274,10 +274,21 @@ function draw(cv, s, o) {
       c.fillText(lbl, Math.min(w - pr - 20, Math.max(pl + 20, X(ts))), h - 16);
     }
   }
-  for (const e of (o.events || [])) {
-    if (e.ts_start < x0 || e.ts_start > x1) continue; const x = Math.round(X(e.ts_start)) + .5, am = cssv("--warn");
+  // Event labels: close events are stacked on successive rows so that
+  // their labels never overlap.
+  const rows = [];
+  const evs = (o.events || []).filter(e => e.ts_start >= x0 && e.ts_start <= x1).sort((a, b) => a.ts_start - b.ts_start);
+  c.font = "10px system-ui,sans-serif";
+  for (const e of evs) {
+    const x = Math.round(X(e.ts_start)) + .5, am = cssv("--warn");
     c.strokeStyle = am; c.lineWidth = 1; c.beginPath(); c.moveTo(x, pt); c.lineTo(x, h - pb + lh); c.stroke();
-    c.fillStyle = am; c.font = "10px system-ui,sans-serif"; c.textAlign = x > w - 170 ? "right" : "left"; c.textBaseline = "top"; c.fillText(e.title, x + (x > w - 170 ? -5 : 5), pt);
+    const tw = c.measureText(e.title).width, right = x > w - 170;
+    const a = right ? x - 5 - tw : x + 5, b = a + tw;
+    let row = 0;
+    while (rows[row] && rows[row].some(([l, r]) => a < r + 6 && b > l - 6)) row++;
+    (rows[row] = rows[row] || []).push([a, b]);
+    c.fillStyle = am; c.textAlign = right ? "right" : "left"; c.textBaseline = "top";
+    c.fillText(e.title, right ? x - 5 : x + 5, pt + row * 13);
   }
   return { X, Y, x0, x1, pw, ph, w, h, pl };
 }

@@ -11,6 +11,8 @@ between operators who measure each other.
 - 🤝 **Federation**: pair with other operators, measure each other, get notified of incidents
 - 📦 **One static binary**, SQLite inside, optional S3 archive, installs in under a minute
 
+![smokestack home page: faults first, then critical targets, with 24-hour status bars and sparklines](docs/screenshots/home.png)
+
 ---
 
 ## Quick start
@@ -35,6 +37,39 @@ Then open `https://latency.example.net/admin`, set your AS number and add
 your targets.
 
 📘 Full guide: **[DEPLOY.md](DEPLOY.md)** (HTTPS, updates, backups, troubleshooting).
+
+---
+
+## Screenshots
+
+<table>
+<tr>
+<td width="50%"><a href="docs/screenshots/detail.png"><img src="docs/screenshots/detail.png" alt="Target detail with percentile bands, packet loss and annotated events"></a></td>
+<td width="50%"><a href="docs/screenshots/traceroutes.png"><img src="docs/screenshots/traceroutes.png" alt="Anomaly traceroute compared with the last healthy path"></a></td>
+</tr>
+<tr>
+<td align="center"><b>Target detail</b><br>Percentile bands, loss bars, events, zoom from one year down to 30 seconds</td>
+<td align="center"><b>Traceroute on anomalies</b><br>Taken automatically, compared hop by hop with the last healthy path</td>
+</tr>
+<tr>
+<td width="50%"><a href="docs/screenshots/federation.png"><img src="docs/screenshots/federation.png" alt="Federation page with paired networks and the inter-AS matrix"></a></td>
+<td width="50%"><a href="docs/screenshots/network.png"><img src="docs/screenshots/network.png" alt="Host network page from RIPEstat and PeeringDB"></a></td>
+</tr>
+<tr>
+<td align="center"><b>Federation</b><br>Operators measure each other, latency in both directions, inter-AS matrix</td>
+<td align="center"><b>Host network</b><br>Your AS as seen in global routing (RIPEstat) and declared on PeeringDB</td>
+</tr>
+<tr>
+<td width="50%"><a href="docs/screenshots/home-dark.png"><img src="docs/screenshots/home-dark.png" alt="Home page in dark theme"></a></td>
+<td width="50%" align="center"><a href="docs/screenshots/mobile.png"><img src="docs/screenshots/mobile.png" alt="Home page on a phone" width="45%"></a></td>
+</tr>
+<tr>
+<td align="center"><b>Dark theme</b><br>Follows the visitor's system setting</td>
+<td align="center"><b>Mobile</b><br>Responsive, faults first</td>
+</tr>
+</table>
+
+<sub>Screenshots use a demo data set: fictitious operators and documentation addresses (RFC 5737, RFC 3849, RFC 5398).</sub>
 
 ---
 
