@@ -168,6 +168,11 @@ tests itself, the configuration database is backed up, and the switch is
 atomic. If the new version fails to start three times, the previous one is
 restored automatically.
 
+The service checks for new versions every 6 hours and shows them in the
+back-office. Automatic installation is optional (off by default) and only
+ever installs signed releases, never pre-releases. Details:
+[DEPLOY.md § 5](DEPLOY.md#5-updating).
+
 ---
 
 ## Configuration

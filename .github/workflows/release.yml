@@ -32,5 +32,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* \
+          # A version with a hyphen (v0.2.0-rc1) is published as a
+          # pre-release: GitHub leaves it out of "latest", so servers with
+          # automatic updates never install it by themselves.
+          PRE=""
+          case "$GITHUB_REF_NAME" in *-*) PRE="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* $PRE \
             --title "smokestack ${GITHUB_REF_NAME#v}" --generate-notes

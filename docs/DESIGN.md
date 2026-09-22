@@ -493,7 +493,12 @@ Whether from the back-office, the command line or automatically:
 5. if the new version fails to start three times, the previous one is
    restored automatically and the incident is recorded in the history.
 
-Automatic updates always require a trusted signature. Releases are built by
+Automatic updates: the service checks `latest.json` 2 minutes after each
+start, then every 6 hours. Checking is on by default and only reports;
+installing is a separate, opt-in setting. Automatic installation always
+requires a trusted signature, whatever `allow_unsigned` says, and pre-releases
+(versions with a hyphen) are never offered, since the release workflow
+publishes them as GitHub pre-releases, outside "latest". Releases are built by
 GitHub Actions when a `v*` tag is pushed: tests, linux/amd64 and linux/arm64
 builds, signing with the `SMOKESTACK_RELEASE_KEY` secret, and publication with
 `latest.json`, which instances poll. Dependabot keeps Go modules and CI

@@ -214,13 +214,61 @@ sudo smokestack update smokestack-1.3.0-linux-amd64.zip
 sudo smokestack rollback
 ```
 
-### Automatically
+### Automatic updates
 
-In *Instance → Updates*, tick **Install new versions automatically**.
-The service checks the release feed every 6 hours (`update.manifest_url`, by
-default the project's GitHub releases) and installs new versions. Automatic
-updates **always require a trusted signature**, even if unsigned packages
-are allowed for manual uploads.
+Two independent settings, in *Instance → Updates*:
+
+| Setting | Default | What it does |
+|---|---|---|
+| **Check regularly for new versions** | on | Looks for a new release and shows it in the back-office and the log. Never installs anything. |
+| **Install new versions automatically** | off | When a newer release is found, downloads, verifies and installs it by itself. |
+
+**When it checks.** Once 2 minutes after each start of the service, then every
+`check_interval_hours` (6 hours by default). The **Check now** button checks
+immediately; like the regular check, it never installs by itself.
+
+**Where versions come from.** `update.manifest_url`, by default the
+`latest.json` of the project's latest GitHub release. Pre-releases (a version
+with a hyphen, such as `0.2.0-rc1`) are never offered: GitHub leaves them out of
+the latest release. To follow your own builds or a mirror, point
+`manifest_url` to your own `latest.json`.
+
+**What happens when a new version is found**, with automatic installation on:
+
+1. the log says `new version available: 0.1.1 (current 0.1.0)`;
+2. the package for this server's platform is downloaded over HTTPS only, and
+   its checksum is compared with the one announced in `latest.json`;
+3. the package **must be signed by a trusted key**, without exception: the
+   `allow_unsigned` setting only ever applies to manual uploads;
+4. the new binary runs its self-test, then `config.db` is backed up to
+   `/var/lib/smokestack/backups/`;
+5. the service switches to the new version and restarts in place, which takes
+   a few seconds. The isolated probe keeps measuring meanwhile, then restarts
+   itself on the new version: no measurement is lost;
+6. after 60 seconds of normal operation the update is confirmed
+   (`update to 0.1.1 confirmed` in the log). If the new version fails to start
+   three times, the previous one is restored automatically.
+
+Each automatic update appears in the history of *Instance → Updates* with
+**auto** as its author.
+
+**Requirements.** An installation made with `install.sh` (the log says
+`in-place updates unavailable` otherwise), and outbound HTTPS to `github.com`
+and `release-assets.githubusercontent.com` (where GitHub serves release files).
+
+**Following it.**
+
+```sh
+journalctl -u smokestack | grep -iE "new version|update"
+```
+
+A failed automatic update is logged as `automatic update to X: <reason>` and
+retried at the next check; the running version keeps working.
+
+**Which mode to choose.** Automatic installation suits most servers: releases
+are signed, tested before switching, and rolled back if they fail. If you
+prefer to decide, keep only the regular check: the back-office then shows
+*version X available*, and you install it in one click.
 
 ### Configuration (`/etc/smokestack/config.json`)
 
@@ -236,8 +284,23 @@ are allowed for manual uploads.
 }
 ```
 
-Set `"enabled": false` to forbid any in-place update: binaries then only
-change when you re-run the installer.
+| Field | Meaning |
+|---|---|
+| `enabled` | `false` forbids any in-place update: binaries then only change when you re-run the installer |
+| `auto_check`, `auto_apply` | initial values of the two settings above; once changed in the back-office, the back-office value wins |
+| `check_interval_hours` | time between two checks (default 6) |
+| `manifest_url` | where to look for new versions |
+| `trusted_keys_file` | extra trusted signing keys, one `ed25519:…` line each, on top of the key built into the binary |
+| `allow_unsigned` | accept unsigned packages **uploaded by hand** (tests only); never used by automatic updates |
+
+After editing the file, restart the service: `systemctl restart smokestack`.
+
+### Notes on versions
+
+- **0.1.1** introduces `/etc/smokestack/smokestack.env` for the listen address.
+  Version 0.1.0 does not read it: after a rollback to 0.1.0, the service would
+  listen on the address in `config.json` (`listen`), or on the default
+  `127.0.0.1:8080`.
 
 ## 6. Publishing your own releases
 
@@ -264,6 +327,10 @@ make release-key                 # creates release.key (secret) and prints the p
 ```sh
 git tag v1.3.0 && git push origin v1.3.0
 ```
+
+A tag with a hyphen (`v0.2.0-rc1`) is published as a **pre-release**: it can
+be downloaded and installed by hand, but servers with automatic updates never
+install it. Use this to test a version before offering it to everyone.
 
 Pushing the tag is all it takes. Do **not** create the release with the
 *Create a new release* button of the GitHub interface: the workflow creates
