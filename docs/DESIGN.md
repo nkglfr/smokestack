@@ -70,7 +70,7 @@ Background loops in the web service:
 | archive | 30 s | hourly sealing, S3 upload, quota-based rotation |
 | target cache | 10 s, and on change | list of active targets handed to the probe |
 | purge | 6 h | applies the retention of each tier |
-| update check | 6 h | looks for a new signed release (optional) |
+| update check | 24 h (configurable) | looks for a new signed release (optional) |
 
 In the probe, the scheduler ticks every second. Start offsets are derived
 from a hash of the target id, so passes are spread over the interval instead
@@ -506,7 +506,8 @@ Whether from the back-office, the command line or automatically:
    restored automatically and the incident is recorded in the history.
 
 Automatic updates: the service checks `latest.json` 2 minutes after each
-start, then every 6 hours. Checking is on by default and only reports;
+start, then at the configured interval (once a day by default, 1 hour to 30
+days, read again after every check). Checking is on by default and only reports;
 installing is a separate, opt-in setting. Automatic installation always
 requires a trusted signature, whatever `allow_unsigned` says, and pre-releases
 (versions with a hyphen) are never offered, since the release workflow

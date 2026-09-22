@@ -96,8 +96,8 @@ commande ou automatiquement :
    restaurée automatiquement, et l'incident est inscrit dans l'historique.
 
 Les mises à jour automatiques exigent toujours une signature de confiance.
-Le service vérifie `latest.json` 2 minutes après chaque démarrage, puis toutes
-les 6 heures. La vérification est active par défaut et se contente de
+Le service vérifie `latest.json` 2 minutes après chaque démarrage, puis à l'intervalle configuré
+(un jour par défaut, de 1 heure à 30 jours, relu après chaque vérification). La vérification est active par défaut et se contente de
 signaler ; l'installation automatique est un réglage distinct, désactivé par
 défaut. Les versions de test (numéro avec un tiret, `0.2.0-rc1`) sont publiées
 comme pre-releases GitHub et ne sont jamais proposées automatiquement.

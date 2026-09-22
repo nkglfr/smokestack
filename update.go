@@ -45,8 +45,13 @@ import (
 
 const (
 	maxPackageBytes = 200 << 20
-	pendingFile     = "update-pending.json"
-	keepReleases    = 3
+	// How often to look for a new version: once a day by default, any value
+	// from one hour to one month.
+	defaultCheckHours = 24
+	minCheckHours     = 1
+	maxCheckHours     = 24 * 30
+	pendingFile       = "update-pending.json"
+	keepReleases      = 3
 )
 
 type UpdateConfig struct {
@@ -54,14 +59,14 @@ type UpdateConfig struct {
 	ManifestURL   string `json:"manifest_url"`
 	AutoCheck     bool   `json:"auto_check"`
 	AutoApply     bool   `json:"auto_apply"`
-	CheckHours    int    `json:"check_interval_hours"`
+	CheckHours    int    `json:"check_interval_hours"` // hours, 1 to 720
 	AllowUnsigned bool   `json:"allow_unsigned"`
 	TrustedKeys   string `json:"trusted_keys_file"`
 }
 
 func defaultUpdateConfig() UpdateConfig {
 	return UpdateConfig{
-		Enabled: true, AutoCheck: true, AutoApply: false, CheckHours: 6,
+		Enabled: true, AutoCheck: true, AutoApply: false, CheckHours: defaultCheckHours,
 		ManifestURL: RepoURL + "/releases/latest/download/latest.json",
 		TrustedKeys: "/etc/smokestack/release-keys.pub",
 	}
@@ -689,6 +694,27 @@ func (u *Updater) autoFlags() (check, apply bool) {
 	return
 }
 
+// checkEvery returns the current interval between two checks. The
+// back-office value wins over config.json, and the loop reads it again
+// after every check, so a change takes effect without a restart.
+func (u *Updater) checkEvery() time.Duration {
+	h := u.cfg.CheckHours
+	if u.store != nil {
+		if v := u.store.Setting("update_check_hours", ""); v != "" {
+			if n, err := strconv.Atoi(v); err == nil {
+				h = n
+			}
+		}
+	}
+	if h < minCheckHours {
+		h = defaultCheckHours
+	}
+	if h > maxCheckHours {
+		h = maxCheckHours
+	}
+	return time.Duration(h) * time.Hour
+}
+
 func (u *Updater) Check() (*RemoteRelease, error) {
 	if u.cfg.ManifestURL == "" || strings.Contains(u.cfg.ManifestURL, "CHANGE-ME") {
 		return nil, errors.New("no update source configured (update.manifest_url)")
@@ -763,10 +789,6 @@ func (u *Updater) fetchAndApply(rel *RemoteRelease, by string) error {
 }
 
 func (u *Updater) Loop(stop <-chan struct{}) {
-	hours := u.cfg.CheckHours
-	if hours <= 0 {
-		hours = 6
-	}
 	run := func() {
 		check, apply := u.autoFlags()
 		if !check {
@@ -782,25 +804,27 @@ func (u *Updater) Loop(stop <-chan struct{}) {
 		}
 		log.Printf("new version available: %s (current %s)", rel.Version, Version)
 		if apply && u.Managed() {
+			// Skipping versions is fine: the latest release is installed
+			// directly, whatever the current version.
 			if err := u.fetchAndApply(rel, "auto"); err != nil {
 				log.Printf("automatic update to %s: %v", rel.Version, err)
 			}
 		}
 	}
+	// A first look shortly after start, then at the configured interval,
+	// which is read again every time.
 	select {
 	case <-stop:
 		return
 	case <-time.After(2 * time.Minute):
 	}
-	run()
-	t := time.NewTicker(time.Duration(hours) * time.Hour)
-	defer t.Stop()
 	for {
+		run()
+		every := u.checkEvery()
 		select {
 		case <-stop:
 			return
-		case <-t.C:
-			run()
+		case <-time.After(every):
 		}
 	}
 }
@@ -833,7 +857,8 @@ func (a *API) updState(w http.ResponseWriter, r *http.Request, u *User) {
 		"current": up.link("current"), "previous": up.link("previous"),
 		"staged": staged, "available": avail, "history": up.History(),
 		"auto_check": check, "auto_apply": apply,
-		"allow_unsigned": up.cfg.AllowUnsigned, "trusted_keys": up.KeyIDs(),
+		"check_interval_hours": int(up.checkEvery() / time.Hour),
+		"allow_unsigned":       up.cfg.AllowUnsigned, "trusted_keys": up.KeyIDs(),
 		"manifest_url": up.cfg.ManifestURL,
 	})
 }
@@ -926,8 +951,9 @@ func (a *API) updCheck(w http.ResponseWriter, r *http.Request, u *User) {
 
 func (a *API) updSettings(w http.ResponseWriter, r *http.Request, u *User) {
 	var in struct {
-		AutoCheck *bool `json:"auto_check"`
-		AutoApply *bool `json:"auto_apply"`
+		AutoCheck  *bool `json:"auto_check"`
+		AutoApply  *bool `json:"auto_apply"`
+		CheckHours *int  `json:"check_interval_hours"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, 400, err.Error())
@@ -938,6 +964,14 @@ func (a *API) updSettings(w http.ResponseWriter, r *http.Request, u *User) {
 	}
 	if in.AutoApply != nil {
 		a.store.SetSetting("update_auto_apply", map[bool]string{true: "1", false: "0"}[*in.AutoApply])
+	}
+	if in.CheckHours != nil {
+		if *in.CheckHours < minCheckHours || *in.CheckHours > maxCheckHours {
+			writeErr(w, 400, fmt.Sprintf("check_interval_hours must be between %d and %d",
+				minCheckHours, maxCheckHours))
+			return
+		}
+		a.store.SetSetting("update_check_hours", strconv.Itoa(*in.CheckHours))
 	}
 	a.store.Audit(u, clientIP(r), "update_settings", "update", "")
 	a.updState(w, r, u)

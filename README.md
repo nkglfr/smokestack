@@ -170,8 +170,9 @@ tests itself, the configuration database is backed up, and the switch is
 atomic. If the new version fails to start three times, the previous one is
 restored automatically.
 
-The service checks for new versions every 6 hours and shows them in the
-back-office. Automatic installation is optional (off by default) and only
+The service checks for new versions once a day (6 hours, a week or a month
+are also available) and shows them in the back-office. Skipping versions is
+harmless: the newest release is installed directly. Automatic installation is optional (off by default) and only
 ever installs signed releases, never pre-releases. Details:
 [DEPLOY.md § 5](DEPLOY.md#5-updating).
 
@@ -186,7 +187,7 @@ ever installs signed releases, never pre-releases. Details:
   "data_dir": "/var/lib/smokestack",
   "probe": { "enabled": true, "mode": "external", "slug": "par-01", "name": "Paris",
              "traceroute": { "max_hops": 30, "reference_hours": 24 } },
-  "update": { "auto_check": true, "auto_apply": false }
+  "update": { "auto_check": true, "auto_apply": false, "check_interval_hours": 24 }
 }
 ```
 

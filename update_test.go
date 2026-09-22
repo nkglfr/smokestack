@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCompareVersions(t *testing.T) {
@@ -102,5 +103,37 @@ func TestSetupCode(t *testing.T) {
 	c := newSetupCode()
 	if len(c) != 14 || strings.Count(c, "-") != 2 || strings.ContainsAny(c, "01IO") {
 		t.Errorf("code d'installation mal forme : %s", c)
+	}
+}
+
+func TestCheckEvery(t *testing.T) {
+	u := &Updater{cfg: UpdateConfig{CheckHours: 0}}
+	if u.checkEvery() != 24*time.Hour {
+		t.Errorf("without a setting: %v, expected 24 h", u.checkEvery())
+	}
+	u.cfg.CheckHours = 168
+	if u.checkEvery() != 168*time.Hour {
+		t.Errorf("weekly: %v", u.checkEvery())
+	}
+	u.cfg.CheckHours = 100000 // clamped to one month
+	if u.checkEvery() != 720*time.Hour {
+		t.Errorf("clamping: %v", u.checkEvery())
+	}
+	u.cfg.CheckHours = -3 // invalid: back to the default
+	if u.checkEvery() != 24*time.Hour {
+		t.Errorf("invalid value: %v", u.checkEvery())
+	}
+}
+
+// Skipping versions must be harmless: the newest release is installed
+// directly, whatever the current version.
+func TestVersionSkipping(t *testing.T) {
+	for _, c := range []struct{ from, latest string }{{"0.1.0", "0.1.4"}, {"0.0.9", "2.0.0"}, {"1.9.9", "1.10.0"}} {
+		if compareVersions(c.latest, c.from) <= 0 {
+			t.Errorf("%s should be newer than %s", c.latest, c.from)
+		}
+	}
+	if compareVersions("0.1.4", "0.1.4") != 0 || compareVersions("0.1.3", "0.1.4") >= 0 {
+		t.Error("comparison of close versions")
 	}
 }

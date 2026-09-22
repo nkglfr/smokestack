@@ -249,9 +249,17 @@ Two independent settings, in *Instance → Updates*:
 | **Check regularly for new versions** | on | Looks for a new release and shows it in the back-office and the log. Never installs anything. |
 | **Install new versions automatically** | off | When a newer release is found, downloads, verifies and installs it by itself. |
 
-**When it checks.** Once 2 minutes after each start of the service, then every
-`check_interval_hours` (6 hours by default). The **Check now** button checks
-immediately; like the regular check, it never installs by itself.
+**When it checks.** Once 2 minutes after each start of the service, then at
+the interval chosen in *Instance → Updates*: every 6 hours, **every day (the
+default)**, every week or every month. The setting is read again after each
+check, so a change takes effect without restarting. The **Check now** button
+checks immediately; like the regular check, it never installs by itself.
+
+**Skipping versions is harmless.** A server checking once a week, or switched
+off for a month, installs the newest release directly, whatever versions came
+in between: releases are complete binaries, not increments, and database
+changes are applied on start whichever version they come from. Tested from a
+0.1.0 server that jumped straight to 0.1.4, keeping its data.
 
 **Where versions come from.** `update.manifest_url`, by default the
 `latest.json` of the project's latest GitHub release. Pre-releases (a version
@@ -303,7 +311,7 @@ prefer to decide, keep only the regular check: the back-office then shows
   "enabled": true,
   "auto_check": true,
   "auto_apply": false,
-  "check_interval_hours": 6,
+  "check_interval_hours": 24,
   "manifest_url": "https://github.com/nkglfr/smokestack/releases/latest/download/latest.json",
   "trusted_keys_file": "/etc/smokestack/release-keys.pub",
   "allow_unsigned": false
@@ -314,7 +322,7 @@ prefer to decide, keep only the regular check: the back-office then shows
 |---|---|
 | `enabled` | `false` forbids any in-place update: binaries then only change when you re-run the installer |
 | `auto_check`, `auto_apply` | initial values of the two settings above; once changed in the back-office, the back-office value wins |
-| `check_interval_hours` | time between two checks (default 6) |
+| `check_interval_hours` | hours between two checks, 1 to 720 (default 24). The back-office value wins once changed |
 | `manifest_url` | where to look for new versions |
 | `trusted_keys_file` | extra trusted signing keys, one `ed25519:…` line each, on top of the key built into the binary |
 | `allow_unsigned` | accept unsigned packages **uploaded by hand** (tests only); never used by automatic updates |

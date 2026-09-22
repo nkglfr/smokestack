@@ -865,6 +865,13 @@ async function viewUpdate(m){
   h+=`<div class="card"><h3>Automatic updates</h3><div class="body">
     <label class="chk"><input type="checkbox" id="ac" ${S.auto_check?"checked":""}><span>Check regularly for new versions
       <small>Source: <span class="mono">${esc(S.manifest_url)}</span></small></span></label>
+    <div class="field" style="max-width:320px"><label>How often to check</label>
+      <select id="ch">${[[6,"Every 6 hours"],[24,"Every day (default)"],[168,"Every week"],[720,"Every month"]]
+        .map(([h,l])=>`<option value="${h}" ${S.check_interval_hours===h?"selected":""}>${l}</option>`).join("")}
+        ${[6,24,168,720].includes(S.check_interval_hours)?"":`<option value="${S.check_interval_hours}" selected>Every ${S.check_interval_hours} hours (config.json)</option>`}
+      </select>
+      <div style="font-size:11.5px;color:var(--ink2);margin-top:4px">A skipped version is never a problem:
+        the newest release is installed directly, whatever the current version.</div></div>
     <label class="chk"><input type="checkbox" id="aa" ${S.auto_apply?"checked":""} ${S.managed?"":"disabled"}><span>Install new versions automatically
       <small>Only packages signed by a trusted key are installed automatically, without exception.</small></span></label>
     <div class="acts"><button class="btn s" id="chk">Check now</button></div>
@@ -908,9 +915,11 @@ async function viewUpdate(m){
     if(!confirm("Revert to version "+S.previous+"?")) return;
     try{await api("POST","/api/v1/admin/update/rollback");waitRestart(S.previous);}catch(e){toast(e.message,true);}
   };
-  const save=async()=>{try{await api("PUT","/api/v1/admin/update/settings",{auto_check:$("#ac").checked,auto_apply:$("#aa").checked});toast("Preferences saved");}
+  const save=async()=>{try{await api("PUT","/api/v1/admin/update/settings",
+      {auto_check:$("#ac").checked,auto_apply:$("#aa").checked,check_interval_hours:parseInt($("#ch").value,10)});
+      toast("Preferences saved");}
     catch(e){toast(e.message,true);}};
-  $("#ac").onchange=save;$("#aa").onchange=save;
+  $("#ac").onchange=save;$("#aa").onchange=save;$("#ch").onchange=save;
   $("#chk").onclick=async()=>{try{await api("POST","/api/v1/admin/update/check");render();}catch(e){toast(e.message,true);}};
 }
 async function waitRestart(ver){
