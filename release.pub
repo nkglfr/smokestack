@@ -2,3 +2,4 @@
 # Une cle par ligne, au format produit par `smokestack release keygen` :
 #   ed25519:BASE64...
 # Voir DEPLOY.md, section "Release signing".
+ed25519:31XBC/X0j40g5UOS6T98cCiyJ6/ZwWykyd0VvlnZ/Lc=
