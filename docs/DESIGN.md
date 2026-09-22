@@ -254,6 +254,16 @@ curl -s -X PUT localhost:8080/api/v1/admin/storage \
                 "low_watermark":0.70,"keep_local_hours":48}}'
 ```
 
+**Private targets.** Each target is public or private. A private target is
+measured, stored and graphed exactly like the others, but it is left out of
+every public endpoint: tree, overview, series, charts, live stream and
+traceroutes. The visibility check accepts the API token or a back-office
+session, so an operator sees everything while a visitor sees only the public
+targets. The set of public target ids is cached and rebuilt whenever a target
+or a category changes, so switching a target takes effect immediately.
+`/api/v1/overview?all=1` returns private targets to an authenticated caller;
+the cached public payload never contains them.
+
 **Safeguard on targets.** Creating a target is refused if its burst does not
 fit in its interval: `packets × spacing_ms + timeout_ms` must stay below 75 %
 of `interval_s`. At 30 seconds this means 10 packets spaced by 200 ms, rather
@@ -513,7 +523,9 @@ actions up to date. Details in [DEPLOY.md § 6](../DEPLOY.md#6-publishing-your-o
 - Latency-triggered traceroutes are covered by unit tests; loss-triggered ones
   were tested on a multi-hop lab network.
 - The raw archive is gzip NDJSON, not yet Parquet.
-- Editing an existing target is not possible yet (delete and recreate).
+- A target can be updated through the API (`PATCH /api/v1/admin/targets/{id}`)
+  and its visibility switched from the back-office; a full edit form in the
+  back-office is still missing.
 - Remote probes on another machine: the ingestion endpoint exists and is
   protected, but issuing probe tokens is not available yet. Same-host
   isolation is complete.

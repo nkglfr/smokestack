@@ -35,6 +35,7 @@ type OverviewTarget struct {
 	Proto    string   `json:"proto"`
 	Interval int64    `json:"interval_s"`
 	Featured bool     `json:"featured"`
+	Public   bool     `json:"public"`
 	Status   string   `json:"status"`
 	MedMs    *float64 `json:"med_ms"`
 	LossPct  *float64 `json:"loss_pct"`
@@ -146,8 +147,8 @@ func rowMed(r ovRow) float64 {
 // en tout : reference 7 jours (roll_1h), 24 h par tranches de 5 min
 // (roll_5m) et 2 h a la minute (roll_1m) pour l'etat courant et le
 // debut du defaut.
-func (s *Store) Overview(probeID int64, now int64) (*Overview, error) {
-	cats, err := s.Tree(true)
+func (s *Store) Overview(probeID int64, now int64, publicOnly bool) (*Overview, error) {
+	cats, err := s.Tree(publicOnly)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +180,8 @@ func (s *Store) Overview(probeID int64, now int64) (*Overview, error) {
 				continue
 			}
 			ot := &OverviewTarget{ID: t.ID, Title: t.Title, Host: t.Host, Proto: t.Proto,
-				Interval: t.IntervalS, Featured: feat[t.ID], Hours: make([]string, 48)}
+				Interval: t.IntervalS, Featured: feat[t.ID], Public: t.Public,
+				Hours: make([]string, 48)}
 
 			var base, day, cur ovAgg
 			for _, r := range baseRows[t.ID] {
@@ -299,7 +301,7 @@ func (c *overviewCache) build() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	start := time.Now()
-	ov, err := c.store.Overview(c.probe, time.Now().Unix())
+	ov, err := c.store.Overview(c.probe, time.Now().Unix(), true)
 	if err != nil {
 		return err
 	}
@@ -342,6 +344,18 @@ func (a *API) OverviewRoutes(mux *http.ServeMux) {
 }
 
 func (a *API) overview(w http.ResponseWriter, r *http.Request) {
+	// Authenticated callers can ask for everything, private targets
+	// included; the cached payload stays public-only.
+	if r.URL.Query().Get("all") != "" && a.authenticated(r) {
+		ov, err := a.store.Overview(a.probeID, time.Now().Unix(), false)
+		if err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, ov)
+		return
+	}
 	if ovCache.data.Load() == nil {
 		if err := ovCache.build(); err != nil {
 			writeErr(w, 500, err.Error())

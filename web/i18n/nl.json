@@ -37,7 +37,8 @@
     "ok_long": "Binnen de referentie",
     "warn_long": "Latentie of jitter buiten de referentie",
     "crit_long": "Pakketverlies vastgesteld",
-    "nodata": "geen gegevens"
+    "nodata": "geen gegevens",
+    "private": "privé"
   },
   "metric": {
     "median": "Mediaan",

@@ -37,7 +37,8 @@
     "ok_long": "Im Referenzbereich",
     "warn_long": "Latenz oder Jitter abweichend",
     "crit_long": "Paketverlust festgestellt",
-    "nodata": "keine Daten"
+    "nodata": "keine Daten",
+    "private": "privat"
   },
   "metric": {
     "median": "Median",

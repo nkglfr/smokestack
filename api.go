@@ -48,6 +48,7 @@ func (a *API) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/v1/admin/storage", a.auth(a.storagePut))
 	mux.HandleFunc("GET /api/v1/admin/targets", a.auth(a.targetsGet))
 	mux.HandleFunc("POST /api/v1/admin/targets", a.auth(a.targetsPost))
+	mux.HandleFunc("PATCH /api/v1/admin/targets/{id}", a.auth(a.targetsPatch))
 	mux.HandleFunc("DELETE /api/v1/admin/targets/{id}", a.auth(a.targetsDelete))
 	mux.HandleFunc("POST /api/v1/admin/categories", a.auth(a.categoriesPost))
 	mux.HandleFunc("POST /api/v1/admin/events", a.auth(a.eventsPost))
@@ -129,6 +130,50 @@ func parseTime(s string, def int64) int64 {
 	return def
 }
 
+// authenticated reports whether the request comes from the API token or a
+// valid back-office session. Private targets are only ever served to these.
+func (a *API) authenticated(r *http.Request) bool {
+	bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if bearer != "" && a.token != "" &&
+		subtle.ConstantTimeCompare([]byte(bearer), []byte(a.token)) == 1 {
+		return true
+	}
+	c, err := r.Cookie(sessionCookie)
+	if err != nil {
+		return false
+	}
+	_, err = a.store.Session(c.Value)
+	return err == nil
+}
+
+// publicIDs is the set of targets an anonymous visitor may see. Rebuilt
+// only when targets or categories change.
+var publicIDs struct {
+	sync.Mutex
+	gen int64
+	set map[int64]bool
+	ok  bool
+}
+
+func (a *API) publicTargetIDs() map[int64]bool {
+	gen := a.store.gen.Load()
+	publicIDs.Lock()
+	defer publicIDs.Unlock()
+	if publicIDs.ok && publicIDs.gen == gen {
+		return publicIDs.set
+	}
+	set := map[int64]bool{}
+	if cats, err := a.store.Tree(true); err == nil {
+		for _, c := range cats {
+			for _, t := range c.Targets {
+				set[t.ID] = true
+			}
+		}
+		publicIDs.set, publicIDs.gen, publicIDs.ok = set, gen, true
+	}
+	return set
+}
+
 // L'arbre public change rarement : il est servi depuis la memoire et
 // recalcule seulement apres une modification de cible ou de categorie
 // (ou au plus tard toutes les 60 s).
@@ -140,7 +185,7 @@ var treeCache struct {
 }
 
 func (a *API) tree(w http.ResponseWriter, r *http.Request) {
-	publicOnly := r.Header.Get("Authorization") == ""
+	publicOnly := !a.authenticated(r)
 	if !publicOnly {
 		cats, err := a.store.Tree(false)
 		if err != nil {
@@ -193,7 +238,7 @@ func (a *API) series(w http.ResponseWriter, r *http.Request) {
 	// La visibilite de la cible est verifiee avant toute lecture ou
 	// reponse depuis le cache.
 	if t, err := a.store.TargetByID(targetID); err != nil ||
-		(!t.Public && r.Header.Get("Authorization") == "") {
+		(!t.Public && !a.authenticated(r)) {
 		writeErr(w, 404, "target not found")
 		return
 	}
@@ -249,6 +294,16 @@ func (a *API) charts(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
+	}
+	if !a.authenticated(r) {
+		visible := a.publicTargetIDs()
+		kept := rows[:0]
+		for _, row := range rows {
+			if visible[row.TargetID] {
+				kept = append(kept, row)
+			}
+		}
+		rows = kept
 	}
 	writeJSON(w, rows)
 }
@@ -325,11 +380,25 @@ func (a *API) live(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
+	// Private targets are left out unless the caller is authenticated.
+	var visible map[int64]bool
+	if !a.authenticated(r) {
+		visible = a.publicTargetIDs()
+	}
 	tick := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
 	for {
 		rows, err := a.store.Live()
 		if err == nil {
+			if visible != nil {
+				kept := rows[:0]
+				for _, row := range rows {
+					if visible[row.TargetID] {
+						kept = append(kept, row)
+					}
+				}
+				rows = kept
+			}
 			b, _ := json.Marshal(rows)
 			fmt.Fprintf(w, "data: %s\n\n", b)
 			flusher.Flush()
@@ -426,6 +495,7 @@ func (a *API) targetsGet(w http.ResponseWriter, r *http.Request) {
 func (a *API) targetsPost(w http.ResponseWriter, r *http.Request) {
 	t := &Target{Proto: "icmp", IntervalS: 60, Packets: 20,
 		SpacingMs: 500, TimeoutMs: 2000, Public: true, Enabled: true}
+	t.Public = true
 	if err := json.NewDecoder(r.Body).Decode(t); err != nil {
 		writeErr(w, 400, err.Error())
 		return
@@ -492,4 +562,65 @@ func (a *API) probeStatus(w http.ResponseWriter, r *http.Request, u *User) {
 		"overview_build_ms": ovCache.lastMs.Load(),
 		"overview_builds":   ovCache.builds.Load(),
 	})
+}
+
+// targetsPatch updates an existing target. Only the fields present in the
+// body change; "public": false keeps a target out of the public site while
+// it keeps being measured.
+func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, 400, "invalid identifier")
+		return
+	}
+	t, err := a.store.TargetByID(id)
+	if err != nil {
+		writeErr(w, 404, "target not found")
+		return
+	}
+	var in struct {
+		Title, Host, Proto                    *string
+		Family, Packets, SpacingMs, TimeoutMs *int
+		IntervalS                             *int64
+		Public, Enabled                       *bool
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	set := func(dst *string, v *string) {
+		if v != nil {
+			*dst = *v
+		}
+	}
+	set(&t.Title, in.Title)
+	set(&t.Host, in.Host)
+	set(&t.Proto, in.Proto)
+	if in.Family != nil {
+		t.Family = *in.Family
+	}
+	if in.Packets != nil {
+		t.Packets = *in.Packets
+	}
+	if in.IntervalS != nil {
+		t.IntervalS = *in.IntervalS
+	}
+	if in.SpacingMs != nil {
+		t.SpacingMs = *in.SpacingMs
+	}
+	if in.TimeoutMs != nil {
+		t.TimeoutMs = *in.TimeoutMs
+	}
+	if in.Public != nil {
+		t.Public = *in.Public
+	}
+	if in.Enabled != nil {
+		t.Enabled = *in.Enabled
+	}
+	if err := a.store.UpdateTarget(t); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	go ovCache.build()
+	writeJSON(w, t)
 }

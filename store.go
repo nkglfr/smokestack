@@ -409,19 +409,43 @@ func (s *Store) CreateCategory(slug, fr, en string, public bool) (int64, error) 
 	return res.LastInsertId()
 }
 
-func (s *Store) CreateTarget(t *Target) (int64, error) {
-	if t.IntervalS != 30 && t.IntervalS != 60 && t.IntervalS != 300 && t.IntervalS != 600 {
-		return 0, fmt.Errorf("interval_s must be 30, 60, 300 or 600")
-	}
+// checkTarget validates the settings shared by creation and update. The
+// burst must fit in the interval, with a margin.
+func checkTarget(t *Target) error {
 	if t.Family != 0 && t.Family != 4 && t.Family != 6 {
-		return 0, fmt.Errorf("family must be 0 (auto), 4 or 6")
+		return fmt.Errorf("family must be 0 (auto), 4 or 6")
 	}
 	if t.Packets < 3 || t.Packets > 50 {
-		return 0, fmt.Errorf("packets must be between 3 and 50")
+		return fmt.Errorf("packets must be between 3 and 50")
 	}
-	// La rafale doit tenir dans l'intervalle, avec une marge.
+	switch t.IntervalS {
+	case 30, 60, 300, 600:
+	default:
+		return fmt.Errorf("interval_s must be 30, 60, 300 or 600")
+	}
 	if int64(t.Packets*t.SpacingMs+t.TimeoutMs) > t.IntervalS*1000*3/4 {
-		return 0, fmt.Errorf("packets x spacing_ms + timeout_ms exceeds 75%% of the interval")
+		return fmt.Errorf("packets x spacing_ms + timeout_ms exceeds 75%% of the interval")
+	}
+	return nil
+}
+
+// UpdateTarget saves an existing target, including its visibility.
+func (s *Store) UpdateTarget(t *Target) error {
+	if err := checkTarget(t); err != nil {
+		return err
+	}
+	_, err := s.cfg.Exec(
+		`UPDATE targets SET title=?,host=?,proto=?,family=?,interval_s=?,packets=?,
+		        spacing_ms=?,timeout_ms=?,public=?,enabled=? WHERE id=?`,
+		t.Title, t.Host, t.Proto, t.Family, t.IntervalS, t.Packets,
+		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), t.ID)
+	s.notifyTargets()
+	return err
+}
+
+func (s *Store) CreateTarget(t *Target) (int64, error) {
+	if err := checkTarget(t); err != nil {
+		return 0, err
 	}
 	res, err := s.cfg.Exec(
 		`INSERT INTO targets(category_id,slug,title,host,proto,interval_s,packets,

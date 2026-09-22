@@ -182,7 +182,7 @@ func (a *API) traceroutesPublic(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, []*Traceroute{})
 		return
 	}
-	a.listTraceroutes(w, r, true)
+	a.listTraceroutes(w, r, !a.authenticated(r))
 }
 
 func (a *API) traceroutesAdmin(w http.ResponseWriter, r *http.Request, u *User) {

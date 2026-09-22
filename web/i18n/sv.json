@@ -37,7 +37,8 @@
     "ok_long": "Inom referensen",
     "warn_long": "Latens eller jitter utanför referensen",
     "crit_long": "Paketförlust observerad",
-    "nodata": "inga data"
+    "nodata": "inga data",
+    "private": "privat"
   },
   "metric": {
     "median": "Median",

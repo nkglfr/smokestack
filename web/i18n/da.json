@@ -37,7 +37,8 @@
     "ok_long": "Inden for referencen",
     "warn_long": "Forsinkelse eller jitter uden for referencen",
     "crit_long": "Pakketab observeret",
-    "nodata": "ingen data"
+    "nodata": "ingen data",
+    "private": "privat"
   },
   "metric": {
     "median": "Median",

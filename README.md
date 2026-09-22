@@ -142,6 +142,7 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 **Back-office**
 - Accounts with four roles (viewer, editor, admin, master) and an audit log
 - Targets and categories, ICMP or TCP, IPv4 or IPv6, every 30 s, 1, 5 or 10 min
+- Public or **private** targets: private ones are measured and visible in the back-office only
 - Traceroutes: automatic on anomalies, daily reference path, on demand, with path comparison
 - Storage settings (local quota or S3), publisher page, languages
 - One-click updates with rollback
@@ -245,6 +246,10 @@ Public, read-only, JSON:
 | `GET /api/v1/asn` | Host network (RIPEstat, PeeringDB) |
 | `GET /api/v1/fed/peers` | Public federation peers |
 | `GET /api/v1/traceroutes?target=ID` | Traceroutes, if made public by the operator |
+
+Private targets never appear in these endpoints. An authenticated call (session
+cookie or `Authorization: Bearer <admin token>`) sees them, and
+`/api/v1/overview?all=1` returns them too.
 | `GET /healthz` | Health check |
 
 Rate limit: 20 requests/s per client IP, bursts of 80.

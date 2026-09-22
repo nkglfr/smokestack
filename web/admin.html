@@ -302,7 +302,9 @@ const FAMILY={0:"auto",4:"IPv4",6:"IPv6"};
 async function viewTargets(m){
   m.innerHTML=`<h2>Targets and categories</h2>
     <p class="lead">A burst must fit in its interval: packets × spacing + timeout must stay
-      below 75 % of the interval. At 30 s, use 10 packets spaced by 200 ms.</p>
+      below 75 % of the interval. At 30 s, use 10 packets spaced by 200 ms.
+      A <strong>private</strong> target is measured like any other but never appears on the public
+      site: useful for tests, for internal addresses, or for a customer link.</p>
     <div class="card"><h3>New category</h3><div class="body">
       <div class="row2">
         <div class="field"><label>Short identifier</label><input id="cslug" placeholder="transit"></div>
@@ -328,6 +330,9 @@ async function viewTargets(m){
         <div class="field"><label>Spacing (ms)</label><input id="tsp" type="number" value="500"></div>
         <div class="field"><label>Timeout (ms)</label><input id="tto" type="number" value="2000"></div>
       </div>
+      <label class="chk"><input type="checkbox" id="tpub" checked><span>Public target
+        <small>Shown on the public site. Uncheck for a private target: it is measured and visible
+          here, but never appears on the public pages or in the public API.</small></span></label>
       <button class="btn p" id="addtgt">Create the target</button>
       <div class="note" style="margin:12px 0 0">To monitor a destination over both IPv4 and IPv6,
         create two targets with the same host, one per family.</div>
@@ -353,7 +358,7 @@ async function viewTargets(m){
         host:$("#thost").value,family:parseInt($("#tfam").value,10),proto:$("#tproto").value,
         interval_s:parseInt($("#tiv").value,10),packets:parseInt($("#tpk").value,10),
         spacing_ms:parseInt($("#tsp").value,10),timeout_ms:parseInt($("#tto").value,10),
-        public:true,enabled:true});
+        public:$("#tpub").checked,enabled:true});
       toast("Target created");render();
     }catch(e){toast(e.message,true);}
   };
@@ -363,15 +368,22 @@ async function viewTargets(m){
     const F=new Set(feat||[]);
     $("#tlist").innerHTML=(list&&list.length)?`<table>
       <thead><tr><th title="Critical target: always shown at the top of the home page">★</th><th>Title</th><th>Host</th>
-      <th>Family</th><th>Proto</th><th>Interval</th><th>Packets</th><th></th></tr></thead><tbody>`+
+      <th>Family</th><th>Proto</th><th>Interval</th><th>Visibility</th><th></th></tr></thead><tbody>`+
       list.map(t=>`<tr><td><button class="btn s" data-star="${t.id}" title="Critical target"
           style="color:${F.has(t.id)?"#d97706":"var(--ink3)"}">${F.has(t.id)?"★":"☆"}</button></td>
         <td>${esc(t.title)}</td><td class="mono">${esc(t.host)}</td>
-        <td>${FAMILY[t.family||0]}</td><td>${esc(t.proto)}</td><td>${t.interval_s} s</td><td>${t.packets}</td>
+        <td>${FAMILY[t.family||0]}</td><td>${esc(t.proto)}</td><td>${t.interval_s} s</td>
+        <td><button class="btn s" data-vis="${t.id}" data-pub="${t.public?1:0}"
+          title="Click to switch">${t.public?'<span class="badge b-ok">public</span>':'<span class="badge b-warn">private</span>'}</button></td>
         <td style="text-align:right;white-space:nowrap">
           <button class="btn s" data-trace="${t.id}">Traceroute</button>
           <button class="btn d s" data-del="${t.id}">Delete</button></td>
         </tr>`).join("")+`</tbody></table>`:`<div class="empty">No target yet.</div>`;
+    document.querySelectorAll("[data-vis]").forEach(b=>b.onclick=async()=>{
+      try{await api("PATCH","/api/v1/admin/targets/"+b.dataset.vis,{public:b.dataset.pub!=="1"});
+        toast(b.dataset.pub==="1"?"Target is now private":"Target is now public");render();}
+      catch(e){toast(e.message,true);}
+    });
     document.querySelectorAll("[data-star]").forEach(b=>b.onclick=async()=>{
       const id=+b.dataset.star;F.has(id)?F.delete(id):F.add(id);
       try{await api("PUT","/api/v1/admin/featured",[...F]);toast("Critical targets updated");render();}

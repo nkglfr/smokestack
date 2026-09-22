@@ -37,7 +37,8 @@
     "ok_long": "Dentro de la referencia",
     "warn_long": "Latencia o jitter fuera de referencia",
     "crit_long": "Pérdida de paquetes observada",
-    "nodata": "sin datos"
+    "nodata": "sin datos",
+    "private": "privado"
   },
   "metric": {
     "median": "Mediana",

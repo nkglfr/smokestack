@@ -37,7 +37,8 @@
     "ok_long": "Conforme à la référence",
     "warn_long": "Latence ou gigue en écart",
     "crit_long": "Perte de paquets constatée",
-    "nodata": "sans données"
+    "nodata": "sans données",
+    "private": "privée"
   },
   "metric": {
     "median": "Médiane",

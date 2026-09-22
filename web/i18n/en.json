@@ -37,7 +37,8 @@
     "ok_long": "On baseline",
     "warn_long": "Latency or jitter off baseline",
     "crit_long": "Packet loss observed",
-    "nodata": "no data"
+    "nodata": "no data",
+    "private": "private"
   },
   "metric": {
     "median": "Median",

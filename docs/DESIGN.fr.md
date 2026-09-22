@@ -43,6 +43,15 @@ make build
 # le code d'installation du compte master s'affiche dans le journal
 ```
 
+## Cibles privées
+
+Chaque cible est publique ou privée. Une cible privée est mesurée, stockée et
+tracée comme les autres, mais elle est exclue de toutes les routes publiques :
+arbre, vue d'ensemble, séries, graphes, flux temps réel et traceroutes. Le
+contrôle accepte le jeton d'API ou une session du back-office. La liste des
+cibles publiques est mise en cache et reconstruite à chaque modification, donc
+une bascule prend effet immédiatement.
+
 ## Adresse d'écoute
 
 Par défaut, le service web écoute sur `127.0.0.1:8080`, derrière un reverse
@@ -272,7 +281,8 @@ plutôt que les 20 paquets par seconde de SmokePing.
 
 - IPv6 vérifié par tests unitaires seulement (paquets construits) ; à valider sur un hôte double pile.
 - Archive en NDJSON gzip, pas encore en Parquet.
-- Édition d'une cible existante et gestion des sondes distantes à venir.
+- Modification d'une cible possible par l'API (`PATCH`) ; formulaire complet dans le back-office à venir.
+- Gestion des sondes distantes à venir.
 
 ## Page éditeur
 

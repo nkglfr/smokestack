@@ -193,7 +193,11 @@ limiting applies to the proxy's address.
 2. **Publisher page**: organisation, **AS number**, NOC contact, default language.
    The AS number enables the *Host network* page (RIPEstat + PeeringDB).
 3. **Targets and categories**: add your targets; the star marks *critical
-   targets*, always shown at the top of the home page.
+   targets*, always shown at the top of the home page. Each target is **public**
+   or **private**: a private target is measured like any other and visible in
+   the back-office, but never appears on the public pages nor in the public API
+   — useful for a test, an internal address or a customer link. Switch it at any
+   time with the *Visibility* button in the target list.
 4. **Users**: create accounts for your team (roles: viewer, editor, admin, master).
 5. **Language**: public pages exist in English (reference), Danish, Dutch, French, German, Italian, Norwegian (Bokmål), Portuguese, Spanish and Swedish. Visitors get their
    browser's language automatically; the default for everyone else is set in

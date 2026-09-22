@@ -152,7 +152,9 @@ const worst = list => list.some(x => x.status === "crit") ? "crit" : list.some(x
 
 /* -------------------------------------------------------------- données */
 async function loadOverview() {
-  S.ov = await fetch("/api/v1/overview").then(r => r.json());
+  // "all=1" is only honoured for authenticated callers; visitors get the
+  // public targets either way.
+  S.ov = await fetch("/api/v1/overview?all=1").then(r => r.json());
   S.ov.categories.forEach(c => { if (S.open[c.id] === undefined) S.open[c.id] = true; });
 }
 async function loadSide() {
@@ -173,7 +175,7 @@ function rowHTML(tg, showCat) {
   const since = tg.since ? `<div class="since" style="color:var(--${k === "crit" ? "crit" : "warn"})">${esc(t("common.since"))} ${clock(tg.since)} · ${esc(I18N.ago(tg.since))}</div>` : "";
   return `<div class="row ${k === "crit" || k === "warn" ? "a-" + k : ""}" data-t="${tg.id}">
     <div><div class="who"><span class="dot d-${k}"></span><div style="min-width:0"><div class="nm">${esc(tg.title)}</div>
-      <div class="sb"><span class="mono">${esc(tg.host)}</span>${showCat ? ` · <span style="color:${color(tg._ci)}">${esc(cname(tg._cat))}</span>` : ""}</div></div></div>${since}</div>
+      <div class="sb"><span class="mono">${esc(tg.host)}</span>${showCat ? ` · <span style="color:${color(tg._ci)}">${esc(cname(tg._cat))}</span>` : ""}${tg.public === false ? ` · <span class="badge b-n">${esc(t("status.private"))}</span>` : ""}</div></div></div>${since}</div>
     <div class="hb">${hbarHTML(tg)}</div>
     <div class="spk"><canvas height="30" data-spark="${tg.id}"></canvas></div>
     <div><div class="lbl">${esc(t("metric.median"))}</div><div class="num"><b>${n2(tg.med_ms)}</b> ms${ratio}</div></div>
@@ -354,6 +356,7 @@ function renderDetail() {
     <div class="crumb"><a href="/" id="bk">← ${esc(t("common.back_home"))}</a><span class="faint">/</span><span style="color:${acc}">${esc(cname(tg._cat))}</span></div>
     <div class="dh"><h1>${esc(tg.title)}</h1><span class="badge b-${k === "nodata" ? "n" : k}">${esc(t("status." + (k === "nodata" ? "nodata" : k + "_long")))}</span></div>
     <div class="tags"><span class="tag mono">${esc(tg.host)}</span><span class="tag">${esc(tg.proto.toUpperCase())} · ${tg.interval_s} s</span>
+      ${tg.public === false ? `<span class="tag" style="background:var(--warn-soft);color:var(--warn)">${esc(t("status.private"))}</span>` : ""}
       ${tg.base_ms != null ? `<span class="tag">ref. ${n2(tg.base_ms)} ms</span>` : ""}</div>
     <div class="presets" id="pr">${PRESETS.map(([key], i) => `<button class="preset" data-p="${i}" aria-pressed="${S.preset === i}">${esc(t(key))}</button>`).join("")}
       <button class="preset" id="cp" style="margin-left:auto">🔗 ${esc(t("common.copy_link"))}</button></div>
