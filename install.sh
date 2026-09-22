@@ -7,6 +7,7 @@
 #   sudo ./install.sh --admin-email noc@example.net --ip 0.0.0.0 --port 8080
 #   sudo ./install.sh --embedded          # probe inside the web service (small servers)
 #   sudo ./install.sh --lang fr           # default language of the public pages
+#   sudo ./install.sh --yes               # never ask questions (automation)
 #   sudo ./install.sh --uninstall [--purge]
 #
 # Re-running the script on an installed server upgrades it in place.
@@ -22,7 +23,7 @@ USER_NAME=smokestack
 UNIT=/etc/systemd/system/smokestack.service
 PROBE_UNIT=/etc/systemd/system/smokestack-probe.service
 
-PACKAGE=""; ADMIN_EMAIL=""; LISTEN_IP=""; LISTEN_PORT=""; PUBLIC_URL=""; PUBLIC_LANG=""
+PACKAGE=""; ADMIN_EMAIL=""; LISTEN_IP=""; LISTEN_PORT=""; PUBLIC_URL=""; PUBLIC_LANG=""; ASSUME_YES=0
 ENVFILE=/etc/smokestack/smokestack.env
 NO_SERVICE=0; UNINSTALL=0; PURGE=0; EMBEDDED=0
 
@@ -37,6 +38,7 @@ while [ $# -gt 0 ]; do
     --ip)          LISTEN_IP="$2"; shift 2 ;;
     --port)        LISTEN_PORT="$2"; shift 2 ;;
     --lang)        PUBLIC_LANG="$2"; shift 2 ;;
+    --yes|-y)      ASSUME_YES=1; shift ;;
     --listen)      # older form ip:port, also [ipv6]:port
                    LISTEN_PORT="${2##*:}"; LISTEN_IP=$(printf '%s' "${2%:*}" | tr -d '[]'); shift 2 ;;
     --public-url)  PUBLIC_URL="$2"; shift 2 ;;
@@ -44,7 +46,7 @@ while [ $# -gt 0 ]; do
     --embedded)    EMBEDDED=1; shift ;;
     --uninstall)   UNINSTALL=1; shift ;;
     --purge)       PURGE=1; shift ;;
-    -h|--help)     sed -n '2,14p' "$0"; exit 0 ;;
+    -h|--help)     sed -n '2,15p' "$0"; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
   esac
 done
@@ -176,6 +178,51 @@ EOF
   chown root:"$USER_NAME" "$ETC/config.json"; chmod 0640 "$ETC/config.json"
   say "Configuration written to $ETC/config.json"
 fi
+# On a first installation run by hand in a terminal, ask for the listen
+# address; Enter keeps the default. No question when it is given as an
+# option, on an upgrade, with --yes, or when not run from a terminal.
+valid_ip() {
+  case "$1" in
+    '*'|'::') return 0 ;;
+    *:*) printf '%s' "$1" | grep -Eq '^[0-9A-Fa-f:.]+$' ;;
+    *) printf '%s\n' "$1" | awk -F. '
+         NF != 4 { exit 1 }
+         { for (i = 1; i <= 4; i++) if ($i !~ /^[0-9]+$/ || $i > 255) exit 1 }' ;;
+  esac
+}
+valid_port() {
+  case "$1" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$1" -ge 1 ] && [ "$1" -le 65535 ]
+}
+if [ ! -f "$ENVFILE" ] && [ -z "$LISTEN_IP$LISTEN_PORT" ] && [ "$ASSUME_YES" -eq 0 ] && [ -t 0 ] && [ -t 1 ]; then
+  echo
+  say "Listen address of the web interface"
+  echo "    127.0.0.1  this machine only (recommended, behind a TLS reverse proxy)"
+  echo "    0.0.0.0    all IPv4 interfaces        ::  all IPv4 and IPv6 interfaces"
+  while :; do
+    printf '    IP   [127.0.0.1]: '; read -r ans || ans=""
+    ans=${ans:-127.0.0.1}
+    if ! valid_ip "$ans"; then
+      warn "not an IP address: $ans (examples: 127.0.0.1, 0.0.0.0, 192.0.2.10, ::)"; continue
+    fi
+    # A specific address must exist on this server, or the service cannot start.
+    case "$ans" in
+      0.0.0.0|::|'*'|127.*|::1) ;;
+      *) if command -v ip >/dev/null 2>&1 && ! ip -o addr show | awk '{sub(/\/.*/,"",$4); print $4}' | grep -qxF "$ans"; then
+           warn "$ans is not an address of this server. Its addresses: $(ip -o addr show | awk '{sub(/\/.*/,"",$4); print $4}' | grep -v '^fe80' | tr '\n' ' ')"
+           continue
+         fi ;;
+    esac
+    LISTEN_IP="$ans"; break
+  done
+  while :; do
+    printf '    port [8080]: '; read -r ans || ans=""
+    ans=${ans:-8080}
+    if valid_port "$ans"; then LISTEN_PORT="$ans"; break; fi
+    warn "not a port number: $ans (1 to 65535)"
+  done
+fi
+
 # Listen address of the web service, in its own small file so that it is
 # easy to change later: edit it, then `systemctl restart smokestack`.
 if [ -n "$LISTEN_IP$LISTEN_PORT" ] || [ ! -f "$ENVFILE" ]; then

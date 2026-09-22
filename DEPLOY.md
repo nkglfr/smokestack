@@ -86,9 +86,17 @@ Options:
 | `--port PORT` | `8080` | Listen port |
 | `--listen IP:PORT` | — | Older combined form of `--ip` and `--port` |
 | `--public-url URL` | — | Public address, used by federation |
+| `--yes` | — | Never ask questions (automation). Questions are also skipped when the script does not run in a terminal |
 | `--lang CODE` | `en` | Default language of the public pages: `en`, `da`, `de`, `es`, `fr`, `it`, `nb`, `nl`, `pt`, `sv` |
 | `--embedded` | — | Run the probe inside the web service (one process, for very small servers) |
 | `--no-service` | — | Skip systemd (containers, custom supervisors) |
+
+On a first installation run from a terminal, the installer asks for the
+listen IP and port of the web interface; press Enter to keep the default
+(`127.0.0.1` and `8080`). It checks that a specific address really exists on
+the server, since the service could not start otherwise. There is no question
+when `--ip` or `--port` is given, with `--yes`, on an upgrade, or when the
+script does not run in a terminal.
 
 Running the installer again on an installed server **upgrades it in place**
 and keeps the configuration and the data.

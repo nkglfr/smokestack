@@ -31,9 +31,10 @@ sudo sh install.sh --admin-email noc@example.net
 Already root, as on a fresh Debian? Drop `sudo`. The installer prints the
 back-office address and the admin password.
 
-By default the web interface listens on `127.0.0.1:8080`, this machine only.
-To reach it directly from your network while testing, add `--ip 0.0.0.0`
-(and `--port 80` for instance). For production, put a TLS reverse proxy in
+On a first installation the installer asks for the listen IP and port;
+press Enter to keep the default, `127.0.0.1:8080` (this machine only). You can
+also give them directly, for instance `--ip 0.0.0.0 --port 80` to reach the
+interface from your network while testing, and `--yes` skips all questions. For production, put a TLS reverse proxy in
 front, for example with Caddy:
 
 ```
