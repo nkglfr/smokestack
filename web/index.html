@@ -344,11 +344,15 @@ function openTarget(id, from, to) {
   const now = Math.floor(Date.now() / 1000);
   S.view = "detail"; S.target = tg;
   if (from && to) { S.from = from; S.to = to; S.preset = -1; } else { S.preset = 0; S.to = now; S.from = now - PRESETS[0][1]; }
-  S.nav = null; writeHash(); renderDetail(); scrollTo({ top: 0 });
+  S.nav = null; writeHash(true); renderDetail(); scrollTo({ top: 0 });
 }
-function writeHash() {
+// Opening a target adds a history entry, so the browser's Back button
+// returns to the overview; zooming only rewrites the current one.
+function writeHash(push) {
   const h = S.view === "detail" ? `#t=${S.target.id}` + (S.preset === -1 ? `&from=${S.from}&to=${S.to}` : `&p=${S.preset}`) : "";
-  history.replaceState(null, "", location.pathname + location.search + h);
+  const url = location.pathname + location.search + h;
+  if (push && location.hash !== h) history.pushState(null, "", url);
+  else history.replaceState(null, "", url);
 }
 function renderDetail() {
   const tg = S.target, acc = color(tg._ci), k = tg.status;
@@ -375,7 +379,7 @@ function renderDetail() {
       <span class="sub">${esc(t("trace.sub"))}</span></div><div class="card"><div class="card-b scroll-x" id="trbox"></div></div></section>
   </div></div></div>`;
   bindRail();
-  $("#bk").onclick = e => { e.preventDefault(); S.view = "home"; writeHash(); renderHome(); };
+  $("#bk").onclick = e => { e.preventDefault(); S.view = "home"; writeHash(true); renderHome(); };
   document.querySelectorAll("[data-p]").forEach(b => b.onclick = () => { const now = Math.floor(Date.now() / 1000); S.preset = +b.dataset.p; S.to = now; S.from = now - PRESETS[S.preset][1]; writeHash(); paint(); });
   $("#cp").onclick = () => { navigator.clipboard && navigator.clipboard.writeText(location.href); $("#cp").textContent = "✓"; };
   paint(); bindChart();

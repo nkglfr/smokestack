@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,7 @@ const icmpPayloadSize = 56
 type TargetSource interface {
 	Targets() []*Target
 	TraceRequests() []int64
+	CheckRequests() []int64
 }
 
 type MeasureSink interface {
@@ -68,6 +70,7 @@ type Prober struct {
 	seq     uint16
 	pending map[uint16]*inflight
 	running map[int64]bool
+	wanted  map[int64]time.Time // immediate measurements waiting for the target
 
 	res    *resolver
 	tracer *Tracer
@@ -80,6 +83,7 @@ func NewProber(src TargetSource, sink MeasureSink, probeID int64, tc TracerouteC
 		id:      uint16(time.Now().UnixNano() & 0xffff),
 		pending: map[uint16]*inflight{},
 		running: map[int64]bool{},
+		wanted:  map[int64]time.Time{},
 		res:     newResolver(),
 	}
 	var err4, err6 error
@@ -397,11 +401,15 @@ func (p *Prober) runTCP(t *Target) ([]float64, string) {
 	if t.Family == 4 || t.Family == 6 {
 		network = fmt.Sprintf("tcp%d", t.Family)
 	}
+	addr := t.Host
+	if t.Port > 0 {
+		addr = net.JoinHostPort(t.Host, strconv.Itoa(t.Port))
+	}
 	var out []float64
 	var lastErr string
 	for i := 0; i < t.Packets; i++ {
 		start := time.Now()
-		c, err := net.DialTimeout(network, t.Host, timeout)
+		c, err := net.DialTimeout(network, addr, timeout)
 		if err == nil {
 			// The SYN -> SYN/ACK time measured by the TCP stack does not
 			// depend on process load; application timing is the fallback.
@@ -449,6 +457,24 @@ func offsetFor(id, interval int64) int64 {
 	return int64(h.Sum32()) % interval
 }
 
+// claim reserves a target for one pass, so that a slow pass is never run
+// twice at the same time. done releases it.
+func (p *Prober) claim(id int64) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.running[id] {
+		return false
+	}
+	p.running[id] = true
+	return true
+}
+
+func (p *Prober) done(id int64) {
+	p.mu.Lock()
+	delete(p.running, id)
+	p.mu.Unlock()
+}
+
 // Schedule starts passes until stop is closed.
 func (p *Prober) Schedule(stop <-chan struct{}) {
 	tick := time.NewTicker(time.Second)
@@ -468,27 +494,37 @@ func (p *Prober) Schedule(stop <-chan struct{}) {
 					}
 				}
 			}
+			// Targets waiting for an immediate measurement. A target
+			// just created may not be in the cache yet, so a request is
+			// kept and retried for a minute instead of being lost.
+			for _, id := range p.src.CheckRequests() {
+				p.wanted[id] = now.Add(time.Minute)
+			}
+			for id, deadline := range p.wanted {
+				if now.After(deadline) {
+					delete(p.wanted, id)
+					continue
+				}
+				for _, t := range targets {
+					if t.ID == id {
+						delete(p.wanted, id)
+						if p.claim(t.ID) {
+							go func(tt *Target) { defer p.done(tt.ID); p.Run(tt) }(t)
+						}
+					}
+				}
+			}
 			sec := now.Unix()
 			for _, t := range targets {
 				if mod(sec, t.IntervalS) != offsetFor(t.ID, t.IntervalS) {
 					continue
 				}
-				p.mu.Lock()
-				busy := p.running[t.ID]
-				if !busy {
-					p.running[t.ID] = true
-				}
-				p.mu.Unlock()
-				if busy {
+				if !p.claim(t.ID) {
 					continue
 				}
 				go func(tt *Target) {
 					time.Sleep(passJitter(tt.IntervalS))
-					defer func() {
-						p.mu.Lock()
-						delete(p.running, tt.ID)
-						p.mu.Unlock()
-					}()
+					defer p.done(tt.ID)
 					p.Run(tt)
 				}(t)
 			}

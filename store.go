@@ -4,8 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"net"
 	"path/filepath"
 	"sort"
+	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -199,6 +202,8 @@ func OpenStore(dir string) (*Store, error) {
 		return nil, fmt.Errorf("schema config: %w", err)
 	}
 	addColumn(cfg, "targets", "family INTEGER NOT NULL DEFAULT 0")
+	addColumn(cfg, "targets", "port INTEGER NOT NULL DEFAULT 0")
+	migrateTCPPorts(cfg)
 
 	// Deux pools sur metrics.db : l'ecriture des mesures dispose de sa
 	// propre connexion et ne fait jamais la queue derriere des lectures de
@@ -258,6 +263,9 @@ type Target struct {
 	// Family : 0 = automatique (adresse litterale, sinon IPv4 puis IPv6),
 	// 4 = IPv4 seulement, 6 = IPv6 seulement.
 	Family int `json:"family"`
+	// Port : uniquement pour proto "tcp". 0 = port inclus dans Host
+	// (ancienne forme "hote:port").
+	Port int `json:"port"`
 }
 
 type Category struct {
@@ -294,7 +302,7 @@ func (s *Store) TouchProbe(id int64) {
 func (s *Store) ActiveTargets() ([]*Target, error) {
 	rows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family
+		        spacing_ms,timeout_ms,public,enabled,family,port
 		   FROM targets WHERE enabled=1 ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -310,7 +318,7 @@ func scanTargets(rows *sql.Rows) ([]*Target, error) {
 		var pub, en int
 		if err := rows.Scan(&t.ID, &t.CategoryID, &t.Slug, &t.Title, &t.Host,
 			&t.Proto, &t.IntervalS, &t.Packets, &t.SpacingMs, &t.TimeoutMs,
-			&pub, &en, &t.Family); err != nil {
+			&pub, &en, &t.Family, &t.Port); err != nil {
 			return nil, err
 		}
 		t.Public, t.Enabled = pub == 1, en == 1
@@ -354,7 +362,7 @@ func (s *Store) Tree(publicOnly bool) ([]*Category, error) {
 
 	trows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family
+		        spacing_ms,timeout_ms,public,enabled,family,port
 		   FROM targets ORDER BY title`)
 	if err != nil {
 		return nil, err
@@ -378,7 +386,7 @@ func (s *Store) Tree(publicOnly bool) ([]*Category, error) {
 func (s *Store) TargetByID(id int64) (*Target, error) {
 	rows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family
+		        spacing_ms,timeout_ms,public,enabled,family,port
 		   FROM targets WHERE id=?`, id)
 	if err != nil {
 		return nil, err
@@ -392,6 +400,55 @@ func (s *Store) TargetByID(id int64) (*Target, error) {
 		return nil, sql.ErrNoRows
 	}
 	return ts[0], nil
+}
+
+// UpdateCategory renames a category or changes its visibility. Only the
+// fields given are changed.
+func (s *Store) UpdateCategory(id int64, fr, en *string, public *bool) error {
+	if fr != nil {
+		if strings.TrimSpace(*fr) == "" {
+			return fmt.Errorf("the French label cannot be empty")
+		}
+		if _, err := s.cfg.Exec(`UPDATE categories SET menu_fr=? WHERE id=?`, *fr, id); err != nil {
+			return err
+		}
+	}
+	if en != nil {
+		if strings.TrimSpace(*en) == "" {
+			return fmt.Errorf("the English label cannot be empty")
+		}
+		if _, err := s.cfg.Exec(`UPDATE categories SET menu_en=? WHERE id=?`, *en, id); err != nil {
+			return err
+		}
+	}
+	if public != nil {
+		if _, err := s.cfg.Exec(`UPDATE categories SET public=? WHERE id=?`, b2i(*public), id); err != nil {
+			return err
+		}
+	}
+	s.notifyTargets()
+	return nil
+}
+
+// DeleteCategory refuses to remove a category that still holds targets,
+// rather than silently orphaning their measurements.
+func (s *Store) DeleteCategory(id int64) error {
+	var n int
+	if err := s.cfg.QueryRow(`SELECT COUNT(*) FROM targets WHERE category_id=?`, id).Scan(&n); err != nil {
+		return err
+	}
+	if n > 0 {
+		return fmt.Errorf("this category still holds %d target(s): move or delete them first", n)
+	}
+	res, err := s.cfg.Exec(`DELETE FROM categories WHERE id=?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("category not found")
+	}
+	s.notifyTargets()
+	return nil
 }
 
 func (s *Store) CreateCategory(slug, fr, en string, public bool) (int64, error) {
@@ -409,11 +466,55 @@ func (s *Store) CreateCategory(slug, fr, en string, public bool) (int64, error) 
 	return res.LastInsertId()
 }
 
+// migrateTCPPorts moves the port of older TCP targets ("host:443") into
+// its own column, so that host and port can be edited separately.
+func migrateTCPPorts(db *sql.DB) {
+	rows, err := db.Query(`SELECT id,host FROM targets WHERE proto='tcp' AND port=0`)
+	if err != nil {
+		return
+	}
+	type fix struct {
+		id         int64
+		host, port string
+	}
+	var list []fix
+	for rows.Next() {
+		var f fix
+		var h string
+		if rows.Scan(&f.id, &h) == nil {
+			if host, port, err := net.SplitHostPort(h); err == nil {
+				f.host, f.port = host, port
+				list = append(list, f)
+			}
+		}
+	}
+	rows.Close()
+	for _, f := range list {
+		n, err := strconv.Atoi(f.port)
+		if err != nil || n < 1 || n > 65535 {
+			continue
+		}
+		db.Exec(`UPDATE targets SET host=?, port=? WHERE id=?`, f.host, n, f.id)
+	}
+}
+
 // checkTarget validates the settings shared by creation and update. The
 // burst must fit in the interval, with a margin.
 func checkTarget(t *Target) error {
 	if t.Family != 0 && t.Family != 4 && t.Family != 6 {
 		return fmt.Errorf("family must be 0 (auto), 4 or 6")
+	}
+	if t.Proto == "tcp" {
+		if t.Port == 0 {
+			if _, p, err := net.SplitHostPort(t.Host); err == nil {
+				if n, err := strconv.Atoi(p); err == nil {
+					t.Port = n
+				}
+			}
+		}
+		if t.Port < 1 || t.Port > 65535 {
+			return fmt.Errorf("a TCP target needs a port between 1 and 65535")
+		}
 	}
 	if t.Packets < 3 || t.Packets > 50 {
 		return fmt.Errorf("packets must be between 3 and 50")
@@ -435,10 +536,10 @@ func (s *Store) UpdateTarget(t *Target) error {
 		return err
 	}
 	_, err := s.cfg.Exec(
-		`UPDATE targets SET title=?,host=?,proto=?,family=?,interval_s=?,packets=?,
-		        spacing_ms=?,timeout_ms=?,public=?,enabled=? WHERE id=?`,
-		t.Title, t.Host, t.Proto, t.Family, t.IntervalS, t.Packets,
-		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), t.ID)
+		`UPDATE targets SET category_id=?,title=?,host=?,proto=?,family=?,interval_s=?,packets=?,
+		        spacing_ms=?,timeout_ms=?,public=?,enabled=?,port=? WHERE id=?`,
+		t.CategoryID, t.Title, t.Host, t.Proto, t.Family, t.IntervalS, t.Packets,
+		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), t.Port, t.ID)
 	s.notifyTargets()
 	return err
 }
@@ -449,10 +550,10 @@ func (s *Store) CreateTarget(t *Target) (int64, error) {
 	}
 	res, err := s.cfg.Exec(
 		`INSERT INTO targets(category_id,slug,title,host,proto,interval_s,packets,
-		                     spacing_ms,timeout_ms,public,enabled,created_at,family)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		                     spacing_ms,timeout_ms,public,enabled,created_at,family,port)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.CategoryID, t.Slug, t.Title, t.Host, t.Proto, t.IntervalS, t.Packets,
-		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), time.Now().Unix(), t.Family)
+		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), time.Now().Unix(), t.Family, t.Port)
 	if err != nil {
 		return 0, err
 	}

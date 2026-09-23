@@ -228,6 +228,10 @@ func (c *TargetCache) refresh() {
 // embedded probe.
 func (c *TargetCache) TraceRequests() []int64 { return traceRequests.Pop() }
 
+// CheckRequests hands over targets to measure right away: a target just
+// created should not wait a whole interval for its first result.
+func (c *TargetCache) CheckRequests() []int64 { return checkRequests.Pop() }
+
 func (c *TargetCache) Targets() []*Target {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

@@ -841,6 +841,7 @@ func (a *API) UpdateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/admin/update/apply", a.need(RoleMaster, a.updApply))
 	mux.HandleFunc("POST /api/v1/admin/update/rollback", a.need(RoleMaster, a.updRollback))
 	mux.HandleFunc("POST /api/v1/admin/update/check", a.need(RoleMaster, a.updCheck))
+	mux.HandleFunc("POST /api/v1/admin/update/install-latest", a.need(RoleMaster, a.updInstallLatest))
 	mux.HandleFunc("PUT /api/v1/admin/update/settings", a.need(RoleMaster, a.updSettings))
 }
 
@@ -975,4 +976,34 @@ func (a *API) updSettings(w http.ResponseWriter, r *http.Request, u *User) {
 	}
 	a.store.Audit(u, clientIP(r), "update_settings", "update", "")
 	a.updState(w, r, u)
+}
+
+// updInstallLatest downloads and installs the latest published release
+// immediately, without waiting for the next automatic check.
+func (a *API) updInstallLatest(w http.ResponseWriter, r *http.Request, u *User) {
+	up := a.upd
+	if !up.Managed() {
+		writeErr(w, 400, up.reason)
+		return
+	}
+	up.mu.Lock()
+	rel := up.available
+	up.mu.Unlock()
+	if rel == nil || !rel.Newer {
+		var err error
+		if rel, err = up.Check(); err != nil {
+			writeErr(w, 502, err.Error())
+			return
+		}
+	}
+	if !rel.Newer {
+		writeErr(w, 400, "already on the latest published version")
+		return
+	}
+	if err := up.fetchAndApply(rel, u.Email); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	a.store.Audit(u, clientIP(r), "update_install_latest", "version", rel.Version)
+	writeJSON(w, map[string]any{"ok": true, "version": rel.Version, "restarting": true})
 }

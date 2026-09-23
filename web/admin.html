@@ -216,7 +216,7 @@ function shell(){
   }
   $("#app").innerHTML=`
     <div class="top"><div class="topin">
-      <div class="brand"><span class="logo">S</span><span>smokestack</span>
+      <div class="brand" id="home" style="cursor:pointer" title="Dashboard"><span class="logo">S</span><span>smokestack</span>
         <span class="badge b-n" style="margin-left:6px">admin</span></div>
       <span class="spacer"></span>
       <div class="who"><div>${esc(ME.display_name)}</div>
@@ -225,12 +225,13 @@ function shell(){
       <button class="btn s" id="out">Sign out</button>
     </div></div>
     <div class="shell"><nav class="side">${nav}</nav><main id="main"></main></div>`;
+  $("#home").onclick=()=>{EDIT=null;go("dash");};
   $("#out").onclick=async()=>{await api("POST","/api/v1/auth/logout");location.reload();};
   $("#pw").onclick=changePassword;
   document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>{VIEW=b.dataset.v;shell();});
   render();
 }
-function go(view){VIEW=view;shell();}
+function go(view){VIEW=view;if(view!=="targets") EDIT=null;shell();}
 
 async function changePassword(){
   const cur=prompt("Current password");if(!cur) return;
@@ -299,32 +300,42 @@ async function viewDash(m){
 
 /* ----------------------------------------------------------- targets */
 const FAMILY={0:"auto",4:"IPv4",6:"IPv6"};
+const COMMON_PORTS=[[443,"HTTPS"],[80,"HTTP"],[22,"SSH"],[53,"DNS"],[25,"SMTP"],[587,"SMTP submission"],[179,"BGP"],[3306,"MySQL"],[5432,"PostgreSQL"],[8080,"HTTP alt"]];
+let EDIT=null;   // target being edited, null when creating
+
 async function viewTargets(m){
+  const editing=!!EDIT;
   m.innerHTML=`<h2>Targets and categories</h2>
     <p class="lead">A burst must fit in its interval: packets × spacing + timeout must stay
       below 75 % of the interval. At 30 s, use 10 packets spaced by 200 ms.
       A <strong>private</strong> target is measured like any other but never appears on the public
       site: useful for tests, for internal addresses, or for a customer link.</p>
-    <div class="card"><h3>New category</h3><div class="body">
-      <div class="row2">
+
+    <div class="card"><h3>Categories</h3><div class="body">
+      <div id="clist">Loading…</div>
+      <div class="row2" style="margin-top:14px">
         <div class="field"><label>Short identifier</label><input id="cslug" placeholder="transit"></div>
         <div class="field"><label>English label</label><input id="cen" placeholder="Transit providers"></div>
         <div class="field"><label>French label</label><input id="cfr" placeholder="Transitaires"></div>
       </div>
       <button class="btn p" id="addcat">Create the category</button>
     </div></div>
-    <div class="card"><h3>New target</h3><div class="body">
+
+    <div class="card" ${editing?'style="border-color:#93c5fd"':''}><h3>${editing?`Edit “${esc(EDIT.title)}”`:"New target"}</h3><div class="body">
       <div class="row2">
         <div class="field"><label>Category</label><select id="tcat"></select></div>
         <div class="field"><label>Title</label><input id="ttitle" placeholder="Cogent Paris"></div>
         <div class="field"><label>Host or IP address</label><input id="thost" placeholder="192.0.2.1 or 2001:db8::1"></div>
+        <div class="field"><label>Protocol</label><select id="tproto">
+          <option value="icmp">ICMP</option><option value="tcp">TCP connect</option></select></div>
+        <div class="field" id="portfield" hidden><label>TCP port</label>
+          <input id="tport" list="ports" placeholder="443">
+          <datalist id="ports">${COMMON_PORTS.map(([p,l])=>`<option value="${p}">${p} — ${l}</option>`).join("")}</datalist></div>
         <div class="field"><label>Address family</label><select id="tfam">
           <option value="0">Auto (literal address, else IPv4 then IPv6)</option>
           <option value="4">IPv4 only</option><option value="6">IPv6 only</option></select></div>
-        <div class="field"><label>Protocol</label><select id="tproto">
-          <option value="icmp">ICMP</option><option value="tcp">TCP connect (host:port)</option></select></div>
         <div class="field"><label>Interval</label><select id="tiv">
-          <option value="30">30 s</option><option value="60" selected>60 s</option>
+          <option value="30">30 s</option><option value="60">60 s</option>
           <option value="300">5 min</option><option value="600">10 min</option></select></div>
         <div class="field"><label>Packets</label><input id="tpk" type="number" value="20"></div>
         <div class="field"><label>Spacing (ms)</label><input id="tsp" type="number" value="500"></div>
@@ -333,17 +344,42 @@ async function viewTargets(m){
       <label class="chk"><input type="checkbox" id="tpub" checked><span>Public target
         <small>Shown on the public site. Uncheck for a private target: it is measured and visible
           here, but never appears on the public pages or in the public API.</small></span></label>
-      <button class="btn p" id="addtgt">Create the target</button>
-      <div class="note" style="margin:12px 0 0">To monitor a destination over both IPv4 and IPv6,
-        create two targets with the same host, one per family.</div>
+      <div class="acts">
+        <button class="btn p" id="savetgt">${editing?"Save changes":"Create the target"}</button>
+        ${editing?`<button class="btn" id="canceledit">Cancel</button>`:""}
+      </div>
+      ${editing?"":`<div class="note" style="margin:12px 0 0">A new target is measured right away:
+        its first result appears within a few seconds, without waiting a whole interval.</div>`}
     </div></div>
-    <div class="card"><h3>Active targets</h3><div class="body" id="tlist">Loading…</div></div>`;
+    <div class="card"><h3>Targets</h3><div class="body" id="tlist">Loading…</div></div>`;
 
   const tree=await api("GET","/api/v1/tree").catch(()=>[]);
   $("#tcat").innerHTML=(tree||[]).map(c=>
     `<option value="${c.id}">${esc(c.menu_en||c.menu_fr)}</option>`).join("")||
     `<option value="">— create a category first —</option>`;
 
+  /* categories */
+  $("#clist").innerHTML=(tree&&tree.length)?`<table><thead><tr><th>English label</th><th>French label</th>
+    <th>Targets</th><th></th></tr></thead><tbody>`+tree.map(c=>`<tr>
+      <td><input data-cen="${c.id}" value="${esc(c.menu_en||"")}" style="padding:4px 8px"></td>
+      <td><input data-cfr="${c.id}" value="${esc(c.menu_fr||"")}" style="padding:4px 8px"></td>
+      <td>${(c.targets||[]).length}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="btn s" data-csave="${c.id}">Rename</button>
+        <button class="btn d s" data-cdel="${c.id}">Delete</button></td></tr>`).join("")+
+    `</tbody></table>`:`<div class="empty">No category yet.</div>`;
+  document.querySelectorAll("[data-csave]").forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.csave;
+    try{await api("PATCH","/api/v1/admin/categories/"+id,
+      {menu_en:document.querySelector(`[data-cen="${id}"]`).value,
+       menu_fr:document.querySelector(`[data-cfr="${id}"]`).value});
+      toast("Category renamed");render();}catch(e){toast(e.message,true);}
+  });
+  document.querySelectorAll("[data-cdel]").forEach(b=>b.onclick=async()=>{
+    if(!confirm("Delete this category?")) return;
+    try{await api("DELETE","/api/v1/admin/categories/"+b.dataset.cdel);toast("Category deleted");render();}
+    catch(e){toast(e.message,true);}
+  });
   $("#addcat").onclick=async()=>{
     try{
       await api("POST","/api/v1/admin/categories",
@@ -351,31 +387,48 @@ async function viewTargets(m){
       toast("Category created");render();
     }catch(e){toast(e.message,true);}
   };
-  $("#addtgt").onclick=async()=>{
+
+  /* target form */
+  const syncProto=()=>{$("#portfield").hidden=$("#tproto").value!=="tcp";};
+  $("#tproto").onchange=syncProto;
+  if(EDIT){
+    $("#tcat").value=EDIT.category_id; $("#ttitle").value=EDIT.title; $("#thost").value=EDIT.host;
+    $("#tproto").value=EDIT.proto; $("#tport").value=EDIT.port||""; $("#tfam").value=String(EDIT.family||0);
+    $("#tiv").value=String(EDIT.interval_s); $("#tpk").value=EDIT.packets; $("#tsp").value=EDIT.spacing_ms;
+    $("#tto").value=EDIT.timeout_ms; $("#tpub").checked=!!EDIT.public;
+    $("#canceledit").onclick=()=>{EDIT=null;render();};
+  } else { $("#tiv").value="60"; }
+  syncProto();
+  $("#savetgt").onclick=async()=>{
+    const body={category_id:parseInt($("#tcat").value,10),title:$("#ttitle").value,
+      host:$("#thost").value,family:parseInt($("#tfam").value,10),proto:$("#tproto").value,
+      port:$("#tproto").value==="tcp"?parseInt($("#tport").value||"0",10):0,
+      interval_s:parseInt($("#tiv").value,10),packets:parseInt($("#tpk").value,10),
+      spacing_ms:parseInt($("#tsp").value,10),timeout_ms:parseInt($("#tto").value,10),
+      public:$("#tpub").checked};
     try{
-      await api("POST","/api/v1/admin/targets",{
-        category_id:parseInt($("#tcat").value,10),title:$("#ttitle").value,
-        host:$("#thost").value,family:parseInt($("#tfam").value,10),proto:$("#tproto").value,
-        interval_s:parseInt($("#tiv").value,10),packets:parseInt($("#tpk").value,10),
-        spacing_ms:parseInt($("#tsp").value,10),timeout_ms:parseInt($("#tto").value,10),
-        public:$("#tpub").checked,enabled:true});
-      toast("Target created");render();
+      if(EDIT){ await api("PATCH","/api/v1/admin/targets/"+EDIT.id,body); EDIT=null; toast("Target saved"); }
+      else { await api("POST","/api/v1/admin/targets",Object.assign(body,{enabled:true})); toast("Target created, first measurement under way"); }
+      render();
     }catch(e){toast(e.message,true);}
   };
 
+  /* target list */
   try{
     const [list,feat]=await Promise.all([api("GET","/api/v1/admin/targets"),api("GET","/api/v1/admin/featured").catch(()=>[])]);
     const F=new Set(feat||[]);
     $("#tlist").innerHTML=(list&&list.length)?`<table>
       <thead><tr><th title="Critical target: always shown at the top of the home page">★</th><th>Title</th><th>Host</th>
-      <th>Family</th><th>Proto</th><th>Interval</th><th>Visibility</th><th></th></tr></thead><tbody>`+
+      <th>Family</th><th>Check</th><th>Interval</th><th>Visibility</th><th></th></tr></thead><tbody>`+
       list.map(t=>`<tr><td><button class="btn s" data-star="${t.id}" title="Critical target"
           style="color:${F.has(t.id)?"#d97706":"var(--ink3)"}">${F.has(t.id)?"★":"☆"}</button></td>
-        <td>${esc(t.title)}</td><td class="mono">${esc(t.host)}</td>
+        <td>${esc(t.title)}</td><td class="mono">${esc(t.host)}${t.port?":"+t.port:""}</td>
         <td>${FAMILY[t.family||0]}</td><td>${esc(t.proto)}</td><td>${t.interval_s} s</td>
         <td><button class="btn s" data-vis="${t.id}" data-pub="${t.public?1:0}"
           title="Click to switch">${t.public?'<span class="badge b-ok">public</span>':'<span class="badge b-warn">private</span>'}</button></td>
         <td style="text-align:right;white-space:nowrap">
+          <button class="btn s" data-edit="${t.id}">Edit</button>
+          <button class="btn s" data-now="${t.id}" title="Measure right away">Check now</button>
           <button class="btn s" data-trace="${t.id}">Traceroute</button>
           <button class="btn d s" data-del="${t.id}">Delete</button></td>
         </tr>`).join("")+`</tbody></table>`:`<div class="empty">No target yet.</div>`;
@@ -387,6 +440,14 @@ async function viewTargets(m){
     document.querySelectorAll("[data-star]").forEach(b=>b.onclick=async()=>{
       const id=+b.dataset.star;F.has(id)?F.delete(id):F.add(id);
       try{await api("PUT","/api/v1/admin/featured",[...F]);toast("Critical targets updated");render();}
+      catch(e){toast(e.message,true);}
+    });
+    document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{
+      EDIT=list.find(t=>t.id==b.dataset.edit); render(); window.scrollTo({top:0,behavior:"smooth"});
+    });
+    document.querySelectorAll("[data-now]").forEach(b=>b.onclick=async()=>{
+      try{await api("POST","/api/v1/admin/targets/"+b.dataset.now+"/check");
+        toast("Measurement requested: the result appears within a few seconds");}
       catch(e){toast(e.message,true);}
     });
     document.querySelectorAll("[data-trace]").forEach(b=>b.onclick=()=>{TR_TARGET=+b.dataset.trace;go("traces");});
@@ -875,7 +936,8 @@ async function viewUpdate(m){
     <label class="chk"><input type="checkbox" id="aa" ${S.auto_apply?"checked":""} ${S.managed?"":"disabled"}><span>Install new versions automatically
       <small>Only packages signed by a trusted key are installed automatically, without exception.</small></span></label>
     <div class="acts"><button class="btn s" id="chk">Check now</button></div>
-    <div style="margin-top:10px;font-size:13px">${av?(av.newer?`<span class="badge b-warn">version ${esc(av.version)} available</span>`
+    <div style="margin-top:10px;font-size:13px">${av?(av.newer?`<span class="badge b-warn">version ${esc(av.version)} available</span>
+      <button class="btn p s" id="inow" style="margin-left:8px">Install it now</button>`
       :`<span class="badge b-ok">up to date</span> latest published version: ${esc(av.version)}`):""}</div>
   </div></div>`;
   const ACT={update:"update",rollback:"rollback",auto_rollback:'<span class="badge b-crit">automatic rollback</span>'};
@@ -921,6 +983,11 @@ async function viewUpdate(m){
     catch(e){toast(e.message,true);}};
   $("#ac").onchange=save;$("#aa").onchange=save;$("#ch").onchange=save;
   $("#chk").onclick=async()=>{try{await api("POST","/api/v1/admin/update/check");render();}catch(e){toast(e.message,true);}};
+  if($("#inow")) $("#inow").onclick=async()=>{
+    if(!confirm("Install version "+av.version+" now? The service restarts (a few seconds).")) return;
+    try{await api("POST","/api/v1/admin/update/install-latest");waitRestart(av.version);}
+    catch(e){toast(e.message,true);}
+  };
 }
 async function waitRestart(ver){
   $("#u").innerHTML=`<div class="card"><div class="body"><strong>Restarting on version ${esc(ver)}…</strong>

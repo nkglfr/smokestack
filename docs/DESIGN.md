@@ -267,6 +267,10 @@ or a category changes, so switching a target takes effect immediately.
 `/api/v1/overview?all=1` returns private targets to an authenticated caller;
 the cached public payload never contains them.
 
+**TCP targets.** The host and the port are stored separately, so a target can
+move between ICMP and TCP without rewriting its address; older targets stored
+as `host:port` are migrated on start.
+
 **Safeguard on targets.** Creating a target is refused if its burst does not
 fit in its interval: `packets × spacing_ms + timeout_ms` must stay below 75 %
 of `interval_s`. At 30 seconds this means 10 packets spaced by 200 ms, rather
@@ -527,9 +531,10 @@ actions up to date. Details in [DEPLOY.md § 6](../DEPLOY.md#6-publishing-your-o
 - Latency-triggered traceroutes are covered by unit tests; loss-triggered ones
   were tested on a multi-hop lab network.
 - The raw archive is gzip NDJSON, not yet Parquet.
-- A target can be updated through the API (`PATCH /api/v1/admin/targets/{id}`)
-  and its visibility switched from the back-office; a full edit form in the
-  back-office is still missing.
+- On the home page, a faulty target that is also a critical one appears in
+  three places (faults, critical targets, its category); de-duplicating that
+  view is still to do.
+- There is no catalogue of ready-made targets to enable in one click.
 - Remote probes on another machine: the ingestion endpoint exists and is
   protected, but issuing probe tokens is not available yet. Same-host
   isolation is complete.

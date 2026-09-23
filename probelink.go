@@ -50,6 +50,7 @@ type probeTargetsResp struct {
 	ProbeID       int64     `json:"probe_id"`
 	Targets       []*Target `json:"targets"`
 	TraceRequests []int64   `json:"trace_requests"`
+	CheckRequests []int64   `json:"check_requests"`
 }
 
 func probeSocketPath(cfg Config) string {
@@ -71,7 +72,7 @@ func ServeProbeSocket(path string, cache *TargetCache, writer *Writer, probeID i
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /probe/v1/targets", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, probeTargetsResp{Version: Version, ProbeID: probeID, Targets: cache.Targets(),
-			TraceRequests: traceRequests.Pop()})
+			TraceRequests: traceRequests.Pop(), CheckRequests: checkRequests.Pop()})
 	})
 	mux.HandleFunc("POST /probe/v1/traceroutes", func(w http.ResponseWriter, r *http.Request) {
 		var list []*Traceroute
@@ -123,6 +124,7 @@ type remoteLink struct {
 	dropped int64
 	traces  []*Traceroute
 	treqs   []int64
+	creqs   []int64
 }
 
 func newRemoteLink(sock string) *remoteLink {
@@ -169,6 +171,14 @@ func (l *remoteLink) TraceRequests() []int64 {
 	return out
 }
 
+func (l *remoteLink) CheckRequests() []int64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	out := l.creqs
+	l.creqs = nil
+	return out
+}
+
 func (l *remoteLink) fetchTargets() error {
 	resp, err := l.client.Get("http://probe/probe/v1/targets")
 	if err != nil {
@@ -185,6 +195,7 @@ func (l *remoteLink) fetchTargets() error {
 	l.mu.Lock()
 	l.targets, l.version, l.probeID = tr.Targets, tr.Version, tr.ProbeID
 	l.treqs = append(l.treqs, tr.TraceRequests...)
+	l.creqs = append(l.creqs, tr.CheckRequests...)
 	l.mu.Unlock()
 	return nil
 }

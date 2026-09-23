@@ -193,8 +193,13 @@ limiting applies to the proxy's address.
 1. Open `https://latency.example.net/admin` and log in with the printed credentials.
 2. **Publisher page**: organisation, **AS number**, NOC contact, default language.
    The AS number enables the *Host network* page (RIPEstat + PeeringDB).
-3. **Targets and categories**: add your targets; the star marks *critical
-   targets*, always shown at the top of the home page. Each target is **public**
+3. **Targets and categories**: create your categories (they can be renamed
+   or deleted later), then add your targets. A new target is measured right
+   away, so its first result appears within seconds instead of waiting a whole
+   interval; **Check now** repeats that on demand. **Edit** changes anything
+   later, including the category and the protocol. For a TCP target, the host
+   and the port are separate fields, with the usual ports suggested. The star
+   marks *critical targets*, always shown at the top of the home page. Each target is **public**
    or **private**: a private target is measured like any other and visible in
    the back-office, but never appears on the public pages nor in the public API
    — useful for a test, an internal address or a customer link. Switch it at any
@@ -290,6 +295,10 @@ Each automatic update appears in the history of *Instance → Updates* with
 **Requirements.** An installation made with `install.sh` (the log says
 `in-place updates unavailable` otherwise), and outbound HTTPS to `github.com`
 and `release-assets.githubusercontent.com` (where GitHub serves release files).
+
+**Installing without waiting.** When a version is available, *Instance →
+Updates* shows an **Install it now** button next to it: it downloads, verifies
+and installs it immediately, rather than waiting for the next check.
 
 **Following it.**
 

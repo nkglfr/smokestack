@@ -50,7 +50,10 @@ func (a *API) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/admin/targets", a.auth(a.targetsPost))
 	mux.HandleFunc("PATCH /api/v1/admin/targets/{id}", a.auth(a.targetsPatch))
 	mux.HandleFunc("DELETE /api/v1/admin/targets/{id}", a.auth(a.targetsDelete))
+	mux.HandleFunc("POST /api/v1/admin/targets/{id}/check", a.auth(a.targetsCheck))
 	mux.HandleFunc("POST /api/v1/admin/categories", a.auth(a.categoriesPost))
+	mux.HandleFunc("PATCH /api/v1/admin/categories/{id}", a.auth(a.categoriesPatch))
+	mux.HandleFunc("DELETE /api/v1/admin/categories/{id}", a.auth(a.categoriesDelete))
 	mux.HandleFunc("POST /api/v1/admin/events", a.auth(a.eventsPost))
 }
 
@@ -513,6 +516,8 @@ func (a *API) targetsPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	t.ID = id
+	// Measure it right away instead of waiting a whole interval.
+	checkRequests.Push(id)
 	writeJSON(w, t)
 }
 
@@ -623,4 +628,55 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	go ovCache.build()
 	writeJSON(w, t)
+}
+
+// targetsCheck asks the probe to measure a target right away.
+func (a *API) targetsCheck(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, 400, "invalid identifier")
+		return
+	}
+	if _, err := a.store.TargetByID(id); err != nil {
+		writeErr(w, 404, "target not found")
+		return
+	}
+	checkRequests.Push(id)
+	writeJSON(w, map[string]any{"queued": true})
+}
+
+func (a *API) categoriesPatch(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, 400, "invalid identifier")
+		return
+	}
+	var in struct {
+		MenuFR, MenuEN *string
+		Public         *bool
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	if err := a.store.UpdateCategory(id, in.MenuFR, in.MenuEN, in.Public); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	go ovCache.build()
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+func (a *API) categoriesDelete(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, 400, "invalid identifier")
+		return
+	}
+	if err := a.store.DeleteCategory(id); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	go ovCache.build()
+	w.WriteHeader(http.StatusNoContent)
 }

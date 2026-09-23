@@ -114,7 +114,12 @@ type traceQueue struct {
 	ids []int64
 }
 
-var traceRequests traceQueue
+var (
+	traceRequests traceQueue
+	// checkRequests holds targets waiting for an immediate measurement
+	// (just created, or "check now" from the back-office).
+	checkRequests traceQueue
+)
 
 func (q *traceQueue) Push(id int64) {
 	q.mu.Lock()
