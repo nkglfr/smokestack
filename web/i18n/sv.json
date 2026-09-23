@@ -11,7 +11,8 @@
     "about": "Om",
     "pairing": "Parkoppling",
     "admin": "Administration",
-    "language": "Språk"
+    "language": "Språk",
+    "menu": "Meny"
   },
   "common": {
     "loading": "Laddar…",
@@ -223,5 +224,19 @@
     "ref_col": "Frisk väg",
     "changed": "Markerade rader: en router från den senaste friska vägen har ändrats eller svarar inte längre.",
     "none": "Ingen traceroute för detta mål ännu."
+  },
+  "contact": {
+    "title": "Skriv till operatören",
+    "lead": "Ditt meddelande når teamet som driver denna instans. Din adress används bara för att svara dig.",
+    "name": "Namn",
+    "email": "Din e-postadress",
+    "subject": "Ämne",
+    "subject_ph": "Valfritt",
+    "message": "Meddelande",
+    "send": "Skicka",
+    "sending": "Skickar…",
+    "sent": "Meddelandet är skickat. Tack, vi återkommer.",
+    "error": "Meddelandet kunde inte skickas:",
+    "privacy": "Namn, adress och meddelande sparas på denna instans tills operatören raderar dem. Inget annat samlas in."
   }
 }

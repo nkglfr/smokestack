@@ -206,6 +206,28 @@ limiting applies to the proxy's address.
 ## 4. First steps
 
 1. Open `https://latency.example.net/admin` and log in with the printed credentials.
+### Being reachable without publishing your address
+
+By default the public *About* page carries a **contact form** instead of your
+email address: an address on a public page ends up on spam lists. Messages
+land in *Accounts → Messages* in the back-office, with the sender's address so
+you can reply from your own mail client — the instance never sends mail on a
+visitor's behalf.
+
+In *Instance → Publisher page*:
+
+| Setting | Effect |
+|---|---|
+| Contact form on the public page | on by default; off removes the form |
+| Also publish the general email address | off by default |
+| Notify this address of new messages | never public; used only if SMTP is configured in *NOC alerting*. Without SMTP, messages simply wait in the back-office |
+
+Safeguards on the form: at most 3 messages per hour and per IP address, a
+hidden field that bots fill and humans do not, a message between 10 and 4,000
+characters, addresses validated, and any attempt at inserting mail headers
+refused. Name, address and message stay on your instance until you delete
+them, which the form states to the visitor.
+
 2. **Publisher page**: organisation, **AS number**, NOC contact, default language.
    The AS number enables the *Host network* page (RIPEstat + PeeringDB).
 3. **Targets and categories**: create your categories (they can be renamed
@@ -443,6 +465,7 @@ the following release.
 | Lost the admin password | `sudo smokestack user add -email other@example.net` creates another master |
 | Health check | `curl -s http://127.0.0.1:8080/healthz` → `ok` |
 | A target appears several times on the home page | It is faulty *and* critical *and* in a category. The **Show each target once** box at the top of the faults section keeps it in one place; the choice is remembered in the visitor's browser |
+| Nobody can reach you | The *About* page shows the contact form, not your address. Check it is enabled in *Publisher page*, and look in *Messages* |
 | Interface unreachable from a browser | By default it listens on `127.0.0.1` only: set `SMOKESTACK_LISTEN_IP=0.0.0.0` in `/etc/smokestack/smokestack.env` and restart, or use a reverse proxy. Check the firewall too. |
 | `listen address: ... invalid` in the log | Fix the value named in the message in `/etc/smokestack/smokestack.env` |
 | `curl: (22) ... 404` when downloading `install.sh` | No release has been published yet: install from source (section 2) or publish one (section 6) |

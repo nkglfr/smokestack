@@ -273,6 +273,16 @@ or a category changes, so switching a target takes effect immediately.
 `/api/v1/overview?all=1` returns private targets to an authenticated caller;
 the cached public payload never contains them.
 
+**Contact without an address.** The public pages carry a form rather than the
+operator's email address. Messages are stored on the instance and read in the
+back-office; the operator replies from their own mail client, so the instance
+never sends mail for a visitor and cannot be turned into a relay. A
+notification goes to a private address only if SMTP is already configured for
+the NOC alerts. The address that receives it, and the general address when the
+operator keeps it private, are stripped from the public `/api/v1/site`
+response. The form is rate-limited per IP, has a hidden field for bots, and
+refuses anything looking like mail-header injection.
+
 **One target, one place.** A faulty target is usually also a critical one
 and belongs to a category, so it would appear three times on the home page.
 By default it is shown once, in the faults section, and left out of the other

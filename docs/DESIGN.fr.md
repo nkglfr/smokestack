@@ -60,6 +60,15 @@ contrôle accepte le jeton d'API ou une session du back-office. La liste des
 cibles publiques est mise en cache et reconstruite à chaque modification, donc
 une bascule prend effet immédiatement.
 
+## Contact sans adresse publique
+
+Les pages publiques portent un formulaire plutôt que l'adresse de
+l'opérateur. Les messages sont stockés sur l'instance et lus dans le
+back-office ; l'opérateur répond depuis son propre client de messagerie, donc
+l'instance n'envoie jamais de courriel pour un visiteur et ne peut pas servir
+de relais. L'adresse de notification, et l'adresse générale si l'opérateur la
+garde privée, sont retirées de la réponse publique de `/api/v1/site`.
+
 ## Conteneurs
 
 Le service détecte qu'il tourne dans un conteneur, et s'il partage la pile

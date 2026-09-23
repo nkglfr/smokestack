@@ -11,7 +11,8 @@
     "about": "Impressum",
     "pairing": "Kopplung",
     "admin": "Verwaltung",
-    "language": "Sprache"
+    "language": "Sprache",
+    "menu": "Menü"
   },
   "common": {
     "loading": "Wird geladen…",
@@ -223,5 +224,19 @@
     "ref_col": "Gesunder Pfad",
     "changed": "Hervorgehobene Zeilen: Ein Router des letzten gesunden Pfads hat sich geändert oder antwortet nicht mehr.",
     "none": "Noch kein Traceroute für dieses Ziel."
+  },
+  "contact": {
+    "title": "An den Betreiber schreiben",
+    "lead": "Ihre Nachricht erreicht das Team, das diese Instanz betreibt. Ihre Adresse dient nur der Antwort.",
+    "name": "Name",
+    "email": "Ihre E-Mail-Adresse",
+    "subject": "Betreff",
+    "subject_ph": "Optional",
+    "message": "Nachricht",
+    "send": "Senden",
+    "sending": "Wird gesendet…",
+    "sent": "Nachricht gesendet. Vielen Dank, wir melden uns.",
+    "error": "Die Nachricht konnte nicht gesendet werden:",
+    "privacy": "Name, Adresse und Nachricht werden auf dieser Instanz gespeichert, bis der Betreiber sie löscht. Sonst wird nichts erfasst."
   }
 }

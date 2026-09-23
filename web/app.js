@@ -25,12 +25,16 @@
       `<option value="${esc(l.code)}" ${l.code === I18N.lang ? "selected" : ""}>${esc(l.name)}` +
       (l.coverage < 1 ? ` · ${Math.round(l.coverage * 100)} %` : "") + `</option>`).join("");
     const asn = SITE.asn ? `<span class="chip mono hide-m">${esc(SITE.asn)}</span>` : "";
+    // Under 760 px the links no longer fit: they move into a menu opened
+    // by the button, instead of being cut off and unreachable.
     return `<div class="wrap"><div class="hdr-in">
       <a class="brand" href="/"><span class="mark"></span><span>${esc(SITE.title || "smokestack")}</span></a>
-      <nav class="nav">${nav}</nav>
+      <nav class="nav nav-wide">${nav}</nav>
       <span class="spacer"></span>${asn}
       <select class="lang-select" id="langSel" aria-label="${esc(t("nav.language"))}">${opts}</select>
-    </div></div>`;
+      <button class="burger" id="burger" aria-label="${esc(t("nav.menu"))}" aria-expanded="false" aria-controls="navm">
+        <span></span><span></span><span></span></button>
+    </div><nav class="nav-menu" id="navm" hidden>${nav}</nav></div>`;
   }
 
   // Le lien vers le site officiel vient de la constante OfficialURL du
@@ -83,6 +87,18 @@
 
   function paintChrome(active) {
     document.getElementById("hdr").innerHTML = header(active);
+    const burger = document.getElementById("burger"), menu = document.getElementById("navm");
+    if (burger && menu) {
+      const setOpen = open => {
+        menu.hidden = !open;
+        burger.setAttribute("aria-expanded", open ? "true" : "false");
+        burger.classList.toggle("open", open);
+      };
+      burger.onclick = e => { e.stopPropagation(); setOpen(menu.hidden); };
+      document.addEventListener("click", e => { if (!menu.hidden && !menu.contains(e.target)) setOpen(false); });
+      document.addEventListener("keydown", e => { if (e.key === "Escape") setOpen(false); });
+      addEventListener("resize", () => { if (innerWidth > 760) setOpen(false); });
+    }
     document.getElementById("ftr").innerHTML = footer();
     document.getElementById("langSel").onchange = e => I18N.set(e.target.value);
   }

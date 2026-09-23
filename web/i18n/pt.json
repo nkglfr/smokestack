@@ -11,7 +11,8 @@
     "about": "Sobre",
     "pairing": "Emparelhamento",
     "admin": "Administração",
-    "language": "Idioma"
+    "language": "Idioma",
+    "menu": "Menu"
   },
   "common": {
     "loading": "A carregar…",
@@ -223,5 +224,19 @@
     "ref_col": "Caminho saudável",
     "changed": "Linhas destacadas: um router do último caminho saudável mudou ou deixou de responder.",
     "none": "Ainda não há traceroutes para este destino."
+  },
+  "contact": {
+    "title": "Escrever ao operador",
+    "lead": "A sua mensagem chega à equipa que gere esta instância. O seu endereço serve apenas para lhe responder.",
+    "name": "Nome",
+    "email": "O seu endereço de e-mail",
+    "subject": "Assunto",
+    "subject_ph": "Opcional",
+    "message": "Mensagem",
+    "send": "Enviar",
+    "sending": "A enviar…",
+    "sent": "Mensagem enviada. Obrigado, entraremos em contacto.",
+    "error": "Não foi possível enviar a mensagem:",
+    "privacy": "Nome, endereço e mensagem ficam guardados nesta instância até o operador os apagar. Não é recolhido mais nada."
   }
 }

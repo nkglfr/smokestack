@@ -21,6 +21,7 @@
     </div></div>
     <div class="card"><div class="card-b">
       <div class="section-h"><h2 data-i18n="about.contact"></h2></div><div id="contact"></div>
+      <div id="cform"></div>
       <p class="faint" style="font-size:12.5px;margin:12px 0 0" data-i18n="about.noc_note"></p>
     </div></div>
   </div>
@@ -55,6 +56,7 @@ function render(s) {
     ["about.timezone", esc(s.timezone)],
     ["about.peeringdb", s.peeringdb ? `<a href="${esc(s.peeringdb)}" rel="noopener">↗</a>` : ""]
   ]);
+  contactForm(s);
   document.getElementById("contact").innerHTML = kv([
     ["about.email", s.email ? `<a href="mailto:${esc(s.email)}">${esc(s.email)}</a>` : ""],
     ["about.noc", s.noc_email ? `<a href="mailto:${esc(s.noc_email)}">${esc(s.noc_email)}</a>` : ""],
@@ -64,6 +66,58 @@ function render(s) {
   document.getElementById("legalSec").hidden = !s.legal;
 }
 App.boot("about", render);
+
+/* ------------------------------------------------------- contact form */
+/* The operator's address stays private: visitors write from here and the
+   message lands in the back-office. */
+function contactForm(site) {
+  const box = document.getElementById("cform");
+  if (!box || !site.contact_form) return;
+  const t = I18N.t, esc = App.esc;
+  box.innerHTML = `<div class="card" style="margin-top:14px"><div class="card-b">
+    <h3 style="margin:0 0 4px;font-size:15px">${esc(t("contact.title"))}</h3>
+    <p class="faint" style="font-size:13px;margin:0 0 14px">${esc(t("contact.lead"))}</p>
+    <div class="cf-grid">
+      <label>${esc(t("contact.name"))}<input id="cf-name" maxlength="120" autocomplete="name"></label>
+      <label>${esc(t("contact.email"))}<input id="cf-mail" type="email" maxlength="200" autocomplete="email"></label>
+    </div>
+    <label class="cf-full">${esc(t("contact.subject"))}
+      <input id="cf-sub" maxlength="200" placeholder="${esc(t("contact.subject_ph"))}"></label>
+    <label class="cf-full">${esc(t("contact.message"))}
+      <textarea id="cf-msg" rows="5" maxlength="4000"></textarea></label>
+    <input id="cf-web" class="cf-hp" tabindex="-1" autocomplete="off" aria-hidden="true">
+    <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn-primary" id="cf-send">${esc(t("contact.send"))}</button>
+      <span id="cf-state" class="faint" style="font-size:13px"></span>
+    </div>
+    <p class="faint" style="font-size:11.5px;margin:12px 0 0">${esc(t("contact.privacy"))}</p>
+  </div></div>`;
+  const state = document.getElementById("cf-state"), btn = document.getElementById("cf-send");
+  btn.onclick = async () => {
+    btn.disabled = true; state.style.color = ""; state.textContent = t("contact.sending");
+    try {
+      const r = await fetch("/api/v1/contact", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: document.getElementById("cf-name").value,
+          email: document.getElementById("cf-mail").value,
+          subject: document.getElementById("cf-sub").value,
+          message: document.getElementById("cf-msg").value,
+          website: document.getElementById("cf-web").value,
+          lang: I18N.lang
+        })
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || r.status);
+      box.innerHTML = `<div class="card" style="margin-top:14px"><div class="card-b">
+        <span class="badge b-ok">${esc(t("contact.sent"))}</span></div></div>`;
+    } catch (e) {
+      state.style.color = "var(--crit)";
+      state.textContent = t("contact.error") + " " + e.message;
+      btn.disabled = false;
+    }
+  };
+}
 </script>
 </body>
 </html>

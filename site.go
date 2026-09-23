@@ -11,20 +11,25 @@ import (
 // exploitant identifiable n'inspire pas confiance et ne sert a rien
 // quand un confrere veut signaler une anomalie.
 type Site struct {
-	Title       string `json:"title"`
-	Org         string `json:"org"`
-	ASN         string `json:"asn"`
-	Owner       string `json:"owner"`
-	Email       string `json:"email"`
-	NOCEmail    string `json:"noc_email"`
-	NOCPhone    string `json:"noc_phone"`
-	URL         string `json:"url"`
-	PeeringDB   string `json:"peeringdb"`
-	Location    string `json:"location"`
-	Description string `json:"description"`
-	Legal       string `json:"legal"`
-	Timezone    string `json:"timezone"`
-	DefaultLang string `json:"default_lang"`
+	Title    string `json:"title"`
+	Org      string `json:"org"`
+	ASN      string `json:"asn"`
+	Owner    string `json:"owner"`
+	Email    string `json:"email"`
+	NOCEmail string `json:"noc_email"`
+	NOCPhone string `json:"noc_phone"`
+	// Contact: the form keeps the operator's address private. ShowEmail
+	// puts it back on the public page for those who prefer that.
+	ContactForm   bool   `json:"contact_form"`
+	ShowEmail     bool   `json:"show_email"`
+	ContactNotify string `json:"contact_notify,omitempty"` // never public
+	URL           string `json:"url"`
+	PeeringDB     string `json:"peeringdb"`
+	Location      string `json:"location"`
+	Description   string `json:"description"`
+	Legal         string `json:"legal"`
+	Timezone      string `json:"timezone"`
+	DefaultLang   string `json:"default_lang"`
 	// PublicTraceroutes shows anomaly traceroutes on public pages. Off by
 	// default: hops reveal the inside of the operator's network.
 	PublicTraceroutes bool `json:"public_traceroutes"`
@@ -36,6 +41,7 @@ func defaultSite() Site {
 		Org:         "",
 		Owner:       "",
 		Email:       "",
+		ContactForm: true,
 		Timezone:    "Europe/Paris",
 		DefaultLang: "en",
 		Description: "Latency and packet loss measured from our network to public destinations.",
@@ -63,10 +69,16 @@ func (s *Store) SetSite(v Site) error {
 
 func (a *API) siteGet(w http.ResponseWriter, r *http.Request) {
 	site := a.store.Site()
-	// Le telephone du NOC ne sort qu'aux instances federees
-	// authentifiees, jamais sur la page publique.
-	if r.Header.Get("Authorization") == "" {
+	// The NOC phone only goes to authenticated federated instances, never
+	// to the public page. Same for anything about the contact form: the
+	// address that receives the notifications, and the public address when
+	// the operator chose to keep it private behind the form.
+	if !a.authenticated(r) {
 		site.NOCPhone = ""
+		site.ContactNotify = ""
+		if !site.ShowEmail {
+			site.Email = ""
+		}
 	}
 	w.Header().Set("Cache-Control", "public, max-age=600")
 	writeJSON(w, site)

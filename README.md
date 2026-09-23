@@ -161,7 +161,9 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 **Back-office**
 - Accounts with four roles (viewer, editor, admin, master) and an audit log
 - Targets and categories, ICMP or TCP, IPv4 or IPv6, every 30 s, 1, 5 or 10 min
-- A catalogue of ready-made targets to enable in one click
+- A catalogue of ready-made targets to enable in one click, plus per-country
+  suggestions in the [wiki](https://github.com/nkglfr/smokestack/wiki)
+- A contact form on the public pages, so your address stays off spam lists
 - Public or **private** targets: private ones are measured and visible in the back-office only
 - Traceroutes: automatic on anomalies, daily reference path, on demand, with path comparison
 - Storage settings (local quota or S3), publisher page, languages

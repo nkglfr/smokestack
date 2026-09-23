@@ -69,6 +69,25 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
                border: 1px solid var(--line); border-radius: 9px; padding: 5px 8px; cursor: pointer; }
 @media (max-width: 900px) { .hide-m { display: none !important; } }
 
+/* --- menu mobile --- */
+.burger { display: none; flex-direction: column; justify-content: center; gap: 4px; width: 38px; height: 34px;
+          padding: 0 8px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg-soft); cursor: pointer; }
+.burger span { display: block; height: 2px; border-radius: 2px; background: var(--ink-2); transition: transform .15s, opacity .15s; }
+.burger.open span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+.burger.open span:nth-child(2) { opacity: 0; }
+.burger.open span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+.nav-menu { display: none; flex-direction: column; gap: 2px; padding: 8px 0 12px; border-top: 1px solid var(--line-2); }
+.nav-menu a { padding: 11px 12px; border-radius: 9px; color: var(--ink); font-size: 15px; }
+.nav-menu a[aria-current="page"] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 550; }
+@media (max-width: 760px) {
+  .nav-wide { display: none; }
+  .burger { display: flex; }
+  .nav-menu:not([hidden]) { display: flex; }
+  .hdr-in { gap: 10px; }
+  .brand span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 42vw; }
+  .lang-select { max-width: 34vw; }
+}
+
 /* --- en-tête de page --- */
 .page-head { padding: clamp(26px, 4vw, 48px) 0 clamp(18px, 2.5vw, 28px); }
 .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
@@ -145,3 +164,16 @@ table.t td { padding: 10px; border-top: 1px solid var(--line-2); vertical-align:
 .fbottom { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; border-top: 1px solid var(--line);
            padding: 16px 0 28px; font-size: 12px; color: var(--ink-3); }
 .fbottom a { color: var(--ink-2); font-weight: 550; }
+
+/* --- formulaire de contact --- */
+.cf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 620px) { .cf-grid { grid-template-columns: 1fr; } }
+.cf-grid label, .cf-full { display: block; font-size: 12.5px; color: var(--ink-2); margin-top: 10px; }
+.cf-grid input, .cf-full input, .cf-full textarea { display: block; width: 100%; margin-top: 4px; font: inherit;
+  font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+  border-radius: 9px; padding: 8px 10px; box-sizing: border-box; }
+.cf-full textarea { resize: vertical; }
+.cf-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.btn-primary { font: inherit; font-size: 13.5px; font-weight: 550; color: #fff; background: var(--accent);
+  border: 0; border-radius: 9px; padding: 9px 16px; cursor: pointer; }
+.btn-primary:disabled { opacity: .6; cursor: default; }

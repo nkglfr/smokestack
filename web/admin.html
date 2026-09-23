@@ -112,7 +112,7 @@
 
 <script>
 const $=s=>document.querySelector(s);
-let CSRF="", ME=null, VIEW="dash", PENDING=0, LANGS=[], TR_TARGET=null;
+let CSRF="", ME=null, VIEW="dash", PENDING=0, UNREAD=0, LANGS=[], TR_TARGET=null;
 
 function toast(msg,err){
   const t=$("#toast");t.textContent=msg;t.className="toast"+(err?" err":"");
@@ -191,6 +191,7 @@ const NAV=[
   {id:"dash",   label:"Dashboard", min:1},
   {id:"targets",label:"Targets and categories", min:2},
   {id:"traces", label:"Traceroutes", min:1},
+  {id:"messages",label:"Messages", min:3, mbadge:true},
   {grp:"Federation"},
   {id:"fed",    label:"Peers and pairing", min:3, badge:true},
   {id:"notify", label:"NOC alerting", min:3},
@@ -212,7 +213,8 @@ function shell(){
     if(n.grp){nav+=`<div class="grp">${n.grp}</div>`;continue;}
     if(LVL[ME.role]<n.min) continue;
     nav+=`<button data-v="${n.id}" aria-current="${VIEW===n.id}">${n.label}`+
-      (n.badge&&PENDING?`<span class="n">${PENDING}</span>`:"")+`</button>`;
+      (n.badge&&PENDING?`<span class="n">${PENDING}</span>`:"")+
+      (n.mbadge&&UNREAD?`<span class="n">${UNREAD}</span>`:"")+`</button>`;
   }
   $("#app").innerHTML=`
     <div class="top"><div class="topin">
@@ -245,7 +247,7 @@ async function changePassword(){
 
 function render(){
   const m=$("#main");
-  const views={dash:viewDash,targets:viewTargets,traces:viewTraces,fed:viewFed,notify:viewNotify,
+  const views={dash:viewDash,targets:viewTargets,traces:viewTraces,messages:viewMessages,fed:viewFed,notify:viewNotify,
     storage:viewStorage,site:viewSite,net:viewNet,langs:viewLangs,update:viewUpdate,users:viewUsers,audit:viewAudit};
   return (views[VIEW]||viewDash)(m);
 }
@@ -368,7 +370,10 @@ async function viewTargets(m){
     <div class="card"><h3>Ready-made targets</h3><div class="body">
       <p style="margin:0 0 10px;font-size:13px;color:var(--ink2)">Well-known public services, in their
         IPv4 and IPv6 form, with gentle settings (10 packets spaced by 200 ms). Tick what you want;
-        their category is created if needed, and they are measured right away.</p>
+        their category is created if needed, and they are measured right away.<br>
+        Looking for targets in a given country or region? The
+        <a href="https://github.com/nkglfr/smokestack/wiki" target="_blank" rel="noreferrer">project wiki</a>
+        keeps pages of suggested targets per country, kept up to date by users.</p>
       <div id="sug">Loading…</div></div></div>
     <div class="card"><h3>Targets</h3><div class="body" id="tlist">Loading…</div></div>`;
 
@@ -747,6 +752,7 @@ async function viewNotify(m){
       <button class="btn p" id="save">Save</button>
     </div></div>
     <div class="card"><h3>Federated incidents</h3><div class="body" id="inc">Loading…</div></div>`;
+    document.querySelectorAll("[data-goto]").forEach(a=>a.onclick=e=>{e.preventDefault();go(a.dataset.goto);});
     $("#save").onclick=async()=>{
       try{
         await api("PUT","/api/v1/admin/fed/notify",{
@@ -810,6 +816,7 @@ async function viewStorage(m){
         <tr><td>Pending uploads</td><td>${r.pending_uploads||0}</td></tr>
         <tr><td>Projected retention</td><td>${r.projected_days?r.projected_days.toFixed(0)+" days":"—"}</td></tr>
       </tbody></table></div></div>`;
+    document.querySelectorAll("[data-goto]").forEach(a=>a.onclick=e=>{e.preventDefault();go(a.dataset.goto);});
     $("#save").onclick=async()=>{
       try{
         await api("PUT","/api/v1/admin/storage",{
@@ -848,13 +855,25 @@ async function viewSite(m){
       <div class="field"><label>Default language of public pages</label>
         <select id="default_lang">${(LANGS||[]).map(l=>`<option value="${esc(l.code)}" ${l.code===(s.default_lang||"en")?"selected":""}>${esc(l.name)}</option>`).join("")}</select></div>
     </div></div></div>
-    <div class="card"><h3>Contacts</h3><div class="body"><div class="row2">
+    <div class="card"><h3>Contacts</h3><div class="body">
+      <label class="chk"><input type="checkbox" id="contact_form" ${s.contact_form?"checked":""}>
+        <span>Contact form on the public “About” page<small>Visitors write from the site and the message
+          lands in <a href="#" data-goto="messages">Messages</a>. Your address stays private.</small></span></label>
+      <label class="chk"><input type="checkbox" id="show_email" ${s.show_email?"checked":""}>
+        <span>Also publish the general email address<small>Off by default: an address on a public page
+          ends up on spam lists. Leave it off to be reachable only through the form.</small></span></label>
+      <div class="row2">
+      ${f("contact_notify","Notify this address of new messages",s.contact_notify,"noc@example.net")}
       ${f("email","General email",s.email)}
       ${f("noc_email","NOC email",s.noc_email)}
       ${f("noc_phone","NOC phone",s.noc_phone)}
       ${f("url","Website",s.url)}
       ${f("peeringdb","PeeringDB record",s.peeringdb)}
-    </div></div></div>
+      </div>
+      <div class="note" style="margin:10px 0 0">The notification address is never shown publicly. It is
+        used only if SMTP is configured in <a href="#" data-goto="notify">NOC alerting</a>; otherwise
+        messages simply wait in Messages.</div>
+    </div></div>
     <div class="card"><h3>Public traceroutes</h3><div class="body">
       <label class="chk"><input type="checkbox" id="public_traceroutes" ${s.public_traceroutes?"checked":""}>
         <span>Show traceroutes on the public target pages<small>Off by default: hops reveal the inside
@@ -866,11 +885,15 @@ async function viewSite(m){
       <div class="field"><label>Legal notice</label><textarea id="legal" rows="2">${esc(s.legal||"")}</textarea></div>
       <button class="btn p" id="save">Save</button>
     </div></div>`;
+    document.querySelectorAll("[data-goto]").forEach(a=>a.onclick=e=>{e.preventDefault();go(a.dataset.goto);});
     $("#save").onclick=async()=>{
       const ids=["title","org","asn","owner","location","timezone","email",
-                 "noc_email","noc_phone","url","peeringdb","description","legal","default_lang"];
+                 "noc_email","noc_phone","url","peeringdb","description","legal","default_lang",
+                 "contact_notify"];
       const body={};ids.forEach(k=>body[k]=$("#"+k).value);
       body.public_traceroutes=$("#public_traceroutes").checked;
+      body.contact_form=$("#contact_form").checked;
+      body.show_email=$("#show_email").checked;
       try{await api("PUT","/api/v1/admin/site",body);toast("Saved");}
       catch(e){toast(e.message,true);}
     };
@@ -1042,6 +1065,41 @@ async function waitRestart(ver){
 }
 
 /* ------------------------------------------------------------- users */
+async function viewMessages(m){
+  m.innerHTML=`<h2>Messages</h2>
+    <p class="lead">Messages sent from the contact form of the public “About” page. Your address is
+      never published there. Reply from your own mail client: the instance never writes on your behalf.
+      Enable or disable the form in <a href="#" data-goto="site">Publisher page</a>.</p>
+    <div class="card"><div class="body" id="mlist">Loading…</div></div>`;
+  document.querySelectorAll("[data-goto]").forEach(a=>a.onclick=e=>{e.preventDefault();go(a.dataset.goto);});
+  try{
+    const d=await api("GET","/api/v1/admin/messages");
+    const L=d.messages||[]; UNREAD=d.unread||0;
+    $("#mlist").innerHTML=L.length?L.map(x=>`<div class="msg" style="padding:12px 0;border-top:1px solid var(--line2)">
+      <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+        ${x.read?"":'<span class="badge b-warn">new</span>'}
+        <strong>${esc(x.name)}</strong>
+        <a href="mailto:${esc(x.email)}?subject=${encodeURIComponent("Re: "+(x.subject||"your message"))}">${esc(x.email)}</a>
+        <span class="faint" style="font-size:12px">${new Date(x.ts*1000).toLocaleString()}</span>
+        ${x.subject?`<span>— ${esc(x.subject)}</span>`:""}
+        <span class="faint mono" style="font-size:11.5px;margin-left:auto">${esc(x.ip)}</span>
+      </div>
+      <div style="white-space:pre-wrap;margin:8px 0 6px;font-size:13.5px">${esc(x.body)}</div>
+      <div class="acts">
+        <a class="btn s" href="mailto:${esc(x.email)}?subject=${encodeURIComponent("Re: "+(x.subject||"your message"))}">Reply</a>
+        <button class="btn s" data-read="${x.id}" data-v="${x.read?0:1}">${x.read?"Mark unread":"Mark read"}</button>
+        <button class="btn d s" data-mdel="${x.id}">Delete</button></div></div>`).join(""):
+      `<div class="empty">No message yet.</div>`;
+    document.querySelectorAll("[data-read]").forEach(b=>b.onclick=async()=>{
+      try{await api("PATCH","/api/v1/admin/messages/"+b.dataset.read,{read:b.dataset.v==="1"});render();}
+      catch(e){toast(e.message,true);}});
+    document.querySelectorAll("[data-mdel]").forEach(b=>b.onclick=async()=>{
+      if(!confirm("Delete this message?")) return;
+      try{await api("DELETE","/api/v1/admin/messages/"+b.dataset.mdel);toast("Message deleted");render();}
+      catch(e){toast(e.message,true);}});
+  }catch(e){$("#mlist").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
+}
+
 async function viewUsers(m){
   m.innerHTML=`<h2>Users</h2>
     <p class="lead"><strong>master</strong> manages accounts and everything else.
@@ -1126,6 +1184,7 @@ async function viewAudit(m){
     if(st.user){CSRF=st.csrf;ME=st.user;
       try{const p=await api("GET","/api/v1/admin/fed/pairing");
         PENDING=(p||[]).filter(x=>x.direction==="in"&&x.state==="pending").length;}catch(e){}
+  try{const d=await api("GET","/api/v1/admin/messages");UNREAD=d.unread||0;}catch(e){}
       return shell();}
     gateLogin();
   }catch(e){

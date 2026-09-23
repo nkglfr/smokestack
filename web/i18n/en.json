@@ -11,7 +11,8 @@
     "about": "About",
     "pairing": "Pairing",
     "admin": "Administration",
-    "language": "Language"
+    "language": "Language",
+    "menu": "Menu"
   },
   "common": {
     "loading": "Loading…",
@@ -223,5 +224,19 @@
     "ref_col": "Healthy path",
     "changed": "Highlighted rows: a router of the last healthy path is different or no longer answers.",
     "none": "No traceroute yet for this target."
+  },
+  "contact": {
+    "title": "Write to the operator",
+    "lead": "Your message reaches the team running this instance. Your address is used only to reply to you.",
+    "name": "Name",
+    "email": "Your email address",
+    "subject": "Subject",
+    "subject_ph": "Optional",
+    "message": "Message",
+    "send": "Send",
+    "sending": "Sending…",
+    "sent": "Message sent. Thank you, we will get back to you.",
+    "error": "The message could not be sent:",
+    "privacy": "Name, address and message are stored on this instance until the operator deletes them. Nothing else is collected."
   }
 }

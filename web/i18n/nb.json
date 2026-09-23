@@ -11,7 +11,8 @@
     "about": "Om",
     "pairing": "Sammenkobling",
     "admin": "Administrasjon",
-    "language": "Språk"
+    "language": "Språk",
+    "menu": "Meny"
   },
   "common": {
     "loading": "Laster…",
@@ -223,5 +224,19 @@
     "ref_col": "Frisk sti",
     "changed": "Uthevede rader: en ruter fra den siste friske stien er endret eller svarer ikke lenger.",
     "none": "Ingen traceroute for dette målet ennå."
+  },
+  "contact": {
+    "title": "Skriv til operatøren",
+    "lead": "Meldingen din når teamet som drifter denne instansen. Adressen din brukes bare til å svare deg.",
+    "name": "Navn",
+    "email": "E-postadressen din",
+    "subject": "Emne",
+    "subject_ph": "Valgfritt",
+    "message": "Melding",
+    "send": "Send",
+    "sending": "Sender…",
+    "sent": "Meldingen er sendt. Takk, vi kommer tilbake til deg.",
+    "error": "Meldingen kunne ikke sendes:",
+    "privacy": "Navn, adresse og melding lagres på denne instansen til operatøren sletter dem. Ingenting annet samles inn."
   }
 }

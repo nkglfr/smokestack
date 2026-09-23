@@ -11,7 +11,8 @@
     "about": "Over",
     "pairing": "Koppelen",
     "admin": "Beheer",
-    "language": "Taal"
+    "language": "Taal",
+    "menu": "Menu"
   },
   "common": {
     "loading": "Laden…",
@@ -223,5 +224,19 @@
     "ref_col": "Gezond pad",
     "changed": "Gemarkeerde regels: een router van het laatste gezonde pad is veranderd of antwoordt niet meer.",
     "none": "Nog geen traceroute voor dit doel."
+  },
+  "contact": {
+    "title": "Schrijf naar de operator",
+    "lead": "Uw bericht komt aan bij het team dat deze instantie beheert. Uw adres wordt alleen gebruikt om te antwoorden.",
+    "name": "Naam",
+    "email": "Uw e-mailadres",
+    "subject": "Onderwerp",
+    "subject_ph": "Optioneel",
+    "message": "Bericht",
+    "send": "Versturen",
+    "sending": "Versturen…",
+    "sent": "Bericht verstuurd. Bedankt, we nemen contact op.",
+    "error": "Het bericht kon niet worden verstuurd:",
+    "privacy": "Naam, adres en bericht blijven op deze instantie staan tot de operator ze verwijdert. Er wordt niets anders verzameld."
   }
 }

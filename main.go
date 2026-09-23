@@ -285,6 +285,7 @@ func main() {
 	api.OverviewRoutes(mux)
 	api.TracerouteRoutes(mux)
 	api.SuggestedRoutes(mux)
+	api.ContactRoutes(mux)
 
 	page := func(name string) http.HandlerFunc {
 		return withAssetCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

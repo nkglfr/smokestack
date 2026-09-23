@@ -11,7 +11,8 @@
     "about": "Om",
     "pairing": "Parring",
     "admin": "Administration",
-    "language": "Sprog"
+    "language": "Sprog",
+    "menu": "Menu"
   },
   "common": {
     "loading": "Indlæser…",
@@ -223,5 +224,19 @@
     "ref_col": "Sund sti",
     "changed": "Fremhævede rækker: en router fra den seneste sunde sti er ændret eller svarer ikke længere.",
     "none": "Endnu ingen traceroute for dette mål."
+  },
+  "contact": {
+    "title": "Skriv til operatøren",
+    "lead": "Din besked når det team, der driver denne instans. Din adresse bruges kun til at svare dig.",
+    "name": "Navn",
+    "email": "Din e-mailadresse",
+    "subject": "Emne",
+    "subject_ph": "Valgfrit",
+    "message": "Besked",
+    "send": "Send",
+    "sending": "Sender…",
+    "sent": "Beskeden er sendt. Tak, vi vender tilbage.",
+    "error": "Beskeden kunne ikke sendes:",
+    "privacy": "Navn, adresse og besked gemmes på denne instans, indtil operatøren sletter dem. Der indsamles intet andet."
   }
 }

@@ -11,7 +11,8 @@
     "about": "Informazioni",
     "pairing": "Abbinamento",
     "admin": "Amministrazione",
-    "language": "Lingua"
+    "language": "Lingua",
+    "menu": "Menu"
   },
   "common": {
     "loading": "Caricamento…",
@@ -223,5 +224,19 @@
     "ref_col": "Percorso sano",
     "changed": "Righe evidenziate: un router dell'ultimo percorso sano è cambiato o non risponde più.",
     "none": "Ancora nessun traceroute per questa destinazione."
+  },
+  "contact": {
+    "title": "Scrivere all'operatore",
+    "lead": "Il messaggio arriva al team che gestisce questa istanza. Il suo indirizzo serve solo per risponderle.",
+    "name": "Nome",
+    "email": "Il suo indirizzo email",
+    "subject": "Oggetto",
+    "subject_ph": "Facoltativo",
+    "message": "Messaggio",
+    "send": "Invia",
+    "sending": "Invio…",
+    "sent": "Messaggio inviato. Grazie, le risponderemo.",
+    "error": "Impossibile inviare il messaggio:",
+    "privacy": "Nome, indirizzo e messaggio sono conservati su questa istanza finché l'operatore non li elimina. Nient'altro viene raccolto."
   }
 }

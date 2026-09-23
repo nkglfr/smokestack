@@ -11,7 +11,8 @@
     "about": "À propos",
     "pairing": "Appairage",
     "admin": "Administration",
-    "language": "Langue"
+    "language": "Langue",
+    "menu": "Menu"
   },
   "common": {
     "loading": "Chargement…",
@@ -223,5 +224,19 @@
     "ref_col": "Chemin sain",
     "changed": "Lignes surlignées : un routeur du dernier chemin sain a changé ou ne répond plus.",
     "none": "Aucun traceroute pour cette cible pour l'instant."
+  },
+  "contact": {
+    "title": "Écrire à l'opérateur",
+    "lead": "Votre message parvient à l'équipe qui exploite cette instance. Votre adresse ne sert qu'à vous répondre.",
+    "name": "Nom",
+    "email": "Votre adresse électronique",
+    "subject": "Objet",
+    "subject_ph": "Facultatif",
+    "message": "Message",
+    "send": "Envoyer",
+    "sending": "Envoi…",
+    "sent": "Message envoyé. Merci, nous vous répondrons.",
+    "error": "Le message n'a pas pu être envoyé :",
+    "privacy": "Nom, adresse et message sont conservés sur cette instance jusqu'à leur suppression par l'opérateur. Rien d'autre n'est collecté."
   }
 }

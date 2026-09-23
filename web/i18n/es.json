@@ -11,7 +11,8 @@
     "about": "Acerca de",
     "pairing": "Emparejamiento",
     "admin": "Administración",
-    "language": "Idioma"
+    "language": "Idioma",
+    "menu": "Menú"
   },
   "common": {
     "loading": "Cargando…",
@@ -223,5 +224,19 @@
     "ref_col": "Ruta sana",
     "changed": "Filas resaltadas: un router de la última ruta sana ha cambiado o ya no responde.",
     "none": "Aún no hay traceroutes para este destino."
+  },
+  "contact": {
+    "title": "Escribir al operador",
+    "lead": "Su mensaje llega al equipo que gestiona esta instancia. Su dirección solo se usa para responderle.",
+    "name": "Nombre",
+    "email": "Su dirección de correo",
+    "subject": "Asunto",
+    "subject_ph": "Opcional",
+    "message": "Mensaje",
+    "send": "Enviar",
+    "sending": "Enviando…",
+    "sent": "Mensaje enviado. Gracias, le responderemos.",
+    "error": "No se pudo enviar el mensaje:",
+    "privacy": "Nombre, dirección y mensaje se guardan en esta instancia hasta que el operador los borre. No se recoge nada más."
   }
 }
