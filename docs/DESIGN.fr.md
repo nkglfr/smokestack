@@ -60,6 +60,15 @@ contrôle accepte le jeton d'API ou une session du back-office. La liste des
 cibles publiques est mise en cache et reconstruite à chaque modification, donc
 une bascule prend effet immédiatement.
 
+## Conteneurs
+
+Le service détecte qu'il tourne dans un conteneur, et s'il partage la pile
+réseau de l'hôte. Il le signale dans le journal et dans le back-office plutôt
+que de le laisser à la documentation : derrière le pont Docker, une partie de
+ce qui est mesuré est la traduction d'adresses. L'image existe pour les tests
+et pour ceux qui n'utilisent que des conteneurs ; l'installation classique
+reste la référence.
+
 ## Adresse d'écoute
 
 Par défaut, le service web écoute sur `127.0.0.1:8080`, derrière un reverse

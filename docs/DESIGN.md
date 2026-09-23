@@ -51,6 +51,12 @@ They talk over a Unix socket (`probe.sock` in the data directory, mode 0660).
 A single-process mode (`"probe": {"mode": "embedded"}`) exists for very small
 servers.
 
+**Containers.** The service detects that it runs in a container, and whether
+it shares the host's network stack. It reports it in the log and in the
+back-office rather than leaving that in the documentation only: a bridged
+container measures Docker's NAT as much as the network. The image exists for
+tests and container-only setups; the native install stays the reference.
+
 **Listen address.** The web service listens on `127.0.0.1:8080` by default,
 behind a reverse proxy. The IP and the port are separate settings, so IPv6
 addresses need no brackets: flags `-ip` and `-port`, then the environment

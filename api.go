@@ -46,6 +46,9 @@ func (a *API) Routes(mux *http.ServeMux) {
 
 	mux.HandleFunc("GET /api/v1/admin/storage", a.auth(a.storageGet))
 	mux.HandleFunc("PUT /api/v1/admin/storage", a.auth(a.storagePut))
+	mux.HandleFunc("GET /api/v1/admin/container", a.auth(func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, containerStatus())
+	}))
 	mux.HandleFunc("GET /api/v1/admin/targets", a.auth(a.targetsGet))
 	mux.HandleFunc("POST /api/v1/admin/targets", a.auth(a.targetsPost))
 	mux.HandleFunc("PATCH /api/v1/admin/targets/{id}", a.auth(a.targetsPatch))

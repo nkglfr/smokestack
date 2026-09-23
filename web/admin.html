@@ -268,8 +268,22 @@ function probeCard(p){
       <tr><td>Home page overview</td><td>built in ${p.overview_build_ms} ms, every 30 s</td></tr>
     </tbody></table></div></div>`;
 }
+// A container without the host network distorts every measurement: say so
+// where the operator will see it.
+async function containerBanner(){
+  try{
+    const c=await api("GET","/api/v1/admin/container");
+    if(!c.in_container) return "";
+    const bad=!c.host_network;
+    return `<div class="note" style="margin:0 0 16px;border-left:3px solid ${bad?"var(--crit)":"var(--warn)"}">
+      <strong>${bad?"Container without the host network":"Running in a container"}</strong><br>${esc(c.message)}.
+      ${bad?`Until then, the numbers below include Docker's NAT and are not comparable with a native install.`:""}
+      <a href="https://github.com/nkglfr/smokestack/blob/main/DEPLOY.md#12-container-image-tests" target="_blank" rel="noreferrer">Details</a></div>`;
+  }catch(e){return "";}
+}
+
 async function viewDash(m){
-  m.innerHTML=`<h2>Dashboard</h2>
+  m.innerHTML=(await containerBanner())+`<h2>Dashboard</h2>
     <p class="lead">State of the instance, the probe and the storage.</p>
     <div id="d">Loading…</div>`;
   try{

@@ -323,6 +323,9 @@ func main() {
 	}
 
 	go func() {
+		if c := containerStatus(); c.InContainer {
+			log.Printf("container: %s", c.Message)
+		}
 		log.Printf("listening on http://%s (%s)", cfg.Listen, listenNote(cfg.Listen))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("http: %v", err)

@@ -55,6 +55,21 @@ same commands without `sudo` (a minimal Debian does not even ship it).
 It takes under a minute. At the end, the installer prints the back-office
 address and the **master account password — write it down, it is shown once**.
 
+**Or with Docker**, for a test or if you already run everything in
+containers:
+
+```sh
+docker run -d --network host --cap-add NET_RAW \
+  -v smokestack-data:/var/lib/smokestack ghcr.io/nkglfr/smokestack:latest
+```
+
+> ⚠️ **A container measures less accurately than a native install.** The host
+> network is mandatory, macOS and Windows measure Docker's virtual machine
+> rather than your network, and signed in-place updates with automatic
+> rollback do not apply. Read [section 12](#12-container-image-tests) before
+> publishing measurements from a container. Started in a container, the
+> service says so in its log and in the back-office.
+
 No release published yet, or you prefer to build it yourself? Install from
 source (Go 1.22 or later):
 
@@ -570,3 +585,16 @@ docker run -d --name smokestack \
 
 The image is built and self-tested on every commit by the CI, and published
 for amd64 and arm64 with each release.
+
+### The service warns by itself
+
+Started in a container, smokestack detects it and says what is degraded,
+in its log at start and as a banner on the back-office dashboard:
+
+- **with the host network**: measurements are as accurate as a native
+  install, but in-place signed updates and the automatic rollback are gone;
+- **behind Docker's bridge**: every probe crosses a NAT, traceroutes start
+  with the bridge, IPv6 is usually off — restart with `--network host`.
+
+So an operator who inherits an instance can tell how it is running without
+digging through the deployment.

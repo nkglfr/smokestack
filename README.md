@@ -31,6 +31,25 @@ sudo sh install.sh --admin-email noc@example.net
 Already root, as on a fresh Debian? Drop `sudo`. The installer prints the
 back-office address and the admin password.
 
+**Or with Docker**, for a test:
+
+```sh
+docker run -d --network host --cap-add NET_RAW \
+  -v smokestack-data:/var/lib/smokestack ghcr.io/nkglfr/smokestack:latest
+```
+
+> ⚠️ **Containers measure less accurately.** `--network host` is mandatory:
+> on Docker's default bridge every probe crosses a NAT that adds latency and
+> jitter, traceroutes start with a bogus first hop, and IPv6 is off. On macOS
+> and Windows, Docker runs in a virtual machine, so you measure that machine
+> and not your network. A container also has no signed in-place updates and
+> no automatic rollback. For published measurements, prefer the native
+> install above. Full disclaimer:
+> [DEPLOY.md § 12](DEPLOY.md#12-container-image-tests).
+>
+> The service detects this by itself: started in a container, it says so in
+> its log, and the back-office shows a banner naming what is degraded.
+
 On a first installation the installer asks for the listen IP and port;
 press Enter to keep the default, `127.0.0.1:8080` (this machine only). You can
 also give them directly, for instance `--ip 0.0.0.0 --port 80` to reach the
@@ -210,12 +229,8 @@ from the back-office.
 
 ## Containers
 
-An image is published with each release:
-
-```sh
-docker run -d --network host --cap-add NET_RAW \
-  -v smokestack-data:/var/lib/smokestack ghcr.io/nkglfr/smokestack:latest
-```
+The image is published with each release on `ghcr.io/nkglfr/smokestack`, for
+amd64 and arm64, and the command is in [Quick start](#quick-start) above.
 
 The **host network is mandatory**: on Docker's default bridge, the probes
 cross a NAT that adds latency and jitter, traceroutes start with a bogus hop,
