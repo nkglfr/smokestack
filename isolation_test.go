@@ -99,3 +99,22 @@ func TestGzipMiddleware(t *testing.T) {
 		t.Error("double compression")
 	}
 }
+
+// Each pass starts with a small random delay, so that targets landing on
+// the same second do not all fire at once.
+func TestPassJitter(t *testing.T) {
+	seen := map[int64]bool{}
+	for i := 0; i < 400; i++ {
+		d := passJitter(60)
+		if d < 0 || d > 950*time.Millisecond {
+			t.Fatalf("jitter out of range: %v", d)
+		}
+		seen[d.Milliseconds()/100] = true
+	}
+	if len(seen) < 8 {
+		t.Errorf("jitter poorly spread: %d buckets out of 10", len(seen))
+	}
+	if d := passJitter(5); d > 500*time.Millisecond { // a tenth of the interval
+		t.Errorf("short interval: %v", d)
+	}
+}

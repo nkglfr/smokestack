@@ -74,7 +74,10 @@ Background loops in the web service:
 
 In the probe, the scheduler ticks every second. Start offsets are derived
 from a hash of the target id, so passes are spread over the interval instead
-of all starting on the same second, and stay stable across restarts.
+of all starting on the same second, and stay stable across restarts. Each
+pass also starts with a small random delay (up to 950 ms, at most a tenth of
+the interval), so that targets landing on the same second do not fire at
+once and passes never stay in lockstep with another system's timer.
 
 ## 3. Mergeable percentiles
 

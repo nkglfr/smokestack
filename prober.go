@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"log"
+	"math/rand"
 	"net"
 	"sort"
 	"strings"
@@ -423,6 +424,20 @@ func (p *Prober) runTCP(t *Target) ([]float64, string) {
 	return out, ""
 }
 
+// passJitter is a small random delay added to each pass, so that targets
+// landing on the same second do not all start at once, and so that passes
+// never stay in lockstep with another system's timer.
+func passJitter(interval int64) time.Duration {
+	max := interval * 100 // a tenth of the interval, in milliseconds
+	if max > 950 {
+		max = 950
+	}
+	if max <= 0 {
+		return 0
+	}
+	return time.Duration(rand.Int63n(max)) * time.Millisecond
+}
+
 // offsetFor spreads pass start times over the interval so that targets do
 // not all start on the same second. Derived from the id: stable across
 // restarts.
@@ -468,6 +483,7 @@ func (p *Prober) Schedule(stop <-chan struct{}) {
 					continue
 				}
 				go func(tt *Target) {
+					time.Sleep(passJitter(tt.IntervalS))
 					defer func() {
 						p.mu.Lock()
 						delete(p.running, tt.ID)

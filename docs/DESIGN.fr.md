@@ -43,6 +43,14 @@ make build
 # le code d'installation du compte master s'affiche dans le journal
 ```
 
+## Étalement des mesures
+
+Le décalage de départ de chaque cible vient d'un hachage de son identifiant :
+les passes sont réparties dans l'intervalle et restent stables d'un
+redémarrage à l'autre. Chaque passe part en plus avec un délai aléatoire
+(jusqu'à 950 ms, au plus un dixième de l'intervalle), pour que deux cibles
+tombant sur la même seconde ne partent pas ensemble.
+
 ## Cibles privées
 
 Chaque cible est publique ou privée. Une cible privée est mesurée, stockée et
