@@ -73,7 +73,8 @@
     "hosted_by": "Gemessen aus",
     "see_network": "Über dieses Netz",
     "no_data": "Für dieses Ziel liegt noch keine Messung vor.",
-    "refresh": "Alle 30 Sekunden aktualisiert"
+    "refresh": "Alle 30 Sekunden aktualisiert",
+    "once": "Jedes Ziel nur einmal anzeigen"
   },
   "detail": {
     "navigator": "Navigator — letzte 12 Monate",

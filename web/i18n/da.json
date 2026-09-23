@@ -73,7 +73,8 @@
     "hosted_by": "Målt fra",
     "see_network": "Om dette net",
     "no_data": "Endnu ingen målinger for dette mål.",
-    "refresh": "Opdateres hvert 30. sekund"
+    "refresh": "Opdateres hvert 30. sekund",
+    "once": "Vis hvert mål kun én gang"
   },
   "detail": {
     "navigator": "Navigator — seneste 12 måneder",

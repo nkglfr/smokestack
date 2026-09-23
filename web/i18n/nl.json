@@ -73,7 +73,8 @@
     "hosted_by": "Gemeten vanaf",
     "see_network": "Over dit netwerk",
     "no_data": "Nog geen metingen voor dit doel.",
-    "refresh": "Elke 30 seconden vernieuwd"
+    "refresh": "Elke 30 seconden vernieuwd",
+    "once": "Elk doel maar één keer tonen"
   },
   "detail": {
     "navigator": "Navigator — afgelopen 12 maanden",

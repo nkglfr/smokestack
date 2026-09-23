@@ -140,6 +140,9 @@ const avg = a => { const f = a.filter(x => x != null); return f.length ? f.reduc
 const clock = ts => new Intl.DateTimeFormat(I18N.lang, { hour: "2-digit", minute: "2-digit" }).format(new Date(ts * 1000));
 function rgba(hex, a) { if (!hex.startsWith("#")) return hex; return `rgba(${parseInt(hex.substr(1, 2), 16)},${parseInt(hex.substr(3, 2), 16)},${parseInt(hex.substr(5, 2), 16)},${a})`; }
 
+// A faulty target is also a critical one and belongs to a category: showing
+// it three times on one page is noise. On by default, remembered locally.
+const once = () => { try { return localStorage.getItem("smokestack.once") !== "0"; } catch (e) { return true; } };
 const S = { ov: null, net: null, peers: 0, open: {}, q: "", view: "home", target: null,
             from: 0, to: 0, preset: 0, cur: null, nav: null, events: [] };
 const PRESETS = [["detail.preset_3h", 3 * 3600], ["detail.preset_30h", 30 * 3600], ["detail.preset_10d", 10 * 86400],
@@ -318,20 +321,31 @@ function renderHome() {
       <div><h3>${esc(t("home.ex_bands_t"))}</h3><p>${esc(t("home.ex_bands"))}</p></div>
       <div><h3>${esc(t("home.ex_colours_t"))}</h3><p>${esc(t("home.ex_colours"))}</p></div></div></details>
     <section class="section"><div class="section-h"><h2><span class="dot d-${faults.length ? heroK : "ok"}"></span> ${esc(t("home.faults"))}</h2>
-      <span class="sub">${esc(t("home.faults_sub"))}</span><span class="right"><span class="badge b-${faults.length ? heroK : "ok"}">${faults.length}</span></span></div>
+      <span class="sub">${esc(t("home.faults_sub"))}</span><span class="right">
+        <label class="faint" style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="once" ${once() ? "checked" : ""}> ${esc(t("home.once"))}</label>
+        <span class="badge b-${faults.length ? heroK : "ok"}">${faults.length}</span></span></div>
       ${faults.length ? `<div class="rows">${faults.map(x => rowHTML(x, true)).join("")}</div>` : `<div class="empty"><span class="dot d-ok"></span>${esc(t("home.no_fault"))}</div>`}</section>`;
-  const feat = all.filter(x => x.featured);
+  const hide = once() ? new Set(faults.map(x => x.id)) : new Set();
+  const feat = all.filter(x => x.featured && !hide.has(x.id));
   if (feat.length) h += `<section class="section"><div class="section-h"><h2>★ ${esc(t("home.key"))}</h2><span class="sub">${esc(t("home.key_sub"))}</span>
       <span class="right faint" style="font-size:11.5px">${esc(t("home.last24h"))}</span></div><div class="rows">${feat.map(x => rowHTML(x, true)).join("")}</div></section>`;
   h += `<section class="section"><div class="section-h"><h2>${esc(t("home.all"))}</h2></div>`;
   S.ov.categories.forEach((cat, ci) => {
+    const shown = cat.targets.filter(x => !hide.has(x.id));
+    if (!shown.length) return;
     const meds = cat.targets.map(x => x.med_ms);
     h += `<div class="catblock"><div class="cath"><span class="cbar" style="background:${color(ci)};height:18px;width:4px"></span><span class="t">${esc(cname(cat))}</span>
       <span class="faint" style="font-size:12px">${cat.targets.length} · ${n2(avg(meds))} ms</span><span style="margin-left:auto" class="badge b-${worst(cat.targets)}">${esc(t("status." + worst(cat.targets)))}</span></div>
-      <div class="rows">${cat.targets.map(x => rowHTML(x, false)).join("")}</div></div>`;
+      <div class="rows">${shown.map(x => rowHTML(x, false)).join("")}</div></div>`;
   });
   h += `</section></div></div></div>`;
   $("#view").innerHTML = h; bindRail();
+  const onceBox = $("#once");
+  if (onceBox) onceBox.onchange = () => {
+    try { localStorage.setItem("smokestack.once", onceBox.checked ? "1" : "0"); } catch (e) {}
+    renderHome();
+  };
   document.querySelectorAll("#view .row[data-t]").forEach(r => r.onclick = () => openTarget(+r.dataset.t));
   requestAnimationFrame(() => document.querySelectorAll("[data-spark]").forEach(cv => {
     const tg = byId(+cv.dataset.spark); draw(cv, tg.spark, { height: 30, bare: true, accent: color(tg._ci) });

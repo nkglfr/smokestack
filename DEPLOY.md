@@ -199,7 +199,11 @@ limiting applies to the proxy's address.
    interval; **Check now** repeats that on demand. **Edit** changes anything
    later, including the category and the protocol. For a TCP target, the host
    and the port are separate fields, with the usual ports suggested. The star
-   marks *critical targets*, always shown at the top of the home page. Each target is **public**
+   marks *critical targets*, always shown at the top of the home page.
+   **Ready-made targets** offers well-known public services (resolvers in
+   both IPv4 and IPv6, a few HTTPS endpoints, the NTP pool) with gentle
+   settings: tick what you want, their category is created if needed. Entries
+   already configured are shown as added. Each target is **public**
    or **private**: a private target is measured like any other and visible in
    the back-office, but never appears on the public pages nor in the public API
    — useful for a test, an internal address or a customer link. Switch it at any
@@ -423,6 +427,7 @@ the following release.
 | Upload fails behind nginx | `client_max_body_size 210m;` |
 | Lost the admin password | `sudo smokestack user add -email other@example.net` creates another master |
 | Health check | `curl -s http://127.0.0.1:8080/healthz` → `ok` |
+| A target appears several times on the home page | It is faulty *and* critical *and* in a category. The **Show each target once** box at the top of the faults section keeps it in one place; the choice is remembered in the visitor's browser |
 | Interface unreachable from a browser | By default it listens on `127.0.0.1` only: set `SMOKESTACK_LISTEN_IP=0.0.0.0` in `/etc/smokestack/smokestack.env` and restart, or use a reverse proxy. Check the firewall too. |
 | `listen address: ... invalid` in the log | Fix the value named in the message in `/etc/smokestack/smokestack.env` |
 | `curl: (22) ... 404` when downloading `install.sh` | No release has been published yet: install from source (section 2) or publish one (section 6) |

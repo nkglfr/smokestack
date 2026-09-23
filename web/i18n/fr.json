@@ -73,7 +73,8 @@
     "hosted_by": "Mesuré depuis",
     "see_network": "À propos de ce réseau",
     "no_data": "Aucune mesure pour l'instant sur cette cible.",
-    "refresh": "Actualisé toutes les 30 secondes"
+    "refresh": "Actualisé toutes les 30 secondes",
+    "once": "N'afficher chaque cible qu'une fois"
   },
   "detail": {
     "navigator": "Navigateur — 12 derniers mois",

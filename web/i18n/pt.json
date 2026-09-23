@@ -73,7 +73,8 @@
     "hosted_by": "Medido a partir de",
     "see_network": "Sobre esta rede",
     "no_data": "Ainda não há medições para este destino.",
-    "refresh": "Atualizado a cada 30 segundos"
+    "refresh": "Atualizado a cada 30 segundos",
+    "once": "Mostrar cada destino apenas uma vez"
   },
   "detail": {
     "navigator": "Navegador — últimos 12 meses",

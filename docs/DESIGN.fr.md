@@ -289,8 +289,7 @@ plutôt que les 20 paquets par seconde de SmokePing.
 
 - IPv6 vérifié par tests unitaires seulement (paquets construits) ; à valider sur un hôte double pile.
 - Archive en NDJSON gzip, pas encore en Parquet.
-- Sur l'accueil, une cible en défaut qui est aussi critique apparaît à trois endroits ; dédoublonnage à faire.
-- Pas encore de catalogue de cibles prêtes à activer.
+- Le catalogue de cibles prêtes à activer reste volontairement court.
 - Gestion des sondes distantes à venir.
 
 ## Page éditeur

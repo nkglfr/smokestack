@@ -267,6 +267,12 @@ or a category changes, so switching a target takes effect immediately.
 `/api/v1/overview?all=1` returns private targets to an authenticated caller;
 the cached public payload never contains them.
 
+**One target, one place.** A faulty target is usually also a critical one
+and belongs to a category, so it would appear three times on the home page.
+By default it is shown once, in the faults section, and left out of the other
+lists; a checkbox switches that off and the choice is kept in the visitor's
+browser, not on the server.
+
 **TCP targets.** The host and the port are stored separately, so a target can
 move between ICMP and TCP without rewriting its address; older targets stored
 as `host:port` are migrated on start.
@@ -531,10 +537,9 @@ actions up to date. Details in [DEPLOY.md § 6](../DEPLOY.md#6-publishing-your-o
 - Latency-triggered traceroutes are covered by unit tests; loss-triggered ones
   were tested on a multi-hop lab network.
 - The raw archive is gzip NDJSON, not yet Parquet.
-- On the home page, a faulty target that is also a critical one appears in
-  three places (faults, critical targets, its category); de-duplicating that
-  view is still to do.
-- There is no catalogue of ready-made targets to enable in one click.
+- The catalogue of ready-made targets is deliberately short and holds only
+  services documented as reachable from anywhere; it is not meant to grow
+  into a directory.
 - Remote probes on another machine: the ingestion endpoint exists and is
   protected, but issuing probe tokens is not available yet. Same-host
   isolation is complete.

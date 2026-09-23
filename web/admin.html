@@ -351,6 +351,11 @@ async function viewTargets(m){
       ${editing?"":`<div class="note" style="margin:12px 0 0">A new target is measured right away:
         its first result appears within a few seconds, without waiting a whole interval.</div>`}
     </div></div>
+    <div class="card"><h3>Ready-made targets</h3><div class="body">
+      <p style="margin:0 0 10px;font-size:13px;color:var(--ink2)">Well-known public services, in their
+        IPv4 and IPv6 form, with gentle settings (10 packets spaced by 200 ms). Tick what you want;
+        their category is created if needed, and they are measured right away.</p>
+      <div id="sug">Loading…</div></div></div>
     <div class="card"><h3>Targets</h3><div class="body" id="tlist">Loading…</div></div>`;
 
   const tree=await api("GET","/api/v1/tree").catch(()=>[]);
@@ -412,6 +417,28 @@ async function viewTargets(m){
       render();
     }catch(e){toast(e.message,true);}
   };
+
+  /* ready-made targets */
+  try{
+    const sug=await api("GET","/api/v1/admin/suggested");
+    const groups={};
+    (sug||[]).forEach(x=>{(groups[x.group]=groups[x.group]||[]).push(x);});
+    $("#sug").innerHTML=Object.entries(groups).map(([g,items])=>`
+      <div style="margin-bottom:10px"><div style="font-weight:600;font-size:12.5px;margin-bottom:4px">${esc(g)}</div>
+      ${items.map(x=>`<label class="chk" style="margin:3px 0">
+        <input type="checkbox" data-sug="${esc(x.key)}" ${x.existing?"disabled":""}>
+        <span>${esc(x.title)} <span class="mono" style="color:var(--ink2)">${esc(x.host)}${x.port?":"+x.port:""}</span>
+          ${x.existing?'<span class="badge b-n">already added</span>':""}
+          ${x.note?`<small>${esc(x.note)}</small>`:""}</span></label>`).join("")}</div>`).join("")+
+      `<button class="btn p" id="addsug">Add the selected targets</button>`;
+    $("#addsug").onclick=async()=>{
+      const keys=[...document.querySelectorAll("[data-sug]:checked")].map(i=>i.dataset.sug);
+      if(!keys.length){toast("Nothing selected",true);return;}
+      try{const r=await api("POST","/api/v1/admin/suggested",{keys});
+        toast(`${r.added} target(s) added`+(r.skipped?`, ${r.skipped} skipped`:""));render();}
+      catch(e){toast(e.message,true);}
+    };
+  }catch(e){$("#sug").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
 
   /* target list */
   try{
