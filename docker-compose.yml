@@ -1,0 +1,19 @@
+# smokestack in a container, for tests. Read DEPLOY.md § 12 first: the
+# host network mode is what keeps the measurements honest.
+services:
+  smokestack:
+    image: ghcr.io/nkglfr/smokestack:latest
+    # Mandatory. Without it, every probe crosses Docker's NAT: extra
+    # latency and jitter, a bogus first traceroute hop, and no IPv6.
+    network_mode: host
+    cap_add:
+      - NET_RAW          # ICMP probes and traceroutes
+    environment:
+      SMOKESTACK_LISTEN_IP: 127.0.0.1    # 0.0.0.0 to reach it from the network
+      SMOKESTACK_LISTEN_PORT: 8080
+    volumes:
+      - smokestack-data:/var/lib/smokestack
+    restart: unless-stopped
+
+volumes:
+  smokestack-data:

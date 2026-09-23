@@ -18,6 +18,7 @@ probes a few hundred targets.
 9. [Uninstalling](#9-uninstalling)
 10. [Probe isolation and performance](#10-probe-isolation-and-performance)
 11. [IPv6 and traceroutes](#11-ipv6-and-traceroutes)
+12. [Container image (tests)](#12-container-image-tests)
 
 ---
 
@@ -505,3 +506,53 @@ network; enable them in *Instance → Publisher page*.
 Firewall: the probe must receive ICMP *Time Exceeded* and *Destination
 Unreachable* messages (a stateful firewall lets them through as related
 traffic), and resolve DNS for the hop enrichment.
+
+## 12. Container image (tests)
+
+An image is published with every release:
+`ghcr.io/nkglfr/smokestack:latest`.
+
+> **Read this first.** A container is fine to try smokestack out or if you
+> already run everything in containers. For **published measurements, prefer
+> the native install**: containers add layers that end up in the numbers.
+>
+> - **Use the host network** (`network_mode: host`). With Docker's default
+>   bridge, every probe crosses a virtual bridge and NAT: tens of
+>   microseconds of extra delay, jitter under load, a first traceroute hop
+>   that is the Docker bridge instead of your router, and no IPv6 (bridge
+>   networks have it off by default).
+> - **On macOS and Windows**, Docker runs containers inside a virtual
+>   machine: you would measure that machine, not your network. Fine to see
+>   the interface, useless for real measurements.
+> - **No in-place updates**: the image is immutable, so signed updates and
+>   the automatic rollback do not apply. You update by pulling a new image.
+> - The native install also gives hardened systemd units and a probe process
+>   that is isolated and prioritised on the CPU.
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/nkglfr/smokestack/main/docker-compose.yml
+docker compose up -d
+docker compose logs | grep "setup code"     # to create the first account
+```
+
+Or without compose:
+
+```sh
+docker run -d --name smokestack \
+  --network host --cap-add NET_RAW \
+  -e SMOKESTACK_LISTEN_IP=127.0.0.1 -e SMOKESTACK_LISTEN_PORT=8080 \
+  -v smokestack-data:/var/lib/smokestack \
+  ghcr.io/nkglfr/smokestack:latest
+```
+
+| | |
+|---|---|
+| Configuration and data | in the `smokestack-data` volume, `/var/lib/smokestack` |
+| Listen address | `SMOKESTACK_LISTEN_IP` and `SMOKESTACK_LISTEN_PORT` |
+| ICMP | needs `--cap-add NET_RAW`; the image carries the capability on the binary and runs as a normal user |
+| First account | `docker compose exec smokestack smokestack user add -config /var/lib/smokestack/config.json -email you@example.net` |
+| Update | `docker compose pull && docker compose up -d` |
+| Command line | `docker compose exec smokestack smokestack languages` |
+
+The image is built and self-tested on every commit by the CI, and published
+for amd64 and arm64 with each release.

@@ -38,3 +38,14 @@ jobs:
           done
       - name: Check the installer
         run: sh -n install.sh
+
+  # Builds the container image on every commit and runs its self-test, so a
+  # broken Dockerfile is caught here and not by a user.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t smokestack:ci .
+      - name: Self-test inside the container
+        run: docker run --rm smokestack:ci selftest

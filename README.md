@@ -207,6 +207,24 @@ from the back-office.
 
 ---
 
+## Containers
+
+An image is published with each release:
+
+```sh
+docker run -d --network host --cap-add NET_RAW \
+  -v smokestack-data:/var/lib/smokestack ghcr.io/nkglfr/smokestack:latest
+```
+
+The **host network is mandatory**: on Docker's default bridge, the probes
+cross a NAT that adds latency and jitter, traceroutes start with a bogus hop,
+and IPv6 is off. Containers are meant for tests and for container-only
+setups; for published measurements prefer the native install, which also
+brings signed in-place updates and an isolated, CPU-prioritised probe. Full
+disclaimer: [DEPLOY.md § 12](DEPLOY.md#12-container-image-tests).
+
+---
+
 ## Languages
 
 Public pages are available in:

@@ -1,0 +1,6 @@
+.git
+dist
+docs/screenshots
+*.db
+*.bundle
+release.key
