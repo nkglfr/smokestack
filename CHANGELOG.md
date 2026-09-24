@@ -5,10 +5,16 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
-- **Share a single target with a read-only link** (idea #15), for someone
-  without an account. Dated, revocable, never indexed, limited to that one
-  target even when it is private, and with the token stored hashed so a copy
-  of the database hands over nothing.
+- **Share a single target with a read-only link** (idea #15), made for
+  troubleshooting across networks: a transit provider's support, another AS's
+  NOC or a customer opens your own measurement — percentiles, loss and the
+  traceroutes taken when the path degraded — without an account and without
+  seeing the rest of your monitoring. The shared page states who measured and
+  from where, so the figures mean something to a stranger. Dated, revocable,
+  never indexed, limited to that one target even when it is private, and with
+  the token stored hashed so a copy of the database hands over nothing.
+- Fixed: the host-network card on the public pages could show "undefined"
+  while the RIPEstat data was still being fetched in the background.
 - **Hops over time** (idea #16): the traceroutes screen charts the hop count
   of each traceroute over 30 days, with the AS path on hover — the visual
   counterpart of the AS-path comparison.

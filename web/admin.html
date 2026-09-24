@@ -628,9 +628,11 @@ async function viewTargets(m){
       EDIT=list.find(t=>t.id==b.dataset.edit); render(); window.scrollTo({top:0,behavior:"smooth"});
     });
     document.querySelectorAll("[data-share]").forEach(b=>b.onclick=async()=>{
-      const days=prompt("Share this target with a read-only link.\n\nValid for how many days? (0 = no expiry)","30");
+      const days=prompt("Share this target with a read-only link — for a transit provider's ticket, "
+        +"another AS's NOC, or a customer. They see this one target only: your percentiles, the loss "
+        +"and the traceroutes taken when the path degraded.\n\nValid for how many days? (0 = no expiry)","30");
       if(days===null) return;
-      const note=prompt("A note, so you remember who it is for:","")||"";
+      const note=prompt("A note, so you remember who it is for (ticket number, AS, customer):","")||"";
       try{
         const l=await api("POST","/api/v1/admin/targets/"+b.dataset.share+"/share",
           {days:parseInt(days||"30",10),note});
@@ -1529,10 +1531,18 @@ async function viewUsers(m){
 /* --------------------------------------------------------- audit log */
 async function viewShares(m){
   m.innerHTML=`<h2>Share links</h2>
-    <p class="lead">Read-only links to a single target, for someone without an account — a customer,
-      a peer's NOC, a provider on a ticket. A link opens that one target and nothing else, is never
-      indexed, and can be revoked here. The token is stored hashed: a copy of the database does not
-      hand over working links, and a link is shown only once, when created (from the target list).</p>
+    <p class="lead"><strong>What this is for.</strong> Troubleshooting across networks. When you open a
+      ticket with a transit provider or write to another AS's NOC, the hard part is not describing the
+      problem: it is proving it. A share link hands them your own measurement — a year of percentiles
+      towards one destination, the loss, and the traceroutes taken exactly when the path degraded —
+      without an account, without a screenshot they cannot verify, and without access to the rest of
+      your monitoring. The other side sees where it breaks from your point of view and can compare with
+      their own view of the same path. The same link works for a customer asking about their link, or
+      for a peer investigating an asymmetry with you.</p>
+    <p class="lead">A link opens that one target and nothing else, even a private one, is never indexed,
+      expires on the date you chose, and can be revoked here — access stops immediately. The token is
+      stored hashed: a copy of the database hands over no working link, and the link itself is shown
+      once, when created, from the target list.</p>
     <div class="card"><div class="body" id="shl">Loading…</div></div>`;
   try{
     const L=await api("GET","/api/v1/admin/shares");

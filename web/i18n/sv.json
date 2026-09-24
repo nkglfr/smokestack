@@ -244,5 +244,9 @@
     "verifying": "Kontrollerar att du inte är en robot…",
     "other_ways": "Andra sätt att nå oss",
     "email_label": "E-post"
+  },
+  "share": {
+    "banner": "Läsgraf delad av {org}, mätt från {loc}. Ett mål, sett från detta nät: latens och förlust dit, med percentilband och de traceroutes som togs när målet avvek från sin referens.",
+    "who": "Delad av"
   }
 }

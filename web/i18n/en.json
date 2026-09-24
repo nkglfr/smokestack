@@ -244,5 +244,9 @@
     "verifying": "Checking that you are not a robot…",
     "other_ways": "Other ways to reach us",
     "email_label": "Email"
+  },
+  "share": {
+    "banner": "Read-only graph shared by {org}, measured from {loc}. One target, from this network's point of view: latency and loss towards it, with the percentile bands and the traceroutes taken when it left its baseline.",
+    "who": "Shared by"
   }
 }

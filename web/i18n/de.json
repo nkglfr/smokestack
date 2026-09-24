@@ -244,5 +244,9 @@
     "verifying": "Prüfung, dass Sie kein Roboter sind…",
     "other_ways": "Andere Wege, uns zu erreichen",
     "email_label": "E-Mail"
+  },
+  "share": {
+    "banner": "Nur-Lese-Graph, geteilt von {org}, gemessen von {loc}. Ein Ziel aus Sicht dieses Netzes: Latenz und Verlust dorthin, mit Perzentilbändern und den Traceroutes, die bei Abweichung von der Referenz erhoben wurden.",
+    "who": "Geteilt von"
   }
 }

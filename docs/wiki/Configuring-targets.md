@@ -189,3 +189,35 @@ Alerting has two switches: the global one on that screen, and one per target
 incidents still recorded — you simply are not woken up for it. Useful for a
 target known to be noisy, a test target, or a destination whose owner you do
 not control.
+
+---
+
+## Proving a problem to another network
+
+The measurement is only half the job. The other half is convincing the
+network on the other side, which does not see what you see.
+
+Press **Share** next to a target: you get a read-only link to that one
+target, valid for as long as you choose, revocable at any time. Put it in
+the ticket you open with your transit provider, or in the mail to another
+AS's NOC.
+
+What they get, without an account and without seeing anything else you
+monitor:
+
+- the percentile bands over up to a year, so an evening congestion or a
+  slow drift is obvious rather than asserted;
+- the loss, on that path only;
+- the traceroutes taken **at the moment** the path left its baseline,
+  compared with the last healthy path, with the hop that changed marked;
+- who measured and from where, stated on the page, so the numbers mean
+  something to someone who has never heard of your instance.
+
+That is usually enough to move a ticket from "we see nothing on our side" to
+a discussion about a specific link. And it keeps working after the fix: the
+history shows whether the problem actually went away.
+
+**Two habits worth having.** Put the ticket number or the AS in the link's
+note, so you know months later who holds which link. And give the link an
+expiry — 30 days covers an incident; a link without one outlives the reason
+it was created.

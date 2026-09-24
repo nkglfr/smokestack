@@ -645,11 +645,41 @@ the status code is not the reason. The message under the target's name says
 which one it is — most often a target created without a port, which now says
 so explicitly.
 
-### Sharing one target with someone who has no account
+### Sharing one target: troubleshooting across networks
 
-A customer, a peer's NOC, a provider handling a ticket: **Share** next to a
-target creates a read-only link, valid for the number of days you choose
-(0 for no expiry) with a note so you remember who it is for.
+**What this is for.** When a path degrades between two networks, the hard
+part is not describing the problem — it is proving it to someone who does not
+see what you see. A transit provider's support asks for a traceroute; you
+send a screenshot; they answer that their monitoring shows nothing. Three
+days go by.
+
+A share link replaces all of that with your own measurement, opened in a
+browser by the other side: a year of percentiles towards that one
+destination, the loss, and the traceroutes taken **exactly when** the path
+degraded, compared with the last healthy path. The page says who measured and
+from where, so the figures mean something to a stranger.
+
+A concrete case. Your customers report slow transfers towards a network
+reachable through one of your two transits. You have a target on it,
+measuring every minute. You create a link and put it in the ticket:
+
+- the provider's NOC sees the median jump from 14 to 60 ms every day between
+  20:00 and 23:00, not a vague "it is slow in the evening";
+- they see the loss, and that it only affects **that** path — your other
+  targets are elsewhere and are not shared, which also means they see nothing
+  of the rest of your monitoring;
+- they see the traceroute of the degraded moments and the hop where it
+  changed, which usually names the congested link straight away;
+- the other AS can compare with their own view of the same path, and answer
+  with something verifiable instead of an assertion.
+
+The same link serves a peer investigating an asymmetry with you, and a
+customer asking about their own link. It stays useful after the incident:
+the history proves the fix worked, or that it did not.
+
+**How it works.** **Share** next to a target creates a read-only link, valid
+for the number of days you choose (0 for no expiry), with a note so you
+remember which ticket or which AS it was for.
 
 - the link opens **that one target and nothing else**, even a private one;
 - it is never indexed — the page carries `noindex` and `robots.txt` excludes

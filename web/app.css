@@ -203,3 +203,8 @@ table.t td { padding: 10px; border-top: 1px solid var(--line-2); vertical-align:
 @media (prefers-color-scheme: dark) {
   .note-rot { color: #fcd34d; background: rgba(120, 53, 15, .25); border-color: rgba(252, 211, 77, .35); }
 }
+
+/* --- bandeau d'un graphe partagé --- */
+.note-share { font-size: 12.5px; line-height: 1.5; border-radius: 10px; padding: 12px 14px;
+  margin: 16px 0 6px; max-width: 74ch; color: var(--ink2);
+  background: var(--bg-soft); border: 1px solid var(--line); }

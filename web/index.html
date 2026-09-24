@@ -206,13 +206,17 @@ function railHTML() {
         <span class="dot d-${x.status}"></span><span class="nm">${esc(x.title)}</span><span class="vl mono">${n2(x.med_ms)}</span></button>`).join("") +
       `</div></div>`;
   });
-  if (S.net) {
+  // The host-network figures are fetched from RIPEstat in the background:
+  // until the cache is warm the server answers {pending:true}, and a card
+  // full of "undefined" is worse than no card.
+  if (S.net && !S.net.pending && S.net.asn) {
     const p = S.net.peeringdb;
+    const num = v => (v == null ? "—" : v);
     h += `<a class="netcard" href="/network"><div class="h">${esc(t("home.hosted_by"))}</div>
       <div class="n">AS${esc(S.net.asn)}${S.net.holder ? " · " + esc(S.net.holder.split(" - ")[0]) : ""}</div>
-      <div class="s"><span><b>${S.net.prefixes_v4}</b> IPv4 · <b>${S.net.prefixes_v6}</b> IPv6</span>
-      <span><b>${S.net.nb_upstreams}</b> ${esc(t("net.nb_up").toLowerCase())}</span>
-      ${p ? `<span><b>${p.ixs.length}</b> IX</span><span>PeeringDB · ${esc(p.policy || "—")}</span>` : ""}</div>
+      <div class="s"><span><b>${num(S.net.prefixes_v4)}</b> IPv4 · <b>${num(S.net.prefixes_v6)}</b> IPv6</span>
+      <span><b>${num(S.net.nb_upstreams)}</b> ${esc(t("net.nb_up").toLowerCase())}</span>
+      ${p && p.ixs ? `<span><b>${p.ixs.length}</b> IX</span><span>PeeringDB · ${esc(p.policy || "—")}</span>` : ""}</div>
       <div style="font-size:12px;color:var(--accent);margin-top:8px">${esc(t("home.see_network"))} →</div></a>`;
   }
   return h;
@@ -390,6 +394,8 @@ function renderDetail() {
     <div class="tags"><span class="tag mono">${esc(tg.host)}</span><span class="tag">${esc(tg.proto.toUpperCase())} · ${tg.interval_s} s</span>
       ${tg.public === false ? `<span class="tag" style="background:var(--warn-soft);color:var(--warn)">${esc(t("status.private"))}</span>` : ""}
       ${tg.base_ms != null ? `<span class="tag">ref. ${n2(tg.base_ms)} ms</span>` : ""}</div>
+    ${(SHARE && t("share.banner")) ? `<div class="note-share">${esc(t("share.banner", {
+      org: (App.site.org || App.site.title || ""), loc: (App.site.location || App.site.asn || "—") }))}</div>` : ""}
     ${(!tg.pin_ip && (tg.addr_count || 0) > 1 && t("detail.rotating")) ? `<div class="note-rot">
       ${esc(t("detail.rotating", { n: tg.addr_count }))}</div>` : ""}
     ${tg.pin_ip ? `<div class="note-pin">${esc(t("detail.pinned", { ip: tg.pin_ip }))}</div>` : ""}

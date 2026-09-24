@@ -244,5 +244,9 @@
     "verifying": "Sjekker at du ikke er en robot…",
     "other_ways": "Andre måter å nå oss på",
     "email_label": "E-post"
+  },
+  "share": {
+    "banner": "Lesegraf delt av {org}, målt fra {loc}. Ett mål, sett fra dette nettet: latens og tap dit, med persentilbånd og traceroutene som ble tatt da målet avvek fra referansen.",
+    "who": "Delt av"
   }
 }

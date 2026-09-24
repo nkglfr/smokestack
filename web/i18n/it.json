@@ -244,5 +244,9 @@
     "verifying": "Verifica che non sia un robot…",
     "other_ways": "Altri modi per contattarci",
     "email_label": "Email"
+  },
+  "share": {
+    "banner": "Grafico in sola lettura condiviso da {org}, misurato da {loc}. Una sola destinazione, vista da questa rete: latenza e perdita verso di essa, con le bande di percentili e i traceroute raccolti quando si è scostata dal riferimento.",
+    "who": "Condiviso da"
   }
 }
