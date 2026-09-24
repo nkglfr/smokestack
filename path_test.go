@@ -73,6 +73,16 @@ func TestPathChangeRecorded(t *testing.T) {
 	if !ok || !strings.Contains(detail, "AS174") || !strings.Contains(detail, "AS3356") {
 		t.Fatalf("the change should be recorded with both paths: %q", detail)
 	}
+	// The title drawn on the graph stays short; the paths live in the body.
+	var title, body string
+	store.cfg.QueryRow(`SELECT title,COALESCE(body,'') FROM events WHERE kind='path'
+	                    ORDER BY ts_start DESC LIMIT 1`).Scan(&title, &body)
+	if len(title) > 60 || !strings.Contains(title, "route changed") {
+		t.Errorf("the event title must stay short and readable: %q", title)
+	}
+	if !strings.Contains(body, "AS174") || !strings.Contains(body, "AS3356") {
+		t.Errorf("the paths must be in the body: %q", body)
+	}
 	if !strings.Contains(detail, "Transit Paris") {
 		t.Errorf("the event should name the target: %q", detail)
 	}

@@ -293,19 +293,43 @@ function draw(cv, s, o) {
   // their labels never overlap.
   const rows = [];
   const evs = (o.events || []).filter(e => e.ts_start >= x0 && e.ts_start <= x1).sort((a, b) => a.ts_start - b.ts_start);
+  // A dashed mark and a number, nothing more: the wording goes in the list
+  // under the graph. A full sentence drawn here was unreadable, and an AS
+  // path written across the plot told a visitor nothing.
   c.font = "10px system-ui,sans-serif";
-  for (const e of evs) {
+  evs.forEach((e, i) => {
     const x = Math.round(X(e.ts_start)) + .5, am = cssv("--warn");
-    c.strokeStyle = am; c.lineWidth = 1; c.beginPath(); c.moveTo(x, pt); c.lineTo(x, h - pb + lh); c.stroke();
-    const tw = c.measureText(e.title).width, right = x > w - 170;
-    const a = right ? x - 5 - tw : x + 5, b = a + tw;
-    let row = 0;
-    while (rows[row] && rows[row].some(([l, r]) => a < r + 6 && b > l - 6)) row++;
-    (rows[row] = rows[row] || []).push([a, b]);
-    c.fillStyle = am; c.textAlign = right ? "right" : "left"; c.textBaseline = "top";
-    c.fillText(e.title, right ? x - 5 : x + 5, pt + row * 13);
-  }
+    c.save();
+    c.setLineDash([3, 3]);
+    c.strokeStyle = am; c.lineWidth = 1;
+    c.beginPath(); c.moveTo(x, pt); c.lineTo(x, h - pb); c.stroke();
+    c.restore();
+    const label = String(i + 1);
+    const tw = c.measureText(label).width + 8;
+    c.fillStyle = am;
+    c.beginPath();
+    if (c.roundRect) c.roundRect(x - tw / 2, pt - 13, tw, 12, 6); else c.rect(x - tw / 2, pt - 13, tw, 12);
+    c.fill();
+    c.fillStyle = "#fff"; c.textAlign = "center"; c.textBaseline = "top";
+    c.fillText(label, x, pt - 12);
+  });
   return { X, Y, x0, x1, pw, ph, w, h, pl };
+}
+
+// The numbered marks on the graph, spelled out: date, what happened, and the
+// detail — the AS paths for a route change.
+function renderEvents() {
+  const box = document.getElementById("evbox"), list = document.getElementById("evlist");
+  if (!box || !list) return;
+  const evs = (S.events || []).filter(e => e.ts_start >= S.from && e.ts_start <= S.to)
+    .sort((a, b) => a.ts_start - b.ts_start);
+  box.hidden = evs.length === 0;
+  list.innerHTML = evs.map(e => {
+    const label = e.kind === "path" ? t("detail.route_changed") : e.title;
+    return `<li><span class="evdate">${esc(new Date(e.ts_start * 1000).toLocaleString())}</span>
+      <span class="evwhat">${esc(label)}</span>
+      ${e.body ? `<span class="evdetail mono">${esc(e.body)}</span>` : ""}</li>`;
+  }).join("");
 }
 
 /* --------------------------------------------------------------- accueil */
@@ -413,6 +437,10 @@ function renderDetail() {
       <p class="strip-hint">${esc(t("detail.last24_hint"))}</p>
       <div class="lbl" style="margin:14px 0 3px">${esc(t("detail.navigator"))}</div><canvas id="nv" height="58"></canvas>
       <p class="strip-hint">${esc(t("detail.nav_hint"))}</p></div></div>
+    <div class="card" id="evbox" hidden style="margin-top:10px"><div class="card-b" style="padding-block:12px">
+      <div class="lbl" style="margin-bottom:6px">${esc(t("detail.events"))}</div>
+      <ol class="evlist" id="evlist"></ol>
+      <p class="strip-hint">${esc(t("detail.ev_hint"))}</p></div></div>
     <div class="stats" id="stats"></div>
     <section class="section" id="trsec" hidden style="margin-top:22px"><div class="section-h"><h2>${esc(t("trace.title"))}</h2>
       <span class="sub">${esc(t("trace.sub"))}</span></div><div class="card"><div class="card-b scroll-x" id="trbox"></div></div></section>
@@ -439,6 +467,7 @@ async function paint() {
   renderTraces();
   $("#res").textContent = `${cur.resolution} · ${cur.step_s || tg.interval_s}s · ${cur.t.length} pts`;
   S.g = draw($("#ch"), cur, { height: 330, loss: 1, events: S.events, accent: acc, from: S.from, to: S.to });
+  renderEvents();
   S.ng = draw($("#nv"), nav, { height: 58, bare: 1, accent: acc, from: now - 365 * 86400, to: now }); sel();
   const jit = cur.p75.map((v, i) => v != null && cur.p25[i] != null ? v - cur.p25[i] : null);
   const st = (key, v, u) => `<div class="st"><div class="k">${esc(t(key))}</div><div class="v">${v}<span class="u">${u}</span></div></div>`;
@@ -497,7 +526,10 @@ function sel() {
 }
 function bindChart() {
   const acc = color(S.target._ci);
-  const redraw = () => { S.g = draw($("#ch"), S.cur, { height: 330, loss: 1, events: S.events, accent: acc, from: S.from, to: S.to }); };
+  const redraw = () => {
+    S.g = draw($("#ch"), S.cur, { height: 330, loss: 1, events: S.events, accent: acc, from: S.from, to: S.to });
+    renderEvents();
+  };
   const zoom = (cv, gg, rd) => {
     let d = 0, sx = 0, ex = 0; const px = e => e.clientX - cv.getBoundingClientRect().left;
     cv.onmousedown = e => { d = 1; sx = ex = px(e); };

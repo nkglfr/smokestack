@@ -116,11 +116,13 @@ func (s *Store) notePathChange(tr *Traceroute) {
 	if t, err := s.TargetByID(tr.TargetID); err == nil {
 		title = t.Title
 	}
-	detail := fmt.Sprintf("%s: AS path changed, %s → %s", title,
-		strings.Join(before, " "), strings.Join(now, " "))
-	s.cfg.Exec(`INSERT INTO events(ts_start,kind,title,public) VALUES(?,?,?,1)`,
-		tr.TS, "path", detail)
-	log.Printf("path change: %s", detail)
+	// The title is what gets drawn on the graph, so it stays short; the
+	// paths themselves go in the body, which the page lists underneath.
+	short := fmt.Sprintf("%s: route changed", title)
+	detail := fmt.Sprintf("AS path %s → %s", strings.Join(before, " "), strings.Join(now, " "))
+	s.cfg.Exec(`INSERT INTO events(ts_start,kind,title,body,public) VALUES(?,?,?,?,1)`,
+		tr.TS, "path", short, detail)
+	log.Printf("path change: %s — %s", short, detail)
 }
 
 // RecentPathChange reports whether the AS path of a target changed in the
@@ -139,6 +141,12 @@ func (s *Store) RecentPathChange(targetID int64, since int64) (string, bool) {
 		since, title+":%").Scan(&detail)
 	if err != nil {
 		return "", false
+	}
+	var body string
+	s.cfg.QueryRow(`SELECT COALESCE(body,'') FROM events WHERE kind='path' AND title=?
+	                ORDER BY ts_start DESC LIMIT 1`, detail).Scan(&body)
+	if body != "" {
+		detail += " (" + body + ")"
 	}
 	return detail, true
 }

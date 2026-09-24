@@ -90,7 +90,10 @@
     "rotating": "Dieser Name antwortet von {n} verschiedenen Adressen: ein lastverteilter Dienst. Jede Runde misst den Server, den das DNS geliefert hat, daher vermischen die Zahlen unten Maschinen an möglicherweise verschiedenen Orten und mit unterschiedlicher Last. Ein Server, der ICMP ignoriert, erscheint als Verlust.",
     "pinned": "Auf einer festen Adresse gemessen, {ip}: der Name kann auf etwas anderes zeigen, die Zahlen unten beschreiben immer dieselbe Maschine.",
     "last24_hint": "Ein Block je 30 Minuten: grün, wenn das Ziel seiner Referenz entsprach, bernstein bei abweichender Latenz oder Jitter, rot bei Paketverlust, grau wenn nichts gemessen wurde.",
-    "nav_hint": "Die gesamte Historie auf einen Blick. Ziehen Sie darüber, um den Graphen oben auf einen Zeitraum zu zoomen; Doppelklick kehrt zurück."
+    "nav_hint": "Die gesamte Historie auf einen Blick. Ziehen Sie darüber, um den Graphen oben auf einen Zeitraum zu zoomen; Doppelklick kehrt zurück.",
+    "events": "Ereignisse in diesem Zeitraum",
+    "route_changed": "Route geändert",
+    "ev_hint": "Eine gestrichelte Marke im Graphen zeigt ein Ereignis für dieses Ziel. Routenwechsel werden erfasst, lösen aber keinen Alarm aus: nichts ist defekt, der Pfad ist nur nicht mehr derselbe."
   },
   "fed": {
     "title": "Föderation",

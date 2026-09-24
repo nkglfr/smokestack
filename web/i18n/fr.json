@@ -90,7 +90,10 @@
     "rotating": "Ce nom répond depuis {n} adresses différentes : c'est un service en répartition de charge. Chaque passe mesure le serveur que le DNS a renvoyé, donc les chiffres ci-dessous mélangent des machines qui peuvent se trouver à des endroits différents et subir des charges différentes. Un serveur qui ignore l'ICMP apparaît comme de la perte.",
     "pinned": "Mesuré sur une adresse figée, {ip} : le nom peut désigner autre chose, les chiffres ci-dessous décrivent toujours la même machine.",
     "last24_hint": "Un bloc par tranche de 30 minutes : vert si la cible était conforme à sa référence, ambre si la latence ou la gigue s'est écartée, rouge en cas de perte de paquets, gris si rien n'a été mesuré.",
-    "nav_hint": "L'historique complet d'un coup d'œil. Glissez dessus pour zoomer le graphe ci-dessus sur une période, double-cliquez pour revenir."
+    "nav_hint": "L'historique complet d'un coup d'œil. Glissez dessus pour zoomer le graphe ci-dessus sur une période, double-cliquez pour revenir.",
+    "events": "Événements sur cette période",
+    "route_changed": "route changée",
+    "ev_hint": "Un repère pointillé sur le graphe indique un fait marquant sur cette cible. Un changement de route est enregistré sans déclencher d'alerte : rien n'est cassé, le chemin n'est simplement plus le même."
   },
   "fed": {
     "title": "Fédération",

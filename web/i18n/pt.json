@@ -90,7 +90,10 @@
     "rotating": "Este nome responde a partir de {n} endereços diferentes: é um serviço com equilíbrio de carga. Cada passagem mede o servidor devolvido pelo DNS, pelo que os valores abaixo misturam máquinas que podem estar em locais diferentes e com cargas diferentes. Um servidor que ignora ICMP aparece como perda.",
     "pinned": "Medido num endereço fixo, {ip}: o nome pode apontar para outro sítio, os valores abaixo descrevem sempre a mesma máquina.",
     "last24_hint": "Um bloco por cada 30 minutos: verde se o destino cumpriu a referência, âmbar se a latência ou o jitter se desviaram, vermelho em caso de perda, cinzento se nada foi medido.",
-    "nav_hint": "Todo o histórico num relance. Arraste para ampliar o gráfico acima num período; duplo clique para voltar."
+    "nav_hint": "Todo o histórico num relance. Arraste para ampliar o gráfico acima num período; duplo clique para voltar.",
+    "events": "Eventos neste período",
+    "route_changed": "rota alterada",
+    "ev_hint": "Uma marca tracejada no gráfico assinala um facto neste destino. As mudanças de rota são registadas sem alerta: nada está avariado, apenas o caminho já não é o mesmo."
   },
   "fed": {
     "title": "Federação",

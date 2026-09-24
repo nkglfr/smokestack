@@ -211,3 +211,11 @@ table.t td { padding: 10px; border-top: 1px solid var(--line-2); vertical-align:
 
 /* --- légendes sous les bandes de la page de détail --- */
 .strip-hint { font-size: 11.5px; line-height: 1.45; color: var(--ink3); margin: 6px 0 0; }
+
+/* --- liste des événements sous le graphe --- */
+.evlist { margin: 0; padding-left: 22px; font-size: 12.5px; line-height: 1.6; }
+.evlist li { margin-bottom: 3px; }
+.evlist li::marker { color: var(--warn); font-weight: 600; }
+.evdate { color: var(--ink3); margin-right: 8px; }
+.evwhat { font-weight: 500; }
+.evdetail { color: var(--ink2); margin-left: 8px; font-size: 11.5px; }

@@ -90,7 +90,10 @@
     "rotating": "This name answers from {n} different addresses: it is a load-balanced service. Each pass measures whichever server DNS returned, so the figures below mix machines that may sit in different places and carry different loads. A server that ignores ICMP shows up as loss.",
     "pinned": "Measured at a fixed address, {ip}: the name may point elsewhere, the figures below always describe the same machine.",
     "last24_hint": "One block per 30 minutes: green when the target matched its baseline, amber when latency or jitter drifted, red on packet loss, grey when nothing was measured.",
-    "nav_hint": "The full history at a glance. Drag across it to zoom the graph above on a period, double-click to come back."
+    "nav_hint": "The full history at a glance. Drag across it to zoom the graph above on a period, double-click to come back.",
+    "events": "Events over this period",
+    "route_changed": "route changed",
+    "ev_hint": "A dashed mark on the graph shows when something happened on this target. Route changes are recorded but raise no alert: nothing is broken, the path is simply not the same."
   },
   "fed": {
     "title": "Federation",

@@ -90,7 +90,10 @@
     "rotating": "Det här namnet svarar från {n} olika adresser: det är en lastbalanserad tjänst. Varje omgång mäter den server som DNS gav, så siffrorna nedan blandar maskiner som kan stå på olika platser och ha olika belastning. En server som ignorerar ICMP visas som förlust.",
     "pinned": "Mätt mot en fast adress, {ip}: namnet kan peka någon annanstans, siffrorna nedan beskriver alltid samma maskin.",
     "last24_hint": "Ett block per 30 minuter: grönt när målet följde sin referens, bärnsten när latens eller jitter avvek, rött vid paketförlust, grått när inget mättes.",
-    "nav_hint": "Hela historiken på en gång. Dra över den för att zooma grafen ovan till en period, dubbelklicka för att återgå."
+    "nav_hint": "Hela historiken på en gång. Dra över den för att zooma grafen ovan till en period, dubbelklicka för att återgå.",
+    "events": "Händelser under perioden",
+    "route_changed": "rutt ändrad",
+    "ev_hint": "En streckad markering i grafen visar en händelse för målet. Ruttändringar registreras utan larm: inget är trasigt, vägen är bara inte densamma."
   },
   "fed": {
     "title": "Federation",

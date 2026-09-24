@@ -732,6 +732,13 @@ covers the raw passes, every rollup tier and the traceroutes of that target.
 
 ### What a target page shows
 
+Notable events — a route change, an incident you declared — appear as a
+**dashed mark with a number** on the graph, and are spelled out in a list
+under it: date, what happened, and for a route change the AS path before and
+after. Writing the path across the plot, as earlier versions did, made the
+graph unreadable and told a visitor nothing.
+
+
 Under the graph, two strips:
 
 - **Last 24 hours**: one block per 30 minutes, green when the target matched
