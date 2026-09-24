@@ -282,6 +282,17 @@ func (p *Prober) handleReply(b []byte, reply byte, now int64) bool {
 	return true
 }
 
+// targetIP is the address to probe: the pinned one when the operator set
+// it, otherwise the result of resolving the host.
+func (p *Prober) targetIP(t *Target) (net.IP, error) {
+	if t.PinIP != "" {
+		if ip := net.ParseIP(t.PinIP); ip != nil {
+			return ip, nil
+		}
+	}
+	return p.res.Resolve(t.Host, t.Family)
+}
+
 // -------------------------------------------------------------- resolution
 
 type resolved struct {
@@ -369,6 +380,11 @@ func (p *Prober) Run(t *Target) {
 	default:
 		m.RTTus, m.Err = p.runICMP(t)
 	}
+	// The address actually probed: a rotating name (a pool) points at a
+	// different machine every few minutes, which the back-office flags.
+	if ip, err := p.targetIP(t); err == nil {
+		m.IP = ip.String()
+	}
 	m.Lost = m.Sent - len(m.RTTus)
 	if m.Lost < 0 {
 		m.Lost = 0
@@ -382,7 +398,7 @@ func (p *Prober) Run(t *Target) {
 }
 
 func (p *Prober) runICMP(t *Target) ([]float64, string) {
-	ip, err := p.res.Resolve(t.Host, t.Family)
+	ip, err := p.targetIP(t)
 	if err != nil {
 		return nil, err.Error()
 	}

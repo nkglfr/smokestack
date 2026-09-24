@@ -77,3 +77,50 @@ func TestRepliesWithoutOurPayload(t *testing.T) {
 		}
 	}
 }
+
+// A rotating name (a pool) points at a different machine every few minutes:
+// the addresses actually probed are recorded, and pinning one makes the
+// measurement comparable over time.
+func TestRotatingNameAndPinning(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	cat, _ := store.CreateCategory("c", "C", "C", true)
+	id, err := store.CreateTarget(&Target{CategoryID: cat, Slug: "pool", Title: "pool.example",
+		Host: "pool.example", Proto: "icmp", IntervalS: 300, Packets: 5, SpacingMs: 200,
+		TimeoutMs: 1000, Public: true, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Unix()
+	for i, ip := range []string{"192.0.2.1", "192.0.2.2", "192.0.2.1", "198.51.100.7"} {
+		m := Measurement{TargetID: id, ProbeID: 1, TS: now - int64(i*300), Sent: 5, IP: ip,
+			RTTus: []float64{1000, 1100, 1050, 1080, 1090}}
+		if err := store.RecordBatch([]queuedMeasure{{m: m}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seen := store.TargetAddresses(now - 24*3600)[id]
+	if len(seen) != 3 {
+		t.Errorf("3 distinct addresses expected, got %v", seen)
+	}
+	// Pinning one address: the probe must use it instead of resolving.
+	tg, _ := store.TargetByID(id)
+	tg.PinIP = "192.0.2.2"
+	if err := store.UpdateTarget(tg); err != nil {
+		t.Fatal(err)
+	}
+	p := &Prober{res: newResolver()}
+	tg, _ = store.TargetByID(id)
+	ip, err := p.targetIP(tg)
+	if err != nil || ip.String() != "192.0.2.2" {
+		t.Errorf("a pinned target must be probed at its address: %v %v", ip, err)
+	}
+	// Unpinned, the name is resolved again — and fails here, as expected.
+	tg.PinIP = ""
+	if _, err := p.targetIP(tg); err == nil {
+		t.Error("without a pinned address the name is resolved, and pool.example does not exist")
+	}
+}

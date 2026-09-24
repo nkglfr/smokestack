@@ -304,6 +304,13 @@ therefore keeps the send time per sequence number on its own side and uses
 the echoed one only when it is present and plausible; otherwise those
 answered probes were counted as lost.
 
+**Rotating names.** The address actually probed travels with every
+measurement and is kept per target for 24 hours. A name that answers from
+several addresses is a pool: the back-office says so and offers to pin one
+address, which the probe then uses instead of resolving. Without that, a
+pool graph mixes different machines and the passes towards a server that
+ignores ICMP look exactly like packet loss.
+
 **Why a target fails.** Every pass carries the reason it could not measure —
 resolution failure, missing IPv6 stack on the probe, send error, or no reply
 at all — and the last one is kept per target and shown in the back-office.

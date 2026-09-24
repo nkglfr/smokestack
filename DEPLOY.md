@@ -534,10 +534,18 @@ the measurement stays just as useful.
 
 Two more cases worth knowing:
 
-- **Pool names** such as `fr.pool.ntp.org` resolve to a different server every
-  few minutes, and many of those servers do not answer ICMP at all. Use a
-  specific server, or a TCP target on port 123's operator, rather than the
-  pool name.
+- **Rotating names**, such as `fr.pool.ntp.org`, resolve to a different
+  server every few minutes, and many of those servers do not answer ICMP.
+  The graph then mixes several machines, and each pass towards a silent one
+  shows up as a lost pass: with a 5-minute interval, two silent servers out
+  of three give the famous "66.7 % loss" that means nothing.
+
+  The back-office detects it: a target whose name answered from several
+  addresses in the last 24 hours carries a notice and a **Pin** button, which
+  freezes the address actually measured. The name stays on the page, the
+  measurement becomes comparable over time. **Unpin** goes back to resolving
+  the name at every pass. The pinned address is also a field of the target
+  form, and `pin_ip` in the API.
 - **A name with both A and AAAA records** is probed in IPv4 when the family is
   *auto*. Create two targets, one per family, to compare the two stacks.
 

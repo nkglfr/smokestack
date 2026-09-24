@@ -5,6 +5,11 @@ install the newest one directly, whatever versions came in between.
 
 ## 0.2.3
 
+- **Rotating names are detected**: a target whose name answered from several
+  addresses in 24 hours is flagged in the back-office, with a button to pin
+  the address actually measured. A pool name such as `fr.pool.ntp.org` points
+  at a different server every few minutes, so its graph mixed machines and
+  silent servers looked like packet loss.
 - **Fixed: replies that do not echo our payload were counted as lost**
   (issue #9). The send time only travelled inside the packet, and a reply
   shorter than 16 bytes, or one whose payload the target rewrote, was thrown

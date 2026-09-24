@@ -177,9 +177,18 @@ func (s *Store) RecordBatch(batch []queuedMeasure) error {
 		return err
 	}
 	defer clearErr.Close()
+	seenIP, err := tx.Prepare(`INSERT INTO target_addresses(target_id,ip,last_seen) VALUES(?,?,?)
+	                           ON CONFLICT(target_id,ip) DO UPDATE SET last_seen=excluded.last_seen`)
+	if err != nil {
+		return err
+	}
+	defer seenIP.Close()
 	probes := map[int64]bool{}
 	for _, q := range batch {
 		m := q.m
+		if m.IP != "" {
+			seenIP.Exec(m.TargetID, m.IP, m.TS)
+		}
 		if m.Err != "" {
 			setErr.Exec(m.TargetID, m.TS, m.Err)
 		} else if len(m.RTTus) > 0 {

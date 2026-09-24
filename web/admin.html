@@ -48,6 +48,9 @@
   .who{font-size:12px;color:var(--ink2);text-align:right;line-height:1.3}
   .badge{border-radius:999px;padding:2px 9px;font-size:11px;font-weight:500}
   .terr{margin-top:4px;font-size:11.5px;color:var(--crit);max-width:520px;line-height:1.35}
+  .twarn{margin-top:4px;font-size:11.5px;color:#92400e;background:#fffbeb;border:1px solid #fde68a;
+         border-radius:8px;padding:6px 8px;max-width:520px;line-height:1.4}
+  .tpin{margin-top:4px;font-size:11.5px;color:var(--ink2)}
   .b-ok{background:#f0fdf4;color:var(--ok)}
   .b-warn{background:#fffbeb;color:var(--warn)}
   .b-crit{background:#fef2f2;color:var(--crit)}
@@ -390,6 +393,8 @@ async function viewTargets(m){
         <div class="field"><label>Packets</label><input id="tpk" type="number" value="20"></div>
         <div class="field"><label>Spacing (ms)</label><input id="tsp" type="number" value="500"></div>
         <div class="field"><label>Timeout (ms)</label><input id="tto" type="number" value="2000"></div>
+        <div class="field"><label>Pinned address (optional)</label>
+          <input id="tpin" placeholder="leave empty to resolve the name each time"></div>
       </div>
       <label class="chk"><input type="checkbox" id="tpub" checked><span>Public target
         <small>Shown on the public site. Uncheck for a private target: it is measured and visible
@@ -463,6 +468,7 @@ async function viewTargets(m){
       port:$("#tproto").value==="tcp"?parseInt($("#tport").value||"0",10):0,
       interval_s:parseInt($("#tiv").value,10),packets:parseInt($("#tpk").value,10),
       spacing_ms:parseInt($("#tsp").value,10),timeout_ms:parseInt($("#tto").value,10),
+      pin_ip:$("#tpin").value.trim(),
       public:$("#tpub").checked};
     try{
       if(EDIT){ await api("PATCH","/api/v1/admin/targets/"+EDIT.id,body); EDIT=null; toast("Target saved"); }
@@ -508,6 +514,14 @@ async function viewTargets(m){
         <td class="ttl" data-l="" style="text-align:left"><div style="font-weight:550">${esc(t.title)}</div>
           <div class="mono" style="font-size:11.5px;color:var(--ink2)">${esc(t.host)}${t.port?":"+t.port:""}</div>
           <div style="font-size:11.5px;color:var(--ink3)">${esc(cname[t.category_id]||"—")}</div>
+          ${t.pin_ip?`<div class="tpin">📌 pinned to ${esc(t.pin_ip)}
+            <button class="btn s" data-unpin="${t.id}">Unpin</button></div>`:
+            ((t.addresses||[]).length>1?`<div class="twarn">This name answered from
+              ${(t.addresses||[]).length} different addresses in the last 24 h
+              (${esc((t.addresses||[]).slice(0,3).join(", "))}${(t.addresses||[]).length>3?"…":""}).
+              The graph mixes several machines, and a server that does not answer ICMP shows up as loss.
+              <button class="btn s" data-pin="${t.id}" data-ip="${esc(t.addresses[0])}">Pin ${esc(t.addresses[0])}</button>
+              </div>`:"")}
           ${t.last_error?`<div class="terr" title="Last failure: ${esc(new Date(t.last_error_ts*1000).toLocaleString())}">
             ⚠ ${esc(t.last_error)}</div>`:""}</td>
         <td data-l="Family">${FAMILY[t.family||0]}</td><td data-l="Check">${esc(t.proto)}</td>
@@ -520,6 +534,13 @@ async function viewTargets(m){
           <button class="btn s" data-trace="${t.id}">Traceroute</button>
           <button class="btn d s" data-del="${t.id}">Delete</button></td>
         </tr>`).join("")+`</tbody></table>`:`<div class="empty">No target yet.</div>`;
+    const setPin=async(id,ip)=>{
+      try{await api("PATCH","/api/v1/admin/targets/"+id,{pin_ip:ip});
+        toast(ip?("Target pinned to "+ip):"Address no longer pinned");render();}
+      catch(e){toast(e.message,true);}
+    };
+    document.querySelectorAll("[data-pin]").forEach(b=>b.onclick=()=>setPin(b.dataset.pin,b.dataset.ip));
+    document.querySelectorAll("[data-unpin]").forEach(b=>b.onclick=()=>setPin(b.dataset.unpin,""));
     document.querySelectorAll("[data-vis]").forEach(b=>b.onclick=async()=>{
       try{await api("PATCH","/api/v1/admin/targets/"+b.dataset.vis,{public:b.dataset.pub!=="1"});
         toast(b.dataset.pub==="1"?"Target is now private":"Target is now public");render();}

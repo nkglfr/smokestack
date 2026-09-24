@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -499,14 +500,16 @@ func (a *API) targetsGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	errs := a.store.TargetErrors()
+	addrs := a.store.TargetAddresses(time.Now().Unix() - 24*3600)
 	type targetWithError struct {
 		*Target
-		LastError   string `json:"last_error,omitempty"`
-		LastErrorTS int64  `json:"last_error_ts,omitempty"`
+		LastError   string   `json:"last_error,omitempty"`
+		LastErrorTS int64    `json:"last_error_ts,omitempty"`
+		Addresses   []string `json:"addresses,omitempty"`
 	}
 	out := make([]targetWithError, 0, len(ts))
 	for _, t := range ts {
-		row := targetWithError{Target: t}
+		row := targetWithError{Target: t, Addresses: addrs[t.ID]}
 		if e, ok := errs[t.ID]; ok {
 			row.LastError, row.LastErrorTS = e.Err, e.TS
 		}
@@ -617,6 +620,7 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 		Packets    *int    `json:"packets"`
 		SpacingMs  *int    `json:"spacing_ms"`
 		TimeoutMs  *int    `json:"timeout_ms"`
+		PinIP      *string `json:"pin_ip"`
 		Public     *bool   `json:"public"`
 		Enabled    *bool   `json:"enabled"`
 	}
@@ -639,6 +643,14 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Port != nil {
 		t.Port = *in.Port
+	}
+	if in.PinIP != nil {
+		v := strings.TrimSpace(*in.PinIP)
+		if v != "" && net.ParseIP(v) == nil {
+			writeErr(w, 400, "pin_ip must be an IP address")
+			return
+		}
+		t.PinIP = v
 	}
 	if in.Family != nil {
 		t.Family = *in.Family

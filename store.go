@@ -139,6 +139,12 @@ CREATE INDEX IF NOT EXISTS idx_%s_bucket ON %s(bucket);
 `
 
 const metricsExtraSchema = `
+CREATE TABLE IF NOT EXISTS target_addresses (
+  target_id INTEGER NOT NULL,
+  ip        TEXT NOT NULL,
+  last_seen INTEGER NOT NULL,
+  PRIMARY KEY (target_id, ip)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS target_errors (
   target_id INTEGER PRIMARY KEY,
   ts        INTEGER NOT NULL,
@@ -208,6 +214,7 @@ func OpenStore(dir string) (*Store, error) {
 	}
 	addColumn(cfg, "targets", "family INTEGER NOT NULL DEFAULT 0")
 	addColumn(cfg, "targets", "port INTEGER NOT NULL DEFAULT 0")
+	addColumn(cfg, "targets", "pin_ip TEXT NOT NULL DEFAULT ''")
 	migrateTCPPorts(cfg)
 
 	// Deux pools sur metrics.db : l'ecriture des mesures dispose de sa
@@ -271,6 +278,10 @@ type Target struct {
 	// Port : uniquement pour proto "tcp". 0 = port inclus dans Host
 	// (ancienne forme "hote:port").
 	Port int `json:"port"`
+	// PinIP : adresse figee. Un nom qui tourne (pool.ntp.org) designe un
+	// serveur different a chaque resolution ; figer l'adresse rend la
+	// mesure comparable dans le temps.
+	PinIP string `json:"pin_ip"`
 }
 
 type Category struct {
@@ -307,7 +318,7 @@ func (s *Store) TouchProbe(id int64) {
 func (s *Store) ActiveTargets() ([]*Target, error) {
 	rows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port
+		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip
 		   FROM targets WHERE enabled=1 ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -323,7 +334,7 @@ func scanTargets(rows *sql.Rows) ([]*Target, error) {
 		var pub, en int
 		if err := rows.Scan(&t.ID, &t.CategoryID, &t.Slug, &t.Title, &t.Host,
 			&t.Proto, &t.IntervalS, &t.Packets, &t.SpacingMs, &t.TimeoutMs,
-			&pub, &en, &t.Family, &t.Port); err != nil {
+			&pub, &en, &t.Family, &t.Port, &t.PinIP); err != nil {
 			return nil, err
 		}
 		t.Public, t.Enabled = pub == 1, en == 1
@@ -367,7 +378,7 @@ func (s *Store) Tree(publicOnly bool) ([]*Category, error) {
 
 	trows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port
+		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip
 		   FROM targets ORDER BY title`)
 	if err != nil {
 		return nil, err
@@ -391,7 +402,7 @@ func (s *Store) Tree(publicOnly bool) ([]*Category, error) {
 func (s *Store) TargetByID(id int64) (*Target, error) {
 	rows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port
+		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip
 		   FROM targets WHERE id=?`, id)
 	if err != nil {
 		return nil, err
@@ -542,9 +553,9 @@ func (s *Store) UpdateTarget(t *Target) error {
 	}
 	_, err := s.cfg.Exec(
 		`UPDATE targets SET category_id=?,title=?,host=?,proto=?,family=?,interval_s=?,packets=?,
-		        spacing_ms=?,timeout_ms=?,public=?,enabled=?,port=? WHERE id=?`,
+		        spacing_ms=?,timeout_ms=?,public=?,enabled=?,port=?,pin_ip=? WHERE id=?`,
 		t.CategoryID, t.Title, t.Host, t.Proto, t.Family, t.IntervalS, t.Packets,
-		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), t.Port, t.ID)
+		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), t.Port, t.PinIP, t.ID)
 	s.notifyTargets()
 	return err
 }
@@ -555,10 +566,10 @@ func (s *Store) CreateTarget(t *Target) (int64, error) {
 	}
 	res, err := s.cfg.Exec(
 		`INSERT INTO targets(category_id,slug,title,host,proto,interval_s,packets,
-		                     spacing_ms,timeout_ms,public,enabled,created_at,family,port)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		                     spacing_ms,timeout_ms,public,enabled,created_at,family,port,pin_ip)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.CategoryID, t.Slug, t.Title, t.Host, t.Proto, t.IntervalS, t.Packets,
-		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), time.Now().Unix(), t.Family, t.Port)
+		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), time.Now().Unix(), t.Family, t.Port, t.PinIP)
 	if err != nil {
 		return 0, err
 	}
@@ -616,6 +627,28 @@ type Measurement struct {
 	Lost     int       `json:"lost"`
 	RTTus    []float64 `json:"rtt_us"`
 	Err      string    `json:"err,omitempty"`
+	IP       string    `json:"ip,omitempty"` // adresse reellement sondee
+}
+
+// TargetAddresses returns the addresses each target was actually probed
+// at recently. A name that answers from several addresses means the graph
+// mixes different machines.
+func (s *Store) TargetAddresses(since int64) map[int64][]string {
+	out := map[int64][]string{}
+	rows, err := s.mx.Query(`SELECT target_id,ip FROM target_addresses
+	                         WHERE last_seen>=? ORDER BY last_seen DESC`, since)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var ip string
+		if rows.Scan(&id, &ip) == nil {
+			out[id] = append(out[id], ip)
+		}
+	}
+	return out
 }
 
 // TargetError keeps the last reason a target could not be measured, so the
