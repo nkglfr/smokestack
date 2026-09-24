@@ -217,6 +217,13 @@ That is usually enough to move a ticket from "we see nothing on our side" to
 a discussion about a specific link. And it keeps working after the fix: the
 history shows whether the problem actually went away.
 
+**From the traceroute to the NOC.** In the back-office, a hop belonging to
+another AS carries a **NOC** button: it reads what that network declares in
+PeeringDB — NOC contact, phone, peering policy, looking glass — and writes
+the mail, with both AS numbers, the destination, the time and the hop. One
+click attaches a share link to it. The point is to remove the two things that
+waste an evening: finding who to write to, and explaining the context.
+
 **Two habits worth having.** Put the ticket number or the AS in the link's
 note, so you know months later who holds which link. And give the link an
 expiry — 30 days covers an incident; a link without one outlives the reason

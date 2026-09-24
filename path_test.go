@@ -1,6 +1,8 @@
 package main
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -98,5 +100,53 @@ func TestReferenceIntervalPerTarget(t *testing.T) {
 	}
 	if kind, _ := d.observeTarget(2, good, 0); kind == "reference" {
 		t.Error("a target on the 24 h default should not be due after 5 h")
+	}
+}
+
+// PeeringDB contacts: the NOC role comes first, contacts without any way to
+// reach them are dropped, and a network declaring none is not an error.
+// newASNServiceFor points the service at a fake PeeringDB.
+func newASNServiceFor(base string) *ASNService {
+	svc := NewASNService(nil, nil, "")
+	svc.pdbBase = base
+	return svc
+}
+
+func TestPeeringDBContactOrder(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/net"):
+			w.Write([]byte(`{"data":[{"id":42,"name":"Example Transit","asn":174,
+			  "policy_general":"Open","website":"https://example.net"}]}`))
+		case strings.HasPrefix(r.URL.Path, "/poc"):
+			w.Write([]byte(`{"data":[
+			  {"role":"Policy","name":"Peering","email":"peering@example.net","status":"ok"},
+			  {"role":"NOC","name":"NOC 24/7","email":"noc@example.net","phone":"+33100000000","status":"ok"},
+			  {"role":"Technical","name":"Nobody","email":"","phone":"","status":"ok"},
+			  {"role":"Abuse","name":"Abuse","email":"abuse@example.net","status":"deleted"}]}`))
+		default:
+			w.Write([]byte(`{"data":[]}`))
+		}
+	}))
+	defer srv.Close()
+	svc := newASNServiceFor(srv.URL + "/")
+	info := &ASNInfo{ASN: "AS174"}
+	p := svc.fetchPeeringDB("174", info)
+	if p == nil {
+		t.Fatal("a PeeringDB record was expected")
+	}
+	if len(p.Contacts) != 2 {
+		t.Fatalf("2 reachable contacts expected, got %+v", p.Contacts)
+	}
+	if p.Contacts[0].Role != "NOC" {
+		t.Errorf("the NOC must come first, got %q", p.Contacts[0].Role)
+	}
+	if p.Contacts[0].Phone == "" || p.Contacts[0].Email == "" {
+		t.Errorf("the NOC contact lost its details: %+v", p.Contacts[0])
+	}
+	for _, c := range p.Contacts {
+		if c.Email == "" && c.Phone == "" {
+			t.Error("a contact with no way to reach it must be dropped")
+		}
 	}
 }

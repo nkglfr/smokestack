@@ -5,6 +5,16 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- **Reaching the NOC of a network on the path**: each traceroute hop with an
+  AS gets a button showing what that network declares in PeeringDB — NOC
+  contact first, phone, peering policy, PeeringDB page, looking glass — and a
+  mail already written with both AS numbers, the destination, the time and the
+  hop involved. One more button creates a read-only share link and puts it in
+  the message. Back-office only, so the instance is never an open proxy in
+  front of PeeringDB.
+- Fixed: the `User-Agent` sent to RIPEstat and PeeringDB still announced
+  version 0.1.
+
 - **Share a single target with a read-only link** (idea #15), made for
   troubleshooting across networks: a transit provider's support, another AS's
   NOC or a customer opens your own measurement — percentiles, loss and the

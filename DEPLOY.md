@@ -645,6 +645,26 @@ the status code is not the reason. The message under the target's name says
 which one it is — most often a target created without a port, which now says
 so explicitly.
 
+### Reaching the NOC of a network on the path
+
+In the traceroutes screen, each hop that belongs to a known AS carries a
+**NOC** button. It shows what that network declares about itself in
+PeeringDB — its NOC contact first, then technical and peering contacts, with
+email and phone — along with its peering policy, its PeeringDB page and its
+looking glass when it declares one.
+
+It also writes the mail for you: the subject names both AS numbers and the
+destination, and the body states who measures, from where, since when, and
+which hop is involved. **Attach a share link** creates a read-only link to
+the target and puts it in the message, so the other side can check the
+measurement instead of taking your word for it.
+
+Two things worth knowing. PeeringDB only serves **publicly visible** contacts
+to an anonymous caller; a network may declare more to a signed-in user, and
+the `peeringdb_api_key` in the configuration fetches those. And this lookup
+is reserved to the back-office: exposing it publicly would turn your instance
+into an open proxy in front of PeeringDB.
+
 ### Sharing one target: troubleshooting across networks
 
 **What this is for.** When a path degrades between two networks, the hard

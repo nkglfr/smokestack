@@ -695,6 +695,83 @@ function hopRTT(h){
   const v=h.rtt_ms,avg=v.reduce((a,b)=>a+b,0)/v.length;
   return `${avg.toFixed(2)} ms <span style="color:var(--ink3)">(${Math.min(...v).toFixed(2)}–${Math.max(...v).toFixed(2)})</span>`;
 }
+// Reaching the NOC of a network seen in a traceroute, from what that network
+// declares in PeeringDB, with a mail already written: during an incident the
+// time goes into finding the address and explaining the context, not into
+// the diagnosis itself.
+let SITE_CACHE=null;
+async function siteInfo(){
+  if(!SITE_CACHE){ try{ SITE_CACHE=await api("GET","/api/v1/site"); }catch(e){ SITE_CACHE={}; } }
+  return SITE_CACHE;
+}
+
+async function nocPanel(asn, ctx){
+  const box=document.createElement("div");
+  box.className="note"; box.style.margin="8px 0";
+  box.innerHTML=`Looking up ${esc(asn)} in PeeringDB…`;
+  try{
+    const d=await api("GET","/api/v1/admin/asn-contact?asn="+encodeURIComponent(asn));
+    if(d.pending){
+      box.innerHTML=`${esc(asn)} — being fetched from PeeringDB, try again in a moment.`;
+      return box;
+    }
+    const cs=d.contacts||[];
+    const site=await siteInfo();
+    const subject=`${site.asn?site.asn+" ":""}→ ${asn}: ${ctx.problem} towards ${ctx.dest}`;
+    // null drops a line, "" keeps a paragraph break: filtering on "" would
+    // glue the whole message into one block.
+    const body=[
+      `Hello,`, "",
+      `${site.org||site.title||"We"}${site.asn?" ("+site.asn+")":""} measure ${ctx.problem} on the path`,
+      `towards ${ctx.dest}, which transits your network.`, "",
+      `Measured from ${site.location||"our network"}, ${ctx.when}.`,
+      ctx.hop?`The hop involved: ${ctx.hop}`:null, "",
+      ctx.share?`Our graph, its percentiles and the traceroutes taken during the degradation, `
+        +`read-only: ${ctx.share}`
+        :`We can share our graph and the traceroutes taken during the degradation.`, "",
+      `Thanks for having a look,`, "",
+      `${site.noc_email?site.noc_email:(site.org||"")}`
+    ].filter(x=>x!==null).join("\n");
+    const mail=cs.find(c=>c.email);
+    box.innerHTML=`<strong>${esc(d.name||d.holder||asn)}</strong> · ${esc(asn)}
+      ${d.policy?` · peering policy: ${esc(d.policy)}`:""}
+      <div style="margin-top:6px">${cs.length?cs.map(c=>`<div>
+        <span class="badge ${c.role==="NOC"?"b-ok":"b-n"}">${esc(c.role||"contact")}</span>
+        ${c.name?esc(c.name)+" — ":""}
+        ${c.email?`<a href="mailto:${esc(c.email)}" class="mono">${esc(c.email)}</a>`:""}
+        ${c.phone?` · <span class="mono">${esc(c.phone)}</span>`:""}</div>`).join("")
+        :`<em>This network declares no public contact in PeeringDB.</em> Its page may show more to a
+          signed-in user, and an API key in the instance settings would fetch it.`}</div>
+      <div class="acts" style="margin-top:8px">
+        ${mail?`<a class="btn p s" href="mailto:${esc(mail.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}">Write to the NOC</a>`:""}
+        <button class="btn s" data-copy>Copy the message</button>
+        ${ctx.makeShare?`<button class="btn s" data-mkshare title="Create a read-only link to this target and put it in the message">Attach a share link</button>`:""}
+        <a class="btn s" href="${esc(d.peeringdb_url||"")}" target="_blank" rel="noreferrer">PeeringDB page</a>
+        ${d.looking_glass?`<a class="btn s" href="${esc(d.looking_glass)}" target="_blank" rel="noreferrer">Looking glass</a>`:""}
+      </div>`;
+    let text=body;
+    const cp=box.querySelector("[data-copy]");
+    if(cp) cp.onclick=()=>{navigator.clipboard?.writeText(subject+"\n\n"+text);toast("Message copied");};
+    const sb=box.querySelector("[data-mkshare]");
+    if(sb) sb.onclick=async()=>{
+      sb.disabled=true; sb.textContent="Creating…";
+      try{
+        const url=await ctx.makeShare();
+        text=text.replace("We can share our graph and the traceroutes taken during the degradation.",
+          "Our graph, its percentiles and the traceroutes taken during the degradation, read-only "
+          +"(valid 30 days): "+url);
+        const a=box.querySelector("a.btn.p");
+        if(a) a.href="mailto:"+encodeURIComponent(mail.email).replace(/%40/,"@")
+          +"?subject="+encodeURIComponent(subject)+"&body="+encodeURIComponent(text);
+        sb.outerHTML=`<span class="faint" style="font-size:11.5px">share link added to the message ·
+          revoke it in Share links</span>`;
+        toast("Share link created and added to the message");
+      }catch(e){ toast(e.message,true); sb.disabled=false; sb.textContent="Attach a share link"; }
+    };
+  }catch(e){ box.innerHTML=`<span style="color:var(--crit)">${esc(e.message)}</span>`; }
+  return box;
+}
+
 function hopsTable(tr,ref){
   const rows=[],n=Math.max(tr.hops.length,ref?ref.hops.length:0);
   for(let i=0;i<n;i++){
@@ -703,7 +780,8 @@ function hopsTable(tr,ref){
     rows.push(`<tr class="${differs?"diff":""}"><td>${i+1}</td>
       <td class="mono">${h?esc(h.addr||"*"):""}${h&&h.note?`<span class="hopnote" title="the router refused to forward">${esc(h.note)}</span>`:""}</td>
       <td style="font-size:12px">${h?esc(h.name||""):""}</td>
-      <td class="mono" style="font-size:12px">${h?esc(h.asn||""):""}</td>
+      <td class="mono" style="font-size:12px">${h&&h.asn?`${esc(h.asn)}
+        <button class="btn s asnoc" data-noc="${esc(h.asn)}" title="How to reach this network's NOC, as it declares it in PeeringDB">NOC</button>`:""}</td>
       <td style="font-size:12px">${h?hopRTT(h):""}</td>
       <td style="font-size:12px">${h?`${(h.rtt_ms||[]).length}/${h.sent}`:""}</td>
       ${ref?`<td class="mono" style="font-size:12px;color:var(--ink2)">${r?esc(r.addr||"*"):"—"}</td>`:""}</tr>`);
@@ -787,6 +865,31 @@ async function viewTraces(m){
           (open===tr.id?`<tr><td colspan="5" style="background:var(--panel)">${hopsTable(tr,ref)}</td></tr>`:"");
       }).join("")+`</tbody></table>`;
     document.querySelectorAll("[data-tr]").forEach(r=>r.onclick=()=>{const id=+r.dataset.tr;open=open===id?null:id;draw();});
+    // Contacting the NOC of a hop's network, with the incident's context
+    // already in the message.
+    document.querySelectorAll("[data-noc]").forEach(b=>b.onclick=async e=>{
+      e.stopPropagation();
+      const tr=list.find(x=>x.id===open)||{};
+      const tgt=targets.find(t=>t.id===TR_TARGET)||{};
+      const row=b.closest("tr");
+      if(row.nextElementSibling&&row.nextElementSibling.dataset.nocrow){ row.nextElementSibling.remove(); return; }
+      const holder=document.createElement("tr"); holder.dataset.nocrow="1";
+      const cell=document.createElement("td"); cell.colSpan=7; holder.appendChild(cell);
+      row.parentNode.insertBefore(holder,row.nextSibling);
+      cell.appendChild(await nocPanel(b.dataset.noc,{
+        problem: (tr.kind==="anomaly"?"packet loss or added latency":"a path change"),
+        dest: (tgt.title?tgt.title+" ("+(tgt.host||"")+")":(tr.dest||"our target")),
+        when: tr.ts?new Date(tr.ts*1000).toISOString().replace("T"," ").slice(0,16)+" UTC":"recently",
+        hop: b.closest("tr").querySelector("td.mono")?.textContent.trim()||"",
+        // Creating the link on the spot: an existing token is never shown
+        // again, so the only way to put one in the mail is to make one.
+        makeShare: async () => {
+          const l=await api("POST","/api/v1/admin/targets/"+TR_TARGET+"/share",
+            {days:30,note:"sent to "+b.dataset.noc});
+          return l.url;
+        }
+      }));
+    });
   };
   const load=async()=>{
     try{list=await api("GET","/api/v1/admin/traceroutes?target="+TR_TARGET+"&limit=100");

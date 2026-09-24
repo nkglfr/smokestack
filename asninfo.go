@@ -54,24 +54,35 @@ type PDBFac struct {
 	Country string `json:"country"`
 }
 
+// PDBContact : un contact declare dans PeeringDB. Seuls les contacts en
+// visibilite publique sont servis sans authentification ; une cle d'API
+// PeeringDB, si l'operateur en fournit une, en donne davantage.
+type PDBContact struct {
+	Role  string `json:"role"`
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email,omitempty"`
+	Phone string `json:"phone,omitempty"`
+}
+
 type PDBNet struct {
-	ID           int      `json:"id"`
-	Name         string   `json:"name"`
-	AKA          string   `json:"aka,omitempty"`
-	Website      string   `json:"website,omitempty"`
-	IRRASSet     string   `json:"irr_as_set,omitempty"`
-	Types        []string `json:"types,omitempty"`
-	Prefixes4    int      `json:"prefixes4"`
-	Prefixes6    int      `json:"prefixes6"`
-	Traffic      string   `json:"traffic,omitempty"`
-	Ratio        string   `json:"ratio,omitempty"`
-	Scope        string   `json:"scope,omitempty"`
-	Policy       string   `json:"policy,omitempty"`
-	PolicyURL    string   `json:"policy_url,omitempty"`
-	LookingGlass string   `json:"looking_glass,omitempty"`
-	IXs          []PDBIX  `json:"ixs"`
-	Facilities   []PDBFac `json:"facilities"`
-	URL          string   `json:"url"`
+	ID           int          `json:"id"`
+	Name         string       `json:"name"`
+	AKA          string       `json:"aka,omitempty"`
+	Website      string       `json:"website,omitempty"`
+	IRRASSet     string       `json:"irr_as_set,omitempty"`
+	Types        []string     `json:"types,omitempty"`
+	Prefixes4    int          `json:"prefixes4"`
+	Prefixes6    int          `json:"prefixes6"`
+	Traffic      string       `json:"traffic,omitempty"`
+	Ratio        string       `json:"ratio,omitempty"`
+	Scope        string       `json:"scope,omitempty"`
+	Policy       string       `json:"policy,omitempty"`
+	PolicyURL    string       `json:"policy_url,omitempty"`
+	LookingGlass string       `json:"looking_glass,omitempty"`
+	Contacts     []PDBContact `json:"contacts,omitempty"`
+	IXs          []PDBIX      `json:"ixs"`
+	Facilities   []PDBFac     `json:"facilities"`
+	URL          string       `json:"url"`
 }
 
 type ASNInfo struct {
@@ -97,11 +108,12 @@ type ASNInfo struct {
 }
 
 type ASNService struct {
-	store  *Store
-	fed    *Federation
-	client *http.Client
-	pdbKey string
-	ua     string
+	store   *Store
+	fed     *Federation
+	client  *http.Client
+	pdbKey  string
+	pdbBase string // injectable pour les tests
+	ua      string
 
 	mu       sync.Mutex
 	attempts map[string]int64
@@ -109,9 +121,9 @@ type ASNService struct {
 
 func NewASNService(store *Store, fed *Federation, pdbKey string) *ASNService {
 	return &ASNService{
-		store: store, fed: fed, pdbKey: pdbKey,
+		store: store, fed: fed, pdbKey: pdbKey, pdbBase: peeringdbBase,
 		client:   &http.Client{Timeout: 15 * time.Second},
-		ua:       "smokestack/0.1 (+https://github.com/)",
+		ua:       "smokestack/" + Version + " (+https://github.com/nkglfr/smokestack)",
 		attempts: map[string]int64{},
 	}
 }
@@ -282,7 +294,7 @@ func (s *ASNService) fetchPeeringDB(asn string, info *ASNInfo) *PDBNet {
 			LG        string   `json:"looking_glass"`
 		} `json:"data"`
 	}
-	if err := s.getJSON(peeringdbBase+"net?asn="+asn, true, &net); err != nil {
+	if err := s.getJSON(s.pdbBase+"net?asn="+asn, true, &net); err != nil {
 		info.Errors = append(info.Errors, "PeeringDB net: "+err.Error())
 		return nil
 	}
@@ -319,7 +331,43 @@ func (s *ASNService) fetchPeeringDB(asn string, info *ASNInfo) *PDBNet {
 			RS    bool    `json:"is_rs_peer"`
 		} `json:"data"`
 	}
-	if err := s.getJSON(peeringdbBase+"netixlan?net_id="+strconv.Itoa(d.ID), true, &ix); err != nil {
+	// Contacts : role NOC d'abord, c'est celui qu'on veut joindre pendant
+	// un incident. Un reseau qui n'en declare pas n'est pas une erreur.
+	var poc struct {
+		Data []struct {
+			Role    string `json:"role"`
+			Name    string `json:"name"`
+			Email   string `json:"email"`
+			Phone   string `json:"phone"`
+			Visible string `json:"visible"`
+			Status  string `json:"status"`
+		} `json:"data"`
+	}
+	if err := s.getJSON(s.pdbBase+"poc?net_id="+strconv.Itoa(d.ID), true, &poc); err == nil {
+		order := map[string]int{"NOC": 0, "Technical": 1, "Policy": 2, "Abuse": 3}
+		for _, c := range poc.Data {
+			if c.Status != "" && c.Status != "ok" {
+				continue
+			}
+			if c.Email == "" && c.Phone == "" {
+				continue
+			}
+			p.Contacts = append(p.Contacts, PDBContact{Role: c.Role, Name: c.Name,
+				Email: c.Email, Phone: c.Phone})
+		}
+		sort.SliceStable(p.Contacts, func(i, j int) bool {
+			oi, ok1 := order[p.Contacts[i].Role]
+			oj, ok2 := order[p.Contacts[j].Role]
+			if !ok1 {
+				oi = 9
+			}
+			if !ok2 {
+				oj = 9
+			}
+			return oi < oj
+		})
+	}
+	if err := s.getJSON(s.pdbBase+"netixlan?net_id="+strconv.Itoa(d.ID), true, &ix); err != nil {
 		info.Errors = append(info.Errors, "PeeringDB netixlan: "+err.Error())
 	} else {
 		for _, x := range ix.Data {
@@ -342,7 +390,7 @@ func (s *ASNService) fetchPeeringDB(asn string, info *ASNInfo) *PDBNet {
 			Country string `json:"country"`
 		} `json:"data"`
 	}
-	if err := s.getJSON(peeringdbBase+"netfac?net_id="+strconv.Itoa(d.ID), true, &fac); err != nil {
+	if err := s.getJSON(s.pdbBase+"netfac?net_id="+strconv.Itoa(d.ID), true, &fac); err != nil {
 		info.Errors = append(info.Errors, "PeeringDB netfac: "+err.Error())
 	} else {
 		for _, f := range fac.Data {
@@ -484,6 +532,10 @@ func (a *API) ASNRoutes(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("GET /api/v1/asn", a.asnOurs)
 	mux.HandleFunc("GET /api/v1/asn/{asn}", a.asnOne)
+	// Reserved to the back-office: an operator looking up the AS of a
+	// traceroute hop. Public access would turn the instance into an open
+	// proxy in front of PeeringDB.
+	mux.HandleFunc("GET /api/v1/admin/asn-contact", a.need(RoleEditor, a.asnContact))
 	mux.HandleFunc("POST /api/v1/admin/asn/refresh", a.need(RoleAdmin, a.asnRefresh))
 }
 
@@ -555,4 +607,37 @@ func (a *API) asnRefresh(w http.ResponseWriter, r *http.Request, u *User) {
 	}
 	a.store.Audit(u, clientIP(r), "asn_refresh", "asn", asn)
 	writeJSON(w, info)
+}
+
+// asnContact returns how to reach the NOC of an AS seen in a traceroute,
+// from what that network itself declares in PeeringDB. Answered from cache,
+// refreshed in the background.
+func (a *API) asnContact(w http.ResponseWriter, r *http.Request, u *User) {
+	asn, err := normalizeASN(r.URL.Query().Get("asn"))
+	if err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	info, fresh := a.asn.Cached(asn)
+	if info == nil {
+		go a.asn.Refresh(asn)
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, map[string]any{"pending": true, "asn": asn})
+		return
+	}
+	if !fresh {
+		go a.asn.Refresh(asn)
+	}
+	out := map[string]any{"asn": asn, "holder": info.Holder, "country": info.Country}
+	if p := info.PeeringDB; p != nil {
+		out["name"] = p.Name
+		out["peeringdb_url"] = p.URL
+		out["policy"] = p.Policy
+		out["website"] = p.Website
+		out["looking_glass"] = p.LookingGlass
+		out["contacts"] = p.Contacts
+	} else {
+		out["peeringdb_url"] = "https://www.peeringdb.com/asn/" + strings.TrimPrefix(asn, "AS")
+	}
+	writeJSON(w, out)
 }
