@@ -75,7 +75,8 @@
     "see_network": "Om dette nettet",
     "no_data": "Ingen målinger for dette målet ennå.",
     "refresh": "Oppdateres hvert 30. sekund",
-    "once": "Vis hvert mål bare én gang"
+    "once": "Unike mål",
+    "once_hint": "Vis hvert mål bare én gang: et mål med feil blir stående i feilseksjonen og forsvinner fra de kritiske målene og fra kategorien sin."
   },
   "detail": {
     "navigator": "Navigator — siste 12 måneder",

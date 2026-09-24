@@ -75,7 +75,8 @@
     "see_network": "About this network",
     "no_data": "No measurement yet for this target.",
     "refresh": "Refreshed every 30 seconds",
-    "once": "Show each target once"
+    "once": "Unique targets",
+    "once_hint": "Show each target only once: a faulty target stays in the faults section and is left out of the critical targets and of its category."
   },
   "detail": {
     "navigator": "Navigator — last 12 months",

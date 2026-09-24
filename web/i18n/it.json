@@ -75,7 +75,8 @@
     "see_network": "Informazioni su questa rete",
     "no_data": "Ancora nessuna misura per questa destinazione.",
     "refresh": "Aggiornato ogni 30 secondi",
-    "once": "Mostra ogni destinazione una sola volta"
+    "once": "Destinazioni uniche",
+    "once_hint": "Mostra ogni destinazione una sola volta: una destinazione in errore resta nella sezione dei guasti e sparisce dalle destinazioni critiche e dalla sua categoria."
   },
   "detail": {
     "navigator": "Navigatore — ultimi 12 mesi",

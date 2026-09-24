@@ -177,3 +177,10 @@ table.t td { padding: 10px; border-top: 1px solid var(--line-2); vertical-align:
 .btn-primary { font: inherit; font-size: 13.5px; font-weight: 550; color: #fff; background: var(--accent);
   border: 0; border-radius: 9px; padding: 9px 16px; cursor: pointer; }
 .btn-primary:disabled { opacity: .6; cursor: default; }
+
+/* --- étiquette « cible unique » et sa pastille d'information --- */
+.once-lbl { font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+.info { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px;
+        border-radius: 50%; background: var(--accent); color: #fff; font-size: 10.5px; font-weight: 700;
+        font-style: italic; font-family: Georgia, serif; cursor: help; flex: none; }
+.info:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

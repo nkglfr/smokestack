@@ -75,7 +75,8 @@
     "see_network": "Sobre esta rede",
     "no_data": "Ainda não há medições para este destino.",
     "refresh": "Atualizado a cada 30 segundos",
-    "once": "Mostrar cada destino apenas uma vez"
+    "once": "Destinos únicos",
+    "once_hint": "Mostrar cada destino apenas uma vez: um destino com falha fica na secção das falhas e desaparece dos destinos críticos e da sua categoria."
   },
   "detail": {
     "navigator": "Navegador — últimos 12 meses",

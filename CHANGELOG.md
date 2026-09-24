@@ -5,6 +5,8 @@ install the newest one directly, whatever versions came in between.
 
 ## 0.2.3
 
+- The home page checkbox is now simply **Unique targets**, with a blue marker
+  whose tooltip explains what it does (issue #8).
 - **Public pages are indexable.** Title, description, canonical address,
   language alternates, social cards and structured data on every page, plus a
   summary readable without JavaScript. Each target gets a readable address

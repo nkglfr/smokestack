@@ -75,7 +75,8 @@
     "see_network": "Über dieses Netz",
     "no_data": "Für dieses Ziel liegt noch keine Messung vor.",
     "refresh": "Alle 30 Sekunden aktualisiert",
-    "once": "Jedes Ziel nur einmal anzeigen"
+    "once": "Ziele nur einmal",
+    "once_hint": "Jedes Ziel nur einmal anzeigen: Ein gestörtes Ziel bleibt im Störungsbereich und erscheint nicht mehr bei den kritischen Zielen und in seiner Kategorie."
   },
   "detail": {
     "navigator": "Navigator — letzte 12 Monate",
