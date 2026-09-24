@@ -139,14 +139,15 @@ func (a *API) shareCreate(w http.ResponseWriter, r *http.Request, u *User) {
 		return
 	}
 	var in struct {
-		Days int    `json:"days"`
+		Days *int   `json:"days"` // absent = 30, 0 = no expiry
 		Note string `json:"note"`
 	}
 	json.NewDecoder(r.Body).Decode(&in)
-	if in.Days == 0 {
-		in.Days = 30
+	days := 30
+	if in.Days != nil {
+		days = *in.Days
 	}
-	link, err := a.store.CreateShare(id, in.Days, in.Note, u.Email)
+	link, err := a.store.CreateShare(id, days, in.Note, u.Email)
 	if err != nil {
 		writeErr(w, 400, err.Error())
 		return
