@@ -287,6 +287,7 @@ func (a *API) robotsTxt(w http.ResponseWriter, r *http.Request) {
 Allow: /
 Disallow: /admin
 Disallow: /api/
+Disallow: /s/
 
 Sitemap: %s/sitemap.xml
 `, base)

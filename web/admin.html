@@ -231,6 +231,7 @@ const NAV=[
   {id:"update", label:"Updates", min:4},
   {grp:"Accounts"},
   {id:"users",  label:"Users", min:4},
+  {id:"shares", label:"Share links", min:2},
   {id:"logs",   label:"Service log", min:3},
   {id:"audit",  label:"Audit log", min:3}
 ];
@@ -288,7 +289,7 @@ async function changePassword(){
 function render(){
   const m=$("#main");
   const views={dash:viewDash,targets:viewTargets,traces:viewTraces,messages:viewMessages,alerts:viewAlerts,channels:viewChannels,fed:viewFed,notify:viewNotify,
-    storage:viewStorage,site:viewSite,net:viewNet,langs:viewLangs,update:viewUpdate,users:viewUsers,logs:viewLogs,audit:viewAudit};
+    storage:viewStorage,site:viewSite,net:viewNet,langs:viewLangs,update:viewUpdate,users:viewUsers,shares:viewShares,logs:viewLogs,audit:viewAudit};
   return (views[VIEW]||viewDash)(m);
 }
 
@@ -596,6 +597,7 @@ async function viewTargets(m){
         <td class="acts" data-l="" style="text-align:right;white-space:nowrap">
           <button class="btn s" data-edit="${t.id}">Edit</button>
           <button class="btn s" data-now="${t.id}" title="Measure right away">Check now</button>
+          <button class="btn s" data-share="${t.id}">Share</button>
           <button class="btn s" data-advice="${t.id}" title="Look at the shape of the loss">Why this loss?</button>
           <button class="btn s" data-trace="${t.id}">Traceroute</button>
           <button class="btn d s" data-del="${t.id}">Delete</button></td>
@@ -624,6 +626,26 @@ async function viewTargets(m){
     });
     document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{
       EDIT=list.find(t=>t.id==b.dataset.edit); render(); window.scrollTo({top:0,behavior:"smooth"});
+    });
+    document.querySelectorAll("[data-share]").forEach(b=>b.onclick=async()=>{
+      const days=prompt("Share this target with a read-only link.\n\nValid for how many days? (0 = no expiry)","30");
+      if(days===null) return;
+      const note=prompt("A note, so you remember who it is for:","")||"";
+      try{
+        const l=await api("POST","/api/v1/admin/targets/"+b.dataset.share+"/share",
+          {days:parseInt(days||"30",10),note});
+        const box=document.createElement("tr");
+        box.innerHTML=`<td colspan="9"><div class="note" style="margin:0">
+          <strong>Share link created</strong> — copy it now, it is not shown again:
+          <div class="mono" style="margin:6px 0;word-break:break-all;font-size:12px">${esc(l.url)}</div>
+          <button class="btn s" id="cpy">Copy</button>
+          <span class="faint" style="font-size:11.5px;margin-left:8px">${l.expires_at?
+            "expires "+new Date(l.expires_at*1000).toLocaleDateString():"no expiry"} ·
+            revoke it in <a href="#" data-goto="shares">Share links</a></span></div></td>`;
+        b.closest("tr").parentNode.insertBefore(box,b.closest("tr").nextSibling);
+        box.querySelector("#cpy").onclick=()=>{navigator.clipboard?.writeText(l.url);toast("Link copied");};
+        box.querySelectorAll("[data-goto]").forEach(a=>a.onclick=e=>{e.preventDefault();go(a.dataset.goto);});
+      }catch(e){toast(e.message,true);}
     });
     document.querySelectorAll("[data-advice]").forEach(b=>b.onclick=async()=>{
       const id=b.dataset.advice, host=b.closest("tr");
@@ -689,6 +711,29 @@ function hopsTable(tr,ref){
     <tbody>${rows.join("")}</tbody></table>
     ${ref?`<div style="font-size:12px;color:var(--ink2);margin-top:6px">Highlighted rows: a router of the last healthy path is different or no longer answers.</div>`:""}`;
 }
+// One point per traceroute: a jump in the number of hops, or a path that
+// stops reaching the destination, is a topology change you can see.
+function hopChart(pts){
+  if(!pts||pts.length<2) return `<div class="empty">Not enough traceroutes yet.</div>`;
+  const W=760,H=120,P=24;
+  const max=Math.max(...pts.map(p=>p.hops),1), min=Math.min(...pts.map(p=>p.hops),max);
+  const lo=Math.max(0,min-1), hi=max+1;
+  const x=i=>P+i*(W-2*P)/Math.max(1,pts.length-1);
+  const y=v=>H-P-(v-lo)*(H-2*P)/Math.max(1,hi-lo);
+  const line=pts.map((p,i)=>`${i?"L":"M"}${x(i).toFixed(1)},${y(p.hops).toFixed(1)}`).join("");
+  const dots=pts.map((p,i)=>`<circle cx="${x(i).toFixed(1)}" cy="${y(p.hops).toFixed(1)}" r="${p.kind==="reference"?2.5:3.5}"
+     fill="${p.reached?(p.kind==="anomaly"?"#dc2626":"#0ea5e9"):"#f59e0b"}">
+     <title>${esc(new Date(p.ts*1000).toLocaleString())} — ${p.hops} hops, ${esc(p.kind)}${p.reached?"":", not reached"}${p.as_path?" — "+esc(p.as_path):""}</title></circle>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:${H}px">
+    <path d="${line}" fill="none" stroke="#0ea5e9" stroke-width="1.5"/>${dots}
+    <text x="4" y="${y(hi).toFixed(1)}" font-size="10" fill="#94a3b8">${hi}</text>
+    <text x="4" y="${y(lo).toFixed(1)}" font-size="10" fill="#94a3b8">${lo}</text>
+  </svg>
+  <div style="font-size:11.5px;color:var(--ink2);margin-top:4px">${pts.length} traceroutes over 30 days ·
+    blue: destination reached · amber: not reached · red: taken during an anomaly ·
+    hover a point for its AS path</div>`;
+}
+
 async function viewTraces(m){
   m.innerHTML=`<h2>Traceroutes</h2>
     <p class="lead">The probe runs a traceroute by itself when a target leaves its baseline
@@ -702,6 +747,7 @@ async function viewTraces(m){
         <div style="display:flex;gap:7px"><button class="btn p" id="trrun">Run a traceroute now</button>
           <button class="btn" id="trref">Refresh</button></div>
       </div></div></div>
+    <div class="card"><h3>Hops over time</h3><div class="body" id="hopg">Loading…</div></div>
     <div class="tabs" id="trtabs"></div>
     <div class="card"><div class="body" id="trl">Loading…</div></div>`;
   $("#tosite").onclick=e=>{e.preventDefault();go("site");};
@@ -710,6 +756,14 @@ async function viewTraces(m){
   if(!TR_TARGET||!targets.some(t=>t.id===TR_TARGET)) TR_TARGET=targets[0].id;
   $("#trt").innerHTML=targets.map(t=>`<option value="${t.id}" ${t.id===TR_TARGET?"selected":""}>${esc(t.title)} — ${esc(t.host)}</option>`).join("");
   let kind="", list=[], open=null;
+  // Reloaded on every target change: the chart described the first target
+  // whatever was selected.
+  const loadHops=()=>{
+    if($("#hopg")) $("#hopg").innerHTML="Loading…";
+    api("GET","/api/v1/admin/hops?target="+TR_TARGET+"&days=30")
+      .then(p=>{ if($("#hopg")) $("#hopg").innerHTML=hopChart(p); })
+      .catch(e=>{ if($("#hopg")) $("#hopg").innerHTML=`<div class="note">${esc(e.message)}</div>`; });
+  };
   const draw=()=>{
     $("#trtabs").innerHTML=[["","All"],["anomaly","Anomalies"],["reference","References"],["manual","Manual"]]
       .map(([k,l])=>`<button data-k="${k}" aria-pressed="${kind===k}">${l} (${k?list.filter(x=>x.kind===k).length:list.length})</button>`).join("");
@@ -737,8 +791,9 @@ async function viewTraces(m){
       if(open===null&&list.length) open=(list.find(x=>x.kind!=="reference")||list[0]).id; draw();}
     catch(e){$("#trl").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
   };
-  $("#trt").onchange=()=>{TR_TARGET=+$("#trt").value;open=null;load();};
-  $("#trref").onclick=load;
+  loadHops();
+  $("#trt").onchange=()=>{TR_TARGET=+$("#trt").value;open=null;load();loadHops();};
+  $("#trref").onclick=()=>{load();loadHops();};
   $("#trrun").onclick=async()=>{
     try{await api("POST","/api/v1/admin/traceroutes",{target_id:TR_TARGET});
       toast("Traceroute requested: the result appears in about 10 seconds");
@@ -1472,6 +1527,35 @@ async function viewUsers(m){
 }
 
 /* --------------------------------------------------------- audit log */
+async function viewShares(m){
+  m.innerHTML=`<h2>Share links</h2>
+    <p class="lead">Read-only links to a single target, for someone without an account — a customer,
+      a peer's NOC, a provider on a ticket. A link opens that one target and nothing else, is never
+      indexed, and can be revoked here. The token is stored hashed: a copy of the database does not
+      hand over working links, and a link is shown only once, when created (from the target list).</p>
+    <div class="card"><div class="body" id="shl">Loading…</div></div>`;
+  try{
+    const L=await api("GET","/api/v1/admin/shares");
+    $("#shl").innerHTML=(L&&L.length)?`<table class="resp"><thead><tr><th>Target</th><th>Note</th>
+      <th>Created</th><th>Expires</th><th>Used</th><th></th></tr></thead><tbody>`+L.map(l=>`<tr>
+      <td class="ttl" data-l=""><div>${esc(l.title||("#"+l.target_id))}</div>
+        <div style="font-size:11.5px;color:var(--ink3)">by ${esc(l.created_by||"—")}</div></td>
+      <td data-l="Note">${esc(l.note||"—")}</td>
+      <td data-l="Created">${new Date(l.created_at*1000).toLocaleDateString()}</td>
+      <td data-l="Expires">${l.expires_at?
+        (l.expires_at*1000<Date.now()?'<span class="badge b-crit">expired</span>':new Date(l.expires_at*1000).toLocaleDateString())
+        :'<span class="badge b-warn">never</span>'}</td>
+      <td data-l="Used">${l.uses||0}${l.last_used?" · "+new Date(l.last_used*1000).toLocaleDateString():""}</td>
+      <td class="acts" data-l=""><button class="btn d s" data-rev="${l.id}">Revoke</button></td>
+      </tr>`).join("")+`</tbody></table>`:`<div class="empty">No share link. Create one from the target list.</div>`;
+    document.querySelectorAll("[data-rev]").forEach(b=>b.onclick=async()=>{
+      if(!confirm("Revoke this link? Whoever has it loses access immediately.")) return;
+      try{await api("DELETE","/api/v1/admin/shares/"+b.dataset.rev);toast("Link revoked");render();}
+      catch(e){toast(e.message,true);}
+    });
+  }catch(e){$("#shl").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
+}
+
 async function viewLogs(m){
   m.innerHTML=`<h2>Service log</h2>
     <p class="lead">The last lines the service wrote, kept in memory. The same lines go to

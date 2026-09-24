@@ -142,6 +142,11 @@ function rgba(hex, a) { if (!hex.startsWith("#")) return hex; return `rgba(${par
 
 // A faulty target is also a critical one and belongs to a category: showing
 // it three times on one page is noise. On by default, remembered locally.
+// A shared link, /s/<token>: the page shows that one target and passes the
+// token with every data request. It is a credential, so it never leaves in a
+// referrer and the page is never indexed (the server says so too).
+const SHARE = (location.pathname.match(/^\/s\/([A-Za-z0-9]+)\/?$/) || [])[1] || "";
+
 const once = () => { try { return localStorage.getItem("smokestack.once") !== "0"; } catch (e) { return true; } };
 const S = { ov: null, net: null, peers: 0, open: {}, q: "", view: "home", target: null,
             from: 0, to: 0, preset: 0, cur: null, nav: null, events: [] };
@@ -157,7 +162,8 @@ const worst = list => list.some(x => x.status === "crit") ? "crit" : list.some(x
 async function loadOverview() {
   // "all=1" is only honoured for authenticated callers; visitors get the
   // public targets either way.
-  S.ov = await fetch("/api/v1/overview?all=1").then(r => r.json());
+  S.ov = await fetch(SHARE ? "/api/v1/overview?share=" + encodeURIComponent(SHARE)
+    : "/api/v1/overview?all=1").then(r => r.json());
   S.ov.categories.forEach(c => { if (S.open[c.id] === undefined) S.open[c.id] = true; });
 }
 async function loadSide() {
@@ -413,10 +419,10 @@ async function paint() {
   const tg = S.target, acc = color(tg._ci), now = Math.floor(Date.now() / 1000);
   const q = `/api/v1/series?target=${tg.id}&from=${S.from}&to=${S.to}&points=1500`;
   const [cur, ev, nav, traces] = await Promise.all([
-    fetch(q).then(r => r.json()),
+    fetch(q + (SHARE ? "&share=" + encodeURIComponent(SHARE) : "")).then(r => r.json()),
     fetch(`/api/v1/events?from=${S.from}&to=${S.to}`).then(r => r.ok ? r.json() : []).catch(() => []),
-    S.nav ? Promise.resolve(S.nav) : fetch(`/api/v1/series?target=${tg.id}&from=${now - 365 * 86400}&to=${now}&points=600`).then(r => r.json()),
-    fetch(`/api/v1/traceroutes?target=${tg.id}&limit=40`).then(r => r.ok ? r.json() : []).catch(() => [])
+    S.nav ? Promise.resolve(S.nav) : fetch(`/api/v1/series?target=${tg.id}&from=${now - 365 * 86400}&to=${now}&points=600` + (SHARE ? "&share=" + encodeURIComponent(SHARE) : "")).then(r => r.json()),
+    fetch(`/api/v1/traceroutes?target=${tg.id}&limit=40` + (SHARE ? "&share=" + encodeURIComponent(SHARE) : "")).then(r => r.ok ? r.json() : []).catch(() => [])
   ]);
   if (S.view !== "detail" || S.target !== tg) return;
   S.cur = cur; S.nav = nav; S.traces = traces || [];
@@ -516,6 +522,14 @@ function bySlug(slug) {
   for (const c of (S.ov ? S.ov.categories : [])) for (const t of c.targets) if (t.slug === slug) return t;
   return null;
 }
+// openShared opens the single target a share link carries.
+function openShared() {
+  const only = ((S.ov.categories || [])[0] || {}).targets || [];
+  if (!only.length) return false;
+  openTarget(only[0].id);
+  return true;
+}
+
 function fromHash() {
   const p = new URLSearchParams(location.hash.slice(1));
   // /t/<slug>, then the older #t=<id> form so old links keep working.
@@ -532,10 +546,19 @@ function fromHash() {
 (async () => {
   await Promise.all([loadOverview(), loadSide()]);
   let first = true;
-  App.boot("home", () => { if (first) { first = false; if (fromHash()) return; } render(); });
+  // A shared link has one target and no overview to come back to: it opens
+  // straight on that target.
+  App.boot("home", () => {
+    if (first) { first = false; if (SHARE ? openShared() : fromHash()) return; }
+    if (SHARE) { openShared(); return; }
+    render();
+  });
   setInterval(async () => { await loadOverview(); if (S.view === "home") renderHome(); else if (S.target) { S.target = byId(S.target.id) || S.target; } }, 30000);
   let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(render, 160); });
-  const route = () => { if (!fromHash()) { S.view = "home"; S.target = null; renderHome(); } };
+  const route = () => {
+    if (SHARE) return openShared();
+    if (!fromHash()) { S.view = "home"; S.target = null; renderHome(); }
+  };
   addEventListener("hashchange", route);
   addEventListener("popstate", route);
 })();

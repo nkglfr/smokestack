@@ -379,6 +379,36 @@ func (a *API) OverviewRoutes(mux *http.ServeMux) {
 func (a *API) overview(w http.ResponseWriter, r *http.Request) {
 	// Authenticated callers can ask for everything, private targets
 	// included; the cached payload stays public-only.
+	// A share link renders the normal detail page, so it needs an overview
+	// holding its one target — whatever that target's visibility is.
+	if id, ok := a.shareGrant(r); ok && !a.authenticated(r) {
+		ov, err := a.store.Overview(a.probeID, time.Now().Unix(), false)
+		if err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		keep := &Overview{GeneratedAt: ov.GeneratedAt, Counts: map[string]int{}}
+		for _, c := range ov.Categories {
+			for _, t := range c.Targets {
+				if t.ID != id {
+					continue
+				}
+				if tg, err := a.store.TargetByID(id); err == nil && tg.HideHost {
+					t.Host, t.AddrCount, t.Addresses = "", 0, nil
+				} else {
+					t.Addresses = nil
+				}
+				keep.Categories = []*OverviewCategory{{ID: c.ID, Slug: c.Slug,
+					MenuFR: c.MenuFR, MenuEN: c.MenuEN, Targets: []*OverviewTarget{t}}}
+				keep.Counts["targets"] = 1
+				keep.Counts[t.Status] = 1
+			}
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Robots-Tag", "noindex")
+		writeJSON(w, keep)
+		return
+	}
 	if r.URL.Query().Get("all") != "" && a.authenticated(r) {
 		ov, err := a.store.Overview(a.probeID, time.Now().Unix(), false)
 		if err != nil {

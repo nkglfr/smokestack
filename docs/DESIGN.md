@@ -263,6 +263,13 @@ curl -s -X PUT localhost:8080/api/v1/admin/storage \
                 "low_watermark":0.70,"keep_local_hours":48}}'
 ```
 
+**A share link is a credential.** It is a random token, kept hashed like a
+session, that grants read access to exactly one target — series, events and
+traceroutes of that target, nothing else, whatever its visibility. It
+expires, it is revocable, its uses are counted, and both the page and
+`robots.txt` keep it out of search engines: a token that ends up in a search
+result is a leak, not a share.
+
 **Hiding an address is not hiding a target.** A public target can keep its
 address private: the series, the status and the title are public, while the
 host, the port, the pinned address and the traceroutes are stripped from

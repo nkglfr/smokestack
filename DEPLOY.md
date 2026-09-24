@@ -645,6 +645,23 @@ the status code is not the reason. The message under the target's name says
 which one it is — most often a target created without a port, which now says
 so explicitly.
 
+### Sharing one target with someone who has no account
+
+A customer, a peer's NOC, a provider handling a ticket: **Share** next to a
+target creates a read-only link, valid for the number of days you choose
+(0 for no expiry) with a note so you remember who it is for.
+
+- the link opens **that one target and nothing else**, even a private one;
+- it is never indexed — the page carries `noindex` and `robots.txt` excludes
+  `/s/`, because a token in a URL is a credential;
+- a target that hides its address keeps hiding it through the link;
+- *Share links* lists them all with their use count and last use, and
+  **Revoke** cuts access immediately.
+
+The token is stored **hashed**: a copy of the database hands over no working
+link, and the link is shown once, when created. Creations and revocations are
+in the audit log.
+
 ### Interval and retention, per target
 
 The **interval** is free: anything from 10 seconds to a day. The only rule is
@@ -831,6 +848,12 @@ path is also recorded once a day while each target is healthy, and the
 back-office (*Monitoring → Traceroutes*) highlights the routers that changed
 or stopped answering compared with it. Hops are enriched with reverse DNS and
 origin AS (Team Cymru DNS service).
+
+**Hops over time.** The traceroutes screen draws the hop count of each
+traceroute over 30 days, one point per traceroute: blue when the destination
+was reached, amber when it was not, red for a traceroute taken during an
+anomaly, and the AS path on hover. A step from 5 to 8 hops is a topology
+change you can see at a glance.
 
 **Topology changes.** Each healthy path is compared with the previous one.
 When the **AS path** changes — a transit provider decommissioning a peering,

@@ -255,8 +255,10 @@ func (a *API) series(w http.ResponseWriter, r *http.Request) {
 
 	// La visibilite de la cible est verifiee avant toute lecture ou
 	// reponse depuis le cache.
+	// A share token opens exactly one target, and only for reading.
+	shared, hasShare := a.shareGrant(r)
 	if t, err := a.store.TargetByID(targetID); err != nil ||
-		(!t.Public && !a.authenticated(r)) {
+		(!t.Public && !a.authenticated(r) && !(hasShare && shared == targetID)) {
 		writeErr(w, 404, "target not found")
 		return
 	}

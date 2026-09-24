@@ -225,7 +225,53 @@ func (q *traceQueue) Pop() []int64 {
 
 // ------------------------------------------------------------------ routes
 
+// HopSeries is the hop count of each traceroute over a window: the visual
+// signal of a topology change, alongside the AS path comparison.
+type HopPoint struct {
+	TS      int64  `json:"ts"`
+	Hops    int    `json:"hops"`
+	Reached bool   `json:"reached"`
+	Kind    string `json:"kind"`
+	ASPath  string `json:"as_path,omitempty"`
+}
+
+func (s *Store) HopSeries(targetID, since int64) ([]HopPoint, error) {
+	trs, err := s.Traceroutes(targetID, nil, 500)
+	if err != nil {
+		return nil, err
+	}
+	out := []HopPoint{}
+	for i := len(trs) - 1; i >= 0; i-- { // oldest first
+		tr := trs[i]
+		if tr.TS < since {
+			continue
+		}
+		out = append(out, HopPoint{TS: tr.TS, Hops: len(tr.Hops), Reached: tr.Reached,
+			Kind: tr.Kind, ASPath: strings.Join(asPath(tr), " ")})
+	}
+	return out, nil
+}
+
+func (a *API) hopSeries(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.URL.Query().Get("target"), 10, 64)
+	if err != nil {
+		writeErr(w, 400, "target is required")
+		return
+	}
+	days := 30
+	if n, err := strconv.Atoi(r.URL.Query().Get("days")); err == nil && n > 0 && n <= 365 {
+		days = n
+	}
+	pts, err := a.store.HopSeries(id, time.Now().Unix()-int64(days)*86400)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, pts)
+}
+
 func (a *API) TracerouteRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/admin/hops", a.auth(a.hopSeries))
 	mux.HandleFunc("GET /api/v1/traceroutes", a.traceroutesPublic)
 	mux.HandleFunc("GET /api/v1/admin/traceroutes", a.need(RoleViewer, a.traceroutesAdmin))
 	mux.HandleFunc("POST /api/v1/admin/traceroutes", a.need(RoleEditor, a.traceroutesRequest))

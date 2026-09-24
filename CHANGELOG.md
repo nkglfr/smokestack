@@ -5,6 +5,14 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- **Share a single target with a read-only link** (idea #15), for someone
+  without an account. Dated, revocable, never indexed, limited to that one
+  target even when it is private, and with the token stored hashed so a copy
+  of the database hands over nothing.
+- **Hops over time** (idea #16): the traceroutes screen charts the hop count
+  of each traceroute over 30 days, with the AS path on hover — the visual
+  counterpart of the AS-path comparison.
+
 - **Free interval** (idea #14): any value from 10 seconds to a day, bounded
   only by the burst rule. The status window now follows the interval, so a
   target measured every 30 minutes no longer reads as having no data.

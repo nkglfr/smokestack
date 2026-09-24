@@ -292,6 +292,7 @@ func main() {
 	api.ContactRoutes(mux)
 	api.LogRoutes(mux)
 	api.AdviceRoutes(mux)
+	api.ShareRoutes(mux)
 
 	// Public pages get their metadata and a no-JavaScript summary injected
 	// on the way out, so that a crawler sees a real page.
@@ -356,6 +357,14 @@ func main() {
 	// One readable address per target, listed in the sitemap.
 	mux.HandleFunc("GET /t/{slug}", page("index.html", func(r *http.Request) (pageMeta, bool) {
 		return api.targetMeta(r, r.PathValue("slug"))
+	}))
+	// A shared link renders the normal detail page for one target, and is
+	// never indexed: it is a credential in a URL.
+	mux.HandleFunc("GET /s/{token}", page("index.html", func(r *http.Request) (pageMeta, bool) {
+		if _, ok := api.store.ShareTarget(r.PathValue("token")); !ok {
+			return pageMeta{}, false
+		}
+		return pageMeta{Path: "/s/" + r.PathValue("token"), Title: "Shared graph", NoIndex: true}, true
 	}))
 	mux.HandleFunc("GET /robots.txt", api.robotsTxt)
 	mux.HandleFunc("GET /sitemap.xml", api.sitemapXML)
