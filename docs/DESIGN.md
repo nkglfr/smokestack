@@ -362,6 +362,15 @@ in-memory ring and shown in the back-office, while still going to stdout for
 journald or Docker. A log belongs in the system's hands, not in the database;
 but the person who needs it does not always have a shell.
 
+**Why there is loss.** The amount of loss says little; its shape says
+almost everything. A destination limiting ICMP loses a fixed small number of
+packets per burst, never a whole one, however many bursts are affected — the
+share of affected bursts is not the signal, which a test caught while the
+first rule used it. Whole passes lost are a real outage, and the advice says
+so instead of offering to smooth it away. Several packets at once, scattered,
+is the path. The analysis runs on demand over the raw passes of the last 24
+hours and never changes anything by itself.
+
 **Why a target fails.** Every pass carries the reason it could not measure —
 resolution failure, missing IPv6 stack on the probe, send error, or no reply
 at all — and the last one is kept per target and shown in the back-office.

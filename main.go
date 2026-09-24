@@ -291,6 +291,7 @@ func main() {
 	api.probeInProcess = cfg.Probe.Enabled && cfg.Probe.Mode != "external"
 	api.ContactRoutes(mux)
 	api.LogRoutes(mux)
+	api.AdviceRoutes(mux)
 
 	// Public pages get their metadata and a no-JavaScript summary injected
 	// on the way out, so that a crawler sees a real page.

@@ -645,6 +645,27 @@ the status code is not the reason. The message under the target's name says
 which one it is — most often a target created without a port, which now says
 so explicitly.
 
+### Why is there loss on this target?
+
+The target list has a **Why this loss?** button. It reads the shape of the
+loss over the last 24 hours — not only how much — and says which of the three
+usual causes it is:
+
+| Verdict | What the data looks like | What to do |
+|---|---|---|
+| **clean** | no loss at all | nothing |
+| **rate limiting** | one or two packets per burst, never a whole one, over many bursts | a gentler burst is offered, applied in one click |
+| **real outages** | whole passes lost | nothing: that is a real measurement, and tuning would hide it |
+| **scattered loss** | several packets at once, spread out | keep it: it describes the path |
+
+A burst that nearly fills its interval is flagged too, whatever the loss.
+
+Nothing is applied on its own. Changing the packet count changes the
+resolution of the loss figure — with 20 packets one lost packet reads as 5 %
+— and changing the interval changes the shape of the history, which is what a
+one-year graph is for. So the instance names what it sees and offers the
+change; the decision stays yours and is recorded in the audit log.
+
 ### A single target never answers
 
 The back-office shows the reason under the target's name. The three usual

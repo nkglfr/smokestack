@@ -5,6 +5,13 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- **"Why this loss?"** on each target: the instance reads the shape of the
+  loss over 24 hours and tells rate limiting, real outages and path loss
+  apart — one or two packets per burst is a limiter, whole passes lost is an
+  outage, several packets at once is the path. For a limiter it offers a
+  gentler burst, applied in one click; for an outage it says explicitly that
+  tuning would only hide it. Nothing is ever applied on its own.
+
 - **Topology changes are detected**: a healthy path is compared with the
   previous one, and a change of **AS path** is recorded as an event on the
   graphs and in the log — without alerting, since nothing is broken.

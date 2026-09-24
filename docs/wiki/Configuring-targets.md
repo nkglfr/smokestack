@@ -145,6 +145,15 @@ Two settings matter:
 - The comparison is on AS paths, not addresses: an operator balancing traffic
   across parallel links raises nothing.
 
+## Let the instance tell you
+
+Rather than reading graphs, press **Why this loss?** next to a target. It
+looks at the shape of the loss over the last 24 hours and names the cause:
+one or two packets per burst and never a whole one is a limiter; whole passes
+lost is a real outage; several packets at once, spread out, is the path. For
+the first case it offers the gentler burst, in one click. For the second it
+says plainly that changing the settings would only hide the problem.
+
 ## Should this be automatic?
 
 smokestack deliberately does not retune a target on its own. Changing the

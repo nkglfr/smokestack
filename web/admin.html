@@ -577,6 +577,7 @@ async function viewTargets(m){
         <td class="acts" data-l="" style="text-align:right;white-space:nowrap">
           <button class="btn s" data-edit="${t.id}">Edit</button>
           <button class="btn s" data-now="${t.id}" title="Measure right away">Check now</button>
+          <button class="btn s" data-advice="${t.id}" title="Look at the shape of the loss">Why this loss?</button>
           <button class="btn s" data-trace="${t.id}">Traceroute</button>
           <button class="btn d s" data-del="${t.id}">Delete</button></td>
         </tr>`).join("")+`</tbody></table>`:`<div class="empty">No target yet.</div>`;
@@ -604,6 +605,31 @@ async function viewTargets(m){
     });
     document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>{
       EDIT=list.find(t=>t.id==b.dataset.edit); render(); window.scrollTo({top:0,behavior:"smooth"});
+    });
+    document.querySelectorAll("[data-advice]").forEach(b=>b.onclick=async()=>{
+      const id=b.dataset.advice, host=b.closest("tr");
+      b.disabled=true;
+      try{
+        const a=await api("GET","/api/v1/admin/targets/"+id+"/advice");
+        const VERD={clean:"b-ok","rate limiting":"b-warn","real outages":"b-crit",
+                    "scattered loss":"b-warn","not enough data":"b-n"};
+        const box=document.createElement("tr");
+        box.innerHTML=`<td colspan="8"><div class="note" style="margin:0">
+          <span class="badge ${VERD[a.verdict]||"b-n"}">${esc(a.verdict)}</span>
+          ${a.loss_pct?` <strong>${a.loss_pct.toFixed(2)} %</strong> loss over 24 h`:""}
+          <div style="margin-top:6px">${esc(a.detail)}</div>
+          ${(a.suggestions||[]).map((s,i)=>`<div style="margin-top:8px">
+            <strong>${esc(s.label)}</strong> — ${esc(s.why)}
+            <button class="btn p s" data-apply="${id}" data-patch="${esc(JSON.stringify(s.patch))}"
+              style="margin-left:8px">Apply</button></div>`).join("")}
+          </div></td>`;
+        host.parentNode.insertBefore(box,host.nextSibling);
+        box.querySelectorAll("[data-apply]").forEach(ab=>ab.onclick=async()=>{
+          try{await api("PATCH","/api/v1/admin/targets/"+ab.dataset.apply,JSON.parse(ab.dataset.patch));
+            toast("Target settings updated");render();}catch(e){toast(e.message,true);}
+        });
+      }catch(e){toast(e.message,true);}
+      b.disabled=false;
     });
     document.querySelectorAll("[data-now]").forEach(b=>b.onclick=async()=>{
       try{await api("POST","/api/v1/admin/targets/"+b.dataset.now+"/check");
