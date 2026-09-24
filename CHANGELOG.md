@@ -5,6 +5,12 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- CI and release workflows move to `actions/checkout@v5` and
+  `actions/setup-go@v6`, which run on Node 24: GitHub was already forcing the
+  older ones onto it and is removing the Node 20 runtime. The runner is
+  pinned to `ubuntu-24.04` instead of `ubuntu-latest`, so the switch to
+  Ubuntu 26 on 19 October cannot land in the middle of a release.
+
 - The notices on a target page (load-balanced name, pinned address, shared
   graph) now span the full width of the page instead of stopping short of the
   graph above them.

@@ -7,12 +7,16 @@ on:
 permissions:
   contents: read
 
+# The runner version is pinned rather than following ubuntu-latest: a
+# release must not start building on a new distribution the day GitHub
+# switches the label. The binaries are static (CGO_ENABLED=0), so the
+# distribution does not leak into them, but the tooling around them does.
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.22"
       - name: Resolve dependencies
@@ -49,9 +53,9 @@ jobs:
   # Builds the container image on every commit and runs its self-test, so a
   # broken Dockerfile is caught here and not by a user.
   docker:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build the image
         run: docker build -t smokestack:ci .
       - name: Self-test inside the container
