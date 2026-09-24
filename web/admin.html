@@ -47,6 +47,7 @@
   .spacer{flex:1}
   .who{font-size:12px;color:var(--ink2);text-align:right;line-height:1.3}
   .badge{border-radius:999px;padding:2px 9px;font-size:11px;font-weight:500}
+  .terr{margin-top:4px;font-size:11.5px;color:var(--crit);max-width:520px;line-height:1.35}
   .b-ok{background:#f0fdf4;color:var(--ok)}
   .b-warn{background:#fffbeb;color:var(--warn)}
   .b-crit{background:#fef2f2;color:var(--crit)}
@@ -506,7 +507,9 @@ async function viewTargets(m){
           style="color:${F.has(t.id)?"#d97706":"var(--ink3)"}">${F.has(t.id)?"★":"☆"}</button></td>
         <td class="ttl" data-l="" style="text-align:left"><div style="font-weight:550">${esc(t.title)}</div>
           <div class="mono" style="font-size:11.5px;color:var(--ink2)">${esc(t.host)}${t.port?":"+t.port:""}</div>
-          <div style="font-size:11.5px;color:var(--ink3)">${esc(cname[t.category_id]||"—")}</div></td>
+          <div style="font-size:11.5px;color:var(--ink3)">${esc(cname[t.category_id]||"—")}</div>
+          ${t.last_error?`<div class="terr" title="Last failure: ${esc(new Date(t.last_error_ts*1000).toLocaleString())}">
+            ⚠ ${esc(t.last_error)}</div>`:""}</td>
         <td data-l="Family">${FAMILY[t.family||0]}</td><td data-l="Check">${esc(t.proto)}</td>
         <td data-l="Interval">${t.interval_s} s</td>
         <td data-l="Visibility"><button class="btn s" data-vis="${t.id}" data-pub="${t.public?1:0}"

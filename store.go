@@ -139,6 +139,11 @@ CREATE INDEX IF NOT EXISTS idx_%s_bucket ON %s(bucket);
 `
 
 const metricsExtraSchema = `
+CREATE TABLE IF NOT EXISTS target_errors (
+  target_id INTEGER PRIMARY KEY,
+  ts        INTEGER NOT NULL,
+  err       TEXT NOT NULL
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS live (
   target_id INTEGER NOT NULL,
   probe_id  INTEGER NOT NULL,
@@ -611,6 +616,39 @@ type Measurement struct {
 	Lost     int       `json:"lost"`
 	RTTus    []float64 `json:"rtt_us"`
 	Err      string    `json:"err,omitempty"`
+}
+
+// TargetError keeps the last reason a target could not be measured, so the
+// back-office can say why instead of only showing 100 % loss.
+type TargetError struct {
+	TS  int64  `json:"ts"`
+	Err string `json:"err"`
+}
+
+func (s *Store) SetTargetError(id int64, ts int64, msg string) {
+	if msg == "" {
+		s.mxw.Exec(`DELETE FROM target_errors WHERE target_id=?`, id)
+		return
+	}
+	s.mxw.Exec(`INSERT INTO target_errors(target_id,ts,err) VALUES(?,?,?)
+	            ON CONFLICT(target_id) DO UPDATE SET ts=excluded.ts, err=excluded.err`, id, ts, msg)
+}
+
+func (s *Store) TargetErrors() map[int64]TargetError {
+	out := map[int64]TargetError{}
+	rows, err := s.mx.Query(`SELECT target_id,ts,err FROM target_errors`)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var e TargetError
+		if rows.Scan(&id, &e.TS, &e.Err) == nil {
+			out[id] = e
+		}
+	}
+	return out
 }
 
 func (s *Store) Record(m Measurement) error {

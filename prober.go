@@ -304,13 +304,14 @@ func (r *resolver) Resolve(host string, family int) (net.IP, error) {
 	case 4, 6:
 		ips, err := net.DefaultResolver.LookupIP(ctx, fmt.Sprintf("ip%d", family), host)
 		if err != nil || len(ips) == 0 {
-			return nil, fmt.Errorf("dns: no IPv%d address for %s", family, host)
+			return nil, fmt.Errorf("cannot resolve %s in IPv%d: check the name, "+
+				"or set the address family to auto", host, family)
 		}
 		ip = ips[0]
 	default:
 		ips, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
 		if err != nil || len(ips) == 0 {
-			return nil, fmt.Errorf("dns: %s", host)
+			return nil, fmt.Errorf("cannot resolve %s: no address returned by DNS", host)
 		}
 		ip = ips[0]
 		for _, x := range ips {
@@ -391,6 +392,13 @@ func (p *Prober) runICMP(t *Target) ([]float64, string) {
 	fl.done = true
 	out := append([]float64(nil), fl.rtts...)
 	fl.mu.Unlock()
+	if len(out) == 0 {
+		// A target that answers nothing at all deserves a reason, not just
+		// 100 % loss: it is almost always filtering or rate limiting.
+		return out, fmt.Sprintf("no reply to %d ICMP echo requests sent to %s "+
+			"(ICMP filtered on the path, or the target rate-limits it: try fewer packets, "+
+			"spaced further apart)", t.Packets, ip)
+	}
 	return out, ""
 }
 

@@ -164,9 +164,27 @@ func (s *Store) RecordBatch(batch []queuedMeasure) error {
 		return err
 	}
 	defer live.Close()
+	// The reason a pass failed is kept per target, so that the back-office
+	// can show why instead of leaving the operator with 100 % loss.
+	setErr, err := tx.Prepare(`INSERT INTO target_errors(target_id,ts,err) VALUES(?,?,?)
+	                           ON CONFLICT(target_id) DO UPDATE SET ts=excluded.ts, err=excluded.err`)
+	if err != nil {
+		return err
+	}
+	defer setErr.Close()
+	clearErr, err := tx.Prepare(`DELETE FROM target_errors WHERE target_id=?`)
+	if err != nil {
+		return err
+	}
+	defer clearErr.Close()
 	probes := map[int64]bool{}
 	for _, q := range batch {
 		m := q.m
+		if m.Err != "" {
+			setErr.Exec(m.TargetID, m.TS, m.Err)
+		} else if len(m.RTTus) > 0 {
+			clearErr.Exec(m.TargetID)
+		}
 		sk := NewSketch()
 		var sum, sumsq float64
 		for _, v := range m.RTTus {

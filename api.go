@@ -489,13 +489,30 @@ func (a *API) storagePut(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, c)
 }
 
+// targetsGet lists the targets, each with the reason it could not be
+// measured if there is one: showing 100 % loss without a reason leaves the
+// operator guessing between filtering, a missing IPv6 stack and a bad name.
 func (a *API) targetsGet(w http.ResponseWriter, r *http.Request) {
 	ts, err := a.store.ActiveTargets()
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}
-	writeJSON(w, ts)
+	errs := a.store.TargetErrors()
+	type targetWithError struct {
+		*Target
+		LastError   string `json:"last_error,omitempty"`
+		LastErrorTS int64  `json:"last_error_ts,omitempty"`
+	}
+	out := make([]targetWithError, 0, len(ts))
+	for _, t := range ts {
+		row := targetWithError{Target: t}
+		if e, ok := errs[t.ID]; ok {
+			row.LastError, row.LastErrorTS = e.Err, e.TS
+		}
+		out = append(out, row)
+	}
+	writeJSON(w, out)
 }
 
 func (a *API) targetsPost(w http.ResponseWriter, r *http.Request) {

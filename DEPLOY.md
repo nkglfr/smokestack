@@ -487,6 +487,7 @@ the following release.
 | Service does not start | `journalctl -u smokestack -u smokestack-probe -n 50` |
 | Probe log says `the probe needs CAP_NET_RAW` | The probe unit was edited: `AmbientCapabilities=CAP_NET_RAW` is required |
 | Is the probe healthy? | Back-office dashboard, *Measurement pipeline* card: last measurement age, dropped measurements |
+| One target at 100 % loss | The target list in the back-office now shows **why** under its name: name not resolved, IPv6 unavailable on this probe, or no reply at all. See *A single target never answers* below |
 | All targets at 100 % loss | Outbound ICMP filtered? `ping -c3 1.1.1.1` from the host. The log says `ICMP probe unavailable` if the raw socket was refused. |
 | "In-place updates unavailable" | The binary must run from `/opt/smokestack/releases/<v>/`: re-run the installer |
 | Package rejected: unknown signature | The signing key is not in `release.pub` nor `/etc/smokestack/release-keys.pub` |
@@ -500,6 +501,43 @@ the following release.
 | `listen address: ... invalid` in the log | Fix the value named in the message in `/etc/smokestack/smokestack.env` |
 | `curl: (22) ... 404` when downloading `install.sh` | No release has been published yet: install from source (section 2) or publish one (section 6) |
 | `sudo: command not found` | You are root already: run the command without `sudo` |
+
+### A single target never answers
+
+The back-office shows the reason under the target's name. The three usual
+ones:
+
+- **`cannot resolve …`** — the name has no address in the requested family.
+  A target forced to IPv6 whose name has only an A record fails here; set the
+  family back to *auto*.
+- **`IPv6 is not available on this probe`** — the host has no IPv6
+  connectivity, or the probe could not open an ICMPv6 socket. Check with
+  `ping -6 2606:4700:4700::1111` on the server itself.
+- **`no reply to N ICMP echo requests sent to …`** — the packets left and
+  nothing came back. The message gives the address actually probed, which
+  matters for a name.
+
+For that last one, before suspecting smokestack, compare with the same
+pattern rather than with a plain `ping`:
+
+```sh
+ping -c 20 -i 0.2 <address>     # what smokestack does: a burst
+ping -c 3 <address>             # what a person usually does
+```
+
+If the burst shows loss and the three-packet test does not, the destination
+is **rate-limiting ICMP** — many home routers, CPE and ONT answer only a few
+echo requests per second. Lower the target to 10 packets spaced by 300 ms;
+the measurement stays just as useful.
+
+Two more cases worth knowing:
+
+- **Pool names** such as `fr.pool.ntp.org` resolve to a different server every
+  few minutes, and many of those servers do not answer ICMP at all. Use a
+  specific server, or a TCP target on port 123's operator, rather than the
+  pool name.
+- **A name with both A and AAAA records** is probed in IPv4 when the family is
+  *auto*. Create two targets, one per family, to compare the two stacks.
 
 ## 9. Uninstalling
 

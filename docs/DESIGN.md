@@ -296,6 +296,12 @@ an underscore (`category_id`, `interval_s`, `spacing_ms`, `timeout_ms`) are
 silently ignored, and the back-office appears to save without saving. A test
 sets every field and reads them back.
 
+**Why a target fails.** Every pass carries the reason it could not measure —
+resolution failure, missing IPv6 stack on the probe, send error, or no reply
+at all — and the last one is kept per target and shown in the back-office.
+Loss alone does not tell an operator whether the packets were filtered, the
+name was wrong or the host has no IPv6.
+
 **TCP targets.** The host and the port are stored separately, so a target can
 move between ICMP and TCP without rewriting its address; older targets stored
 as `host:port` are migrated on start.

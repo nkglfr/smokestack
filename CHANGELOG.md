@@ -5,6 +5,11 @@ install the newest one directly, whatever versions came in between.
 
 ## 0.2.3
 
+- **A failing target now says why** (issue #9): the back-office shows, under
+  its name, whether the name could not be resolved, whether IPv6 is missing on
+  the probe, or that nothing replied — with the address actually probed. The
+  reason disappears as soon as the target answers again.
+
 - The home page checkbox is now simply **Unique targets**, with a blue marker
   whose tooltip explains what it does (issue #8).
 - **Public pages are indexable.** Title, description, canonical address,
