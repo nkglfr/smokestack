@@ -232,6 +232,12 @@ func (a *Alerter) body(t *Target, inc *LocalIncident, detail string, now int64) 
 		time.Unix(inc.OpenedAt, 0).UTC().Format("2006-01-02 15:04"),
 		strings.ToUpper(t.Proto), t.IntervalS, t.Packets)
 
+	// A path change alone is not worth waking anyone: it is recorded as an
+	// event. Combined with an incident, it is very likely the cause, so it
+	// goes at the top of the message.
+	if detail, ok := a.store.RecentPathChange(t.ID, inc.OpenedAt-7*24*3600); ok {
+		fmt.Fprintf(&b, "The route changed recently — %s\n\n", detail)
+	}
 	// The traceroute taken when the incident opened, compared with the last
 	// healthy path: this is what says where it breaks.
 	if trs, err := a.store.Traceroutes(t.ID, nil, 6); err == nil {

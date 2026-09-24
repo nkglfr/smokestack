@@ -407,7 +407,7 @@ func (p *Prober) Run(t *Target) {
 	}
 	p.sink.Submit(m, t.Host)
 	if p.det != nil {
-		if kind, reason := p.det.observe(t.ID, m); kind != "" {
+		if kind, reason := p.det.observeTarget(t.ID, m, t.TraceHours); kind != "" {
 			p.queueTrace(t, kind, reason)
 		}
 	}
@@ -643,6 +643,11 @@ func median(v []float64) float64 {
 // every 15 min per target, 60 min while the anomaly lasts, within an hourly
 // budget), "reference" now and then while it is healthy.
 func (d *detector) observe(id int64, m Measurement) (kind, reason string) {
+	return d.observeTarget(id, m, 0)
+}
+
+// observeTarget takes the target's own reference interval into account.
+func (d *detector) observeTarget(id int64, m Measurement, traceHours int) (kind, reason string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	now := d.now()
@@ -693,8 +698,15 @@ func (d *detector) observe(id int64, m Measurement) (kind, reason string) {
 		st.base = 0.9*st.base + 0.1*med
 	}
 	st.okPasses++
-	if d.cfg.ReferenceHours > 0 && st.okPasses >= 5 &&
-		now.Sub(st.lastRef) >= time.Duration(d.cfg.ReferenceHours)*time.Hour &&
+	// A target can ask for a denser reference than the instance default:
+	// watching a transit path closely is worth four traceroutes a day,
+	// while a distant destination is not.
+	every := d.cfg.ReferenceHours
+	if traceHours > 0 {
+		every = traceHours
+	}
+	if every > 0 && st.okPasses >= 5 &&
+		now.Sub(st.lastRef) >= time.Duration(every)*time.Hour &&
 		now.Sub(d.lastRef) >= time.Minute {
 		st.lastRef, d.lastRef = now, now
 		return "reference", "healthy path, for comparison"

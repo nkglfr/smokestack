@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -54,12 +57,90 @@ type Traceroute struct {
 	Hops     []Hop  `json:"hops"`
 }
 
+// asPath is the sequence of autonomous systems a traceroute crossed, with
+// repetitions collapsed. Comparing AS paths rather than addresses is what
+// makes topology changes visible without crying at every load-balanced hop:
+// two parallel links of the same operator give different addresses but the
+// same AS path.
+func asPath(tr *Traceroute) []string {
+	var out []string
+	for _, h := range tr.Hops {
+		as := strings.TrimSpace(h.ASN)
+		if as == "" {
+			continue
+		}
+		if len(out) == 0 || out[len(out)-1] != as {
+			out = append(out, as)
+		}
+	}
+	return out
+}
+
+func samePath(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func (s *Store) SaveTraceroute(tr *Traceroute) error {
 	hops, _ := json.Marshal(tr.Hops)
 	_, err := s.mxw.Exec(`INSERT INTO traceroutes(target_id,probe_id,ts,kind,reason,family,dest,reached,hops)
 	                      VALUES(?,?,?,?,?,?,?,?,?)`,
 		tr.TargetID, tr.ProbeID, tr.TS, tr.Kind, tr.Reason, tr.Family, tr.Dest, b2i(tr.Reached), string(hops))
+	if err == nil && tr.Kind == "reference" {
+		s.notePathChange(tr)
+	}
 	return err
+}
+
+// notePathChange compares a fresh healthy path with the previous one and
+// records an event when the AS path changed. A transit provider
+// decommissioning a peering degrades nothing measurable: latency moves by a
+// millisecond, and the change would otherwise go unnoticed.
+func (s *Store) notePathChange(tr *Traceroute) {
+	prev, err := s.Traceroutes(tr.TargetID, []string{"reference"}, 2)
+	if err != nil || len(prev) < 2 {
+		return
+	}
+	now, before := asPath(prev[0]), asPath(prev[1])
+	if len(now) == 0 || len(before) == 0 || samePath(now, before) {
+		return
+	}
+	title := ""
+	if t, err := s.TargetByID(tr.TargetID); err == nil {
+		title = t.Title
+	}
+	detail := fmt.Sprintf("%s: AS path changed, %s → %s", title,
+		strings.Join(before, " "), strings.Join(now, " "))
+	s.cfg.Exec(`INSERT INTO events(ts_start,kind,title,public) VALUES(?,?,?,1)`,
+		tr.TS, "path", detail)
+	log.Printf("path change: %s", detail)
+}
+
+// RecentPathChange reports whether the AS path of a target changed in the
+// last window, and what the change was.
+func (s *Store) RecentPathChange(targetID int64, since int64) (string, bool) {
+	title := ""
+	if t, err := s.TargetByID(targetID); err == nil {
+		title = t.Title
+	}
+	if title == "" {
+		return "", false
+	}
+	var detail string
+	err := s.cfg.QueryRow(`SELECT title FROM events WHERE kind='path' AND ts_start>=?
+	                       AND title LIKE ? ORDER BY ts_start DESC LIMIT 1`,
+		since, title+":%").Scan(&detail)
+	if err != nil {
+		return "", false
+	}
+	return detail, true
 }
 
 func (s *Store) Traceroutes(targetID int64, kinds []string, limit int) ([]*Traceroute, error) {

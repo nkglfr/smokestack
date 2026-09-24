@@ -5,6 +5,14 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- **Topology changes are detected**: a healthy path is compared with the
+  previous one, and a change of **AS path** is recorded as an event on the
+  graphs and in the log — without alerting, since nothing is broken.
+  Addresses are not compared, so parallel links of the same operator raise
+  nothing. When a degradation follows such a change, the alert names it
+  first. A target can take its reference more often than the instance
+  default, in its settings.
+
 - **Deleting a target now archives it.** Its name becomes free again, so a
   target of the same name can be recreated, and its measurements stay
   attached to the archived one. This also fixes a worse problem found while

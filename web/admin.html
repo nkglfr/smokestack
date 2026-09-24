@@ -396,6 +396,8 @@ async function viewTargets(m){
         <div class="field"><label>Packets</label><input id="tpk" type="number" value="20"></div>
         <div class="field"><label>Spacing (ms)</label><input id="tsp" type="number" value="500"></div>
         <div class="field"><label>Timeout (ms)</label><input id="tto" type="number" value="2000"></div>
+        <div class="field"><label>Reference traceroute every (hours, 0 = instance default)</label>
+          <input id="thrs" type="number" min="0" max="720" value="0"></div>
         <div class="field"><label>Pinned address (optional)</label>
           <input id="tpin" placeholder="leave empty to resolve the name each time"></div>
       </div>
@@ -492,6 +494,7 @@ async function viewTargets(m){
       interval_s:parseInt($("#tiv").value,10),packets:parseInt($("#tpk").value,10),
       spacing_ms:parseInt($("#tsp").value,10),timeout_ms:parseInt($("#tto").value,10),
       pin_ip:$("#tpin").value.trim(), alerts_off:!$("#talert").checked,
+      trace_hours:parseInt($("#thrs").value||"0",10),
       public:$("#tpub").checked};
     try{
       if(EDIT){ await api("PATCH","/api/v1/admin/targets/"+EDIT.id,body); EDIT=null; toast("Target saved"); }

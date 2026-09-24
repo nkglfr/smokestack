@@ -643,6 +643,7 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 		TimeoutMs  *int    `json:"timeout_ms"`
 		PinIP      *string `json:"pin_ip"`
 		AlertsOff  *bool   `json:"alerts_off"`
+		TraceHours *int    `json:"trace_hours"`
 		Public     *bool   `json:"public"`
 		Enabled    *bool   `json:"enabled"`
 	}
@@ -691,6 +692,13 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.AlertsOff != nil {
 		t.AlertsOff = *in.AlertsOff
+	}
+	if in.TraceHours != nil {
+		if *in.TraceHours < 0 || *in.TraceHours > 720 {
+			writeErr(w, 400, "trace_hours must be between 0 (instance default) and 720")
+			return
+		}
+		t.TraceHours = *in.TraceHours
 	}
 	if in.Public != nil {
 		t.Public = *in.Public

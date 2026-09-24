@@ -129,6 +129,22 @@ is the usual cause.
 
 ---
 
+## Watching for topology changes
+
+A transit provider decommissioning a peering degrades nothing measurable:
+latency moves by a millisecond or two, and the path is no longer the same.
+smokestack records a healthy path once a day, compares it with the previous
+one, and notes a change of **AS path** as an event — visible on the graph, in
+the log, and used as context if a degradation follows. Nobody is alerted for
+it on its own.
+
+Two settings matter:
+
+- **Reference traceroute every**, per target: leave it at the instance
+  default (24 h) for most things, set 4 h on the paths you watch closely.
+- The comparison is on AS paths, not addresses: an operator balancing traffic
+  across parallel links raises nothing.
+
 ## Should this be automatic?
 
 smokestack deliberately does not retune a target on its own. Changing the

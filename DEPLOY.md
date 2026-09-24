@@ -780,6 +780,18 @@ back-office (*Monitoring → Traceroutes*) highlights the routers that changed
 or stopped answering compared with it. Hops are enriched with reverse DNS and
 origin AS (Team Cymru DNS service).
 
+**Topology changes.** Each healthy path is compared with the previous one.
+When the **AS path** changes — a transit provider decommissioning a peering,
+a route moving to another upstream — an event is recorded, shown on the
+graphs and written to the log, **without alerting anyone**: nothing is broken.
+Addresses are deliberately not compared, since two parallel links of the same
+operator differ by address but not by AS path. If such a change is followed by
+a real degradation, the alert mentions it first: it is very likely the cause.
+
+A target you watch closely can take its reference more often than the
+instance default of 24 hours — every 4 hours for a transit path, say — in
+*Reference traceroute every* in its settings.
+
 Traceroutes are **not public by default**, since hops reveal the inside of your
 network; enable them in *Instance → Publisher page*.
 
