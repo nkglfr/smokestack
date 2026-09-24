@@ -3,12 +3,20 @@
 Versions are published as signed releases; servers with automatic updates
 install the newest one directly, whatever versions came in between.
 
-## 0.2.3
+## 0.2.6
 
-- **Fixed: pages could be served stale from a cache.** The metadata injected
-  into the public pages changes with every measurement, but the pages still
-  carried the version-wide `ETag`, so a browser or a proxy could be told
-  "not modified" and show an outdated description or summary.
+- The changelog is checked when a version is published: the release workflow
+  reads the section of the version being tagged and uses it as the release
+  notes, and refuses to publish without it. Versions 0.2.4 and 0.2.5 had been
+  published while the changelog still listed their contents under 0.2.3.
+
+## 0.2.5
+
+- **The public page explains a load-balanced target**: a name answering from
+  several addresses carries a notice above its figures — different servers,
+  possibly in different places and under different loads — with the addresses
+  seen, in the ten languages and in the description read by search engines.
+  A pinned target says so instead.
 - **Pasted hosts are cleaned**: leading tabs or spaces, a whole URL, brackets
   around an IPv6 address, a trailing dot and invisible characters no longer
   create a target that can never be measured. What cannot be a host is
@@ -16,27 +24,29 @@ install the newest one directly, whatever versions came in between.
 - The ready-made targets drop `pool.ntp.org` and offer French **university
   time servers** instead (Sorbonne, Lyon 1 in IPv4 and IPv6, Caen, Nice), all
   with a stable address.
-- **The public page explains a load-balanced target**: a name answering from
-  several addresses carries a notice above its figures — different servers,
-  possibly in different places and under different loads — with the addresses
-  seen, in the ten languages, and in the description read by search engines.
-  A pinned target says so instead.
 - **Rotating names are detected**: a target whose name answered from several
   addresses in 24 hours is flagged in the back-office, with a button to pin
-  the address actually measured. A pool name such as `fr.pool.ntp.org` points
-  at a different server every few minutes, so its graph mixed machines and
-  silent servers looked like packet loss.
+  the address actually measured.
+- **Fixed: pages could be served stale from a cache.** The metadata injected
+  into the public pages changes with every measurement, but the pages still
+  carried the version-wide `ETag`, so a browser or a proxy could be told
+  "not modified" and show an outdated description or summary.
+
+## 0.2.4
+
 - **Fixed: replies that do not echo our payload were counted as lost**
   (issue #9). The send time only travelled inside the packet, and a reply
   shorter than 16 bytes, or one whose payload the target rewrote, was thrown
   away — several home routers, CPE and ONT answer exactly like that, which is
   why `ping` saw those targets while smokestack reported 100 % loss. The probe
   now keeps the send time on its side and accepts a bare 8-byte reply.
+
+## 0.2.3
+
 - **A failing target now says why** (issue #9): the back-office shows, under
   its name, whether the name could not be resolved, whether IPv6 is missing on
   the probe, or that nothing replied — with the address actually probed. The
   reason disappears as soon as the target answers again.
-
 - The home page checkbox is now simply **Unique targets**, with a blue marker
   whose tooltip explains what it does (issue #8).
 - **Public pages are indexable.** Title, description, canonical address,

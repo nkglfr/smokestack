@@ -29,6 +29,19 @@ jobs:
           make dist VERSION="${GITHUB_REF_NAME#v}" \
                     OFFICIAL_URL="${{ vars.OFFICIAL_URL || format('https://github.com/{0}', github.repository) }}" \
                     REPO_URL="https://github.com/${{ github.repository }}"
+      # A published version must be described in the changelog. Catching it
+      # here is what keeps the two from drifting apart.
+      - name: The changelog must describe this version
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          awk -v v="## $V" '$0 == v {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "CHANGELOG.md has no '## $V' section: add it, then tag again." >&2
+            grep '^## ' CHANGELOG.md | head -3 >&2
+            exit 1
+          fi
+          echo "Release notes taken from CHANGELOG.md:"; cat notes.md
+
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -39,7 +52,7 @@ jobs:
           PRE=""
           case "$GITHUB_REF_NAME" in *-*) PRE="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" dist/* $PRE \
-            --title "smokestack ${GITHUB_REF_NAME#v}" --generate-notes
+            --title "smokestack ${GITHUB_REF_NAME#v}" --notes-file notes.md
 
   # Publishes the container image next to the release. Tests and native
   # packages do not depend on it.

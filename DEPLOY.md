@@ -454,6 +454,11 @@ make release-key                 # creates release.key (secret) and prints the p
 git tag v0.2.2 && git push origin v0.2.2
 ```
 
+The version must have its section in [CHANGELOG.md](CHANGELOG.md), named
+exactly `## X.Y.Z`: the workflow reads it as the release notes and stops
+before publishing anything if it is missing, which is what keeps the
+changelog and the published versions from drifting apart.
+
 A tag with a hyphen (`v0.2.0-rc1`) is published as a **pre-release**: it can
 be downloaded and installed by hand, but servers with automatic updates never
 install it. Use this to test a version before offering it to everyone.
