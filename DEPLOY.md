@@ -515,7 +515,9 @@ ones:
   `ping -6 2606:4700:4700::1111` on the server itself.
 - **`no reply to N ICMP echo requests sent to …`** — the packets left and
   nothing came back. The message gives the address actually probed, which
-  matters for a name.
+  matters for a name. Note that versions up to 0.2.2 also reported this
+  against targets that *did* answer, when their replies did not echo our
+  payload; 0.2.3 fixes that.
 
 For that last one, before suspecting smokestack, compare with the same
 pattern rather than with a plain `ping`:

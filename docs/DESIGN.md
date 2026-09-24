@@ -296,6 +296,14 @@ an underscore (`category_id`, `interval_s`, `spacing_ms`, `timeout_ms`) are
 silently ignored, and the back-office appears to save without saving. A test
 sets every field and reads them back.
 
+**Matching replies.** An echo reply carries our identifier and sequence
+number, and normally echoes the payload, where the send time is written. It
+is not required to: a reply may come back truncated to its 8-byte header, or
+with the payload rewritten, which several home routers and CPE do. The probe
+therefore keeps the send time per sequence number on its own side and uses
+the echoed one only when it is present and plausible; otherwise those
+answered probes were counted as lost.
+
 **Why a target fails.** Every pass carries the reason it could not measure —
 resolution failure, missing IPv6 stack on the probe, send error, or no reply
 at all — and the last one is kept per target and shown in the back-office.

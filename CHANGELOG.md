@@ -5,6 +5,12 @@ install the newest one directly, whatever versions came in between.
 
 ## 0.2.3
 
+- **Fixed: replies that do not echo our payload were counted as lost**
+  (issue #9). The send time only travelled inside the packet, and a reply
+  shorter than 16 bytes, or one whose payload the target rewrote, was thrown
+  away — several home routers, CPE and ONT answer exactly like that, which is
+  why `ping` saw those targets while smokestack reported 100 % loss. The probe
+  now keeps the send time on its side and accepts a bare 8-byte reply.
 - **A failing target now says why** (issue #9): the back-office shows, under
   its name, whether the name could not be resolved, whether IPv6 is missing on
   the probe, or that nothing replied — with the address actually probed. The

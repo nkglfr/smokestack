@@ -69,6 +69,11 @@ type Prober struct {
 	mu      sync.Mutex
 	seq     uint16
 	pending map[uint16]*inflight
+	// sentAt keeps the send time of each sequence number on our side. The
+	// time also travels in the packet, but a reply is not required to echo
+	// the payload, and several home routers and CPE reply with a truncated
+	// or rewritten one: relying on the echo alone counted those as lost.
+	sentAt  map[uint16]int64
 	running map[int64]bool
 	wanted  map[int64]time.Time // immediate measurements waiting for the target
 
@@ -82,6 +87,7 @@ func NewProber(src TargetSource, sink MeasureSink, probeID int64, tc TracerouteC
 		src: src, sink: sink, probeID: probeID,
 		id:      uint16(time.Now().UnixNano() & 0xffff),
 		pending: map[uint16]*inflight{},
+		sentAt:  map[uint16]int64{},
 		running: map[int64]bool{},
 		wanted:  map[int64]time.Time{},
 		res:     newResolver(),
@@ -217,26 +223,7 @@ func (p *Prober) readLoop(conn net.PacketConn, v6 bool) {
 		if !v6 {
 			b = stripIPv4(b)
 		}
-		if len(b) < 16 || b[0] != reply || binary.BigEndian.Uint16(b[4:6]) != p.id {
-			continue
-		}
-		seq := binary.BigEndian.Uint16(b[6:8])
-		sent := int64(binary.BigEndian.Uint64(b[8:16]))
-		p.mu.Lock()
-		fl := p.pending[seq]
-		p.mu.Unlock()
-		if fl == nil {
-			continue
-		}
-		rtt := float64(now-sent) / 1000 // microseconds
-		if rtt < 0 || rtt > 60_000_000 {
-			continue
-		}
-		fl.mu.Lock()
-		if !fl.done {
-			fl.rtts = append(fl.rtts, rtt)
-		}
-		fl.mu.Unlock()
+		p.handleReply(b, reply, now)
 	}
 }
 
@@ -245,6 +232,7 @@ func (p *Prober) nextSeq(fl *inflight) uint16 {
 	defer p.mu.Unlock()
 	p.seq++
 	p.pending[p.seq] = fl
+	p.sentAt[p.seq] = time.Now().UnixNano()
 	return p.seq
 }
 
@@ -252,8 +240,46 @@ func (p *Prober) release(seqs []uint16) {
 	p.mu.Lock()
 	for _, s := range seqs {
 		delete(p.pending, s)
+		delete(p.sentAt, s)
 	}
 	p.mu.Unlock()
+}
+
+// handleReply accounts one ICMP echo reply. It returns false when the
+// packet is not one of ours or cannot be timed.
+func (p *Prober) handleReply(b []byte, reply byte, now int64) bool {
+	// 8 bytes: an echo reply is allowed to come back without our payload.
+	if len(b) < 8 || b[0] != reply || binary.BigEndian.Uint16(b[4:6]) != p.id {
+		return false
+	}
+	seq := binary.BigEndian.Uint16(b[6:8])
+	p.mu.Lock()
+	fl, sent := p.pending[seq], p.sentAt[seq]
+	p.mu.Unlock()
+	if fl == nil {
+		return false
+	}
+	// The echoed timestamp is used when it is there and plausible; our own
+	// record is the fallback, so a truncated or rewritten payload no longer
+	// turns an answered probe into a lost one.
+	if len(b) >= 16 {
+		if ts := int64(binary.BigEndian.Uint64(b[8:16])); ts > 0 && now-ts >= 0 && now-ts < 60e9 {
+			sent = ts
+		}
+	}
+	if sent <= 0 {
+		return false
+	}
+	rtt := float64(now-sent) / 1000 // microseconds
+	if rtt < 0 || rtt > 60_000_000 {
+		return false
+	}
+	fl.mu.Lock()
+	if !fl.done {
+		fl.rtts = append(fl.rtts, rtt)
+	}
+	fl.mu.Unlock()
+	return true
 }
 
 // -------------------------------------------------------------- resolution
