@@ -396,6 +396,15 @@ with the reason.
 move between ICMP and TCP without rewriting its address; older targets stored
 as `host:port` are migrated on start.
 
+**Interval and retention.** The interval is free between 10 s and a day: the
+list of four values was a restriction, not a measurement constraint, and the
+real limit is the burst fitting in the interval. Two things follow from a free
+interval and are easy to miss: the "current" status window must follow the
+interval rather than sit at 15 minutes, and the aggregation tiers stay as they
+are, since rollups are keyed by bucket and not by pass. Retention can also be
+set per target, tighter than the instance tiers, which is the only sensible
+place for that decision.
+
 **Safeguard on targets.** Creating a target is refused if its burst does not
 fit in its interval: `packets × spacing_ms + timeout_ms` must stay below 75 %
 of `interval_s`. At 30 seconds this means 10 packets spaced by 200 ms, rather

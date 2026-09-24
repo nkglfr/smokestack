@@ -220,6 +220,7 @@ func OpenStore(dir string) (*Store, error) {
 	addColumn(cfg, "targets", "archived_at INTEGER NOT NULL DEFAULT 0")
 	addColumn(cfg, "targets", "trace_hours INTEGER NOT NULL DEFAULT 0")
 	addColumn(cfg, "targets", "hide_host INTEGER NOT NULL DEFAULT 0")
+	addColumn(cfg, "targets", "keep_days INTEGER NOT NULL DEFAULT 0")
 	migrateTCPPorts(cfg)
 
 	// Deux pools sur metrics.db : l'ecriture des mesures dispose de sa
@@ -301,6 +302,10 @@ type Target struct {
 	// HideHost : cible publique dont l'adresse reste privee. Utile pour un
 	// tableau de bord destine a des clients, sans devoiler l'adressage.
 	HideHost bool `json:"hide_host,omitempty"`
+	// KeepDays : duree de conservation des mesures de cette cible, en
+	// jours. 0 = paliers de l'instance (48 h brut, 1 an la minute, 3 ans
+	// les 5 minutes, heures et jours sans limite).
+	KeepDays int `json:"keep_days,omitempty"`
 }
 
 type Category struct {
@@ -337,7 +342,7 @@ func (s *Store) TouchProbe(id int64) {
 func (s *Store) ActiveTargets() ([]*Target, error) {
 	rows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host
+		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host,keep_days
 		   FROM targets WHERE enabled=1 AND archived_at=0 ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -353,7 +358,7 @@ func scanTargets(rows *sql.Rows) ([]*Target, error) {
 		var pub, en, off, hide int
 		if err := rows.Scan(&t.ID, &t.CategoryID, &t.Slug, &t.Title, &t.Host,
 			&t.Proto, &t.IntervalS, &t.Packets, &t.SpacingMs, &t.TimeoutMs,
-			&pub, &en, &t.Family, &t.Port, &t.PinIP, &off, &t.ArchivedAt, &t.TraceHours, &hide); err != nil {
+			&pub, &en, &t.Family, &t.Port, &t.PinIP, &off, &t.ArchivedAt, &t.TraceHours, &hide, &t.KeepDays); err != nil {
 			return nil, err
 		}
 		t.Public, t.Enabled, t.AlertsOff = pub == 1, en == 1, off == 1
@@ -398,7 +403,7 @@ func (s *Store) Tree(publicOnly bool) ([]*Category, error) {
 
 	trows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host
+		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host,keep_days
 		   FROM targets WHERE archived_at=0 ORDER BY title`)
 	if err != nil {
 		return nil, err
@@ -427,7 +432,7 @@ func (s *Store) Tree(publicOnly bool) ([]*Category, error) {
 func (s *Store) TargetByID(id int64) (*Target, error) {
 	rows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host
+		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host,keep_days
 		   FROM targets WHERE id=?`, id)
 	if err != nil {
 		return nil, err
@@ -690,10 +695,18 @@ func checkTarget(t *Target) error {
 	if t.Packets < 3 || t.Packets > 50 {
 		return fmt.Errorf("packets must be between 3 and 50")
 	}
-	switch t.IntervalS {
-	case 30, 60, 300, 600:
-	default:
-		return fmt.Errorf("interval_s must be 30, 60, 300 or 600")
+	// Any interval from 10 seconds to a day: what actually matters is that
+	// the burst fits in it, which the next check enforces.
+	if t.IntervalS < 10 || t.IntervalS > 86400 {
+		return fmt.Errorf("interval_s must be between 10 seconds and 86400 (one day)")
+	}
+	// Checked here rather than only in the API, so creation and update
+	// share the same limits whatever the caller.
+	if t.KeepDays < 0 || t.KeepDays > 3650 {
+		return fmt.Errorf("keep_days must be between 0 (instance tiers) and 3650")
+	}
+	if t.TraceHours < 0 || t.TraceHours > 720 {
+		return fmt.Errorf("trace_hours must be between 0 (instance default) and 720")
 	}
 	if int64(t.Packets*t.SpacingMs+t.TimeoutMs) > t.IntervalS*1000*3/4 {
 		return fmt.Errorf("packets x spacing_ms + timeout_ms exceeds 75%% of the interval")
@@ -708,9 +721,9 @@ func (s *Store) UpdateTarget(t *Target) error {
 	}
 	_, err := s.cfg.Exec(
 		`UPDATE targets SET category_id=?,title=?,host=?,proto=?,family=?,interval_s=?,packets=?,
-		        spacing_ms=?,timeout_ms=?,public=?,enabled=?,port=?,pin_ip=?,alerts_off=?,trace_hours=?,hide_host=? WHERE id=?`,
+		        spacing_ms=?,timeout_ms=?,public=?,enabled=?,port=?,pin_ip=?,alerts_off=?,trace_hours=?,hide_host=?,keep_days=? WHERE id=?`,
 		t.CategoryID, t.Title, t.Host, t.Proto, t.Family, t.IntervalS, t.Packets,
-		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), t.Port, t.PinIP, b2i(t.AlertsOff), t.TraceHours, b2i(t.HideHost), t.ID)
+		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), t.Port, t.PinIP, b2i(t.AlertsOff), t.TraceHours, b2i(t.HideHost), t.KeepDays, t.ID)
 	s.notifyTargets()
 	return err
 }
@@ -721,11 +734,11 @@ func (s *Store) CreateTarget(t *Target) (int64, error) {
 	}
 	res, err := s.cfg.Exec(
 		`INSERT INTO targets(category_id,slug,title,host,proto,interval_s,packets,
-		                     spacing_ms,timeout_ms,public,enabled,created_at,family,port,pin_ip,alerts_off,trace_hours,hide_host)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		                     spacing_ms,timeout_ms,public,enabled,created_at,family,port,pin_ip,alerts_off,trace_hours,hide_host,keep_days)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.CategoryID, t.Slug, t.Title, t.Host, t.Proto, t.IntervalS, t.Packets,
 		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), time.Now().Unix(), t.Family, t.Port,
-		t.PinIP, b2i(t.AlertsOff), t.TraceHours, b2i(t.HideHost))
+		t.PinIP, b2i(t.AlertsOff), t.TraceHours, b2i(t.HideHost), t.KeepDays)
 	if err != nil {
 		return 0, err
 	}
@@ -762,7 +775,7 @@ func (s *Store) ArchiveTarget(id int64) error {
 func (s *Store) ArchivedTargets() ([]*Target, error) {
 	rows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host
+		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host,keep_days
 		   FROM targets WHERE archived_at>0 ORDER BY archived_at DESC`)
 	if err != nil {
 		return nil, err
@@ -1058,6 +1071,39 @@ func (s *Store) Purge(now int64) error {
 			`DELETE FROM %s WHERE bucket < ?`, g.table), now-g.keep); err != nil {
 			return err
 		}
+	}
+	return s.purgePerTarget(now)
+}
+
+// purgePerTarget applies the retention a target asked for, tighter than the
+// instance tiers: a test target has no business keeping ten years of daily
+// aggregates, and nothing else should decide that for the operator.
+func (s *Store) purgePerTarget(now int64) error {
+	rows, err := s.cfg.Query(`SELECT id,keep_days FROM targets WHERE keep_days>0`)
+	if err != nil {
+		return err
+	}
+	type lim struct {
+		id   int64
+		days int
+	}
+	var list []lim
+	for rows.Next() {
+		var l lim
+		if rows.Scan(&l.id, &l.days) == nil {
+			list = append(list, l)
+		}
+	}
+	rows.Close()
+	for _, l := range list {
+		cut := now - int64(l.days)*86400
+		for _, tbl := range []string{"samples", "roll_1m", "roll_5m", "roll_1h", "roll_1d"} {
+			if _, err := s.mxw.Exec(fmt.Sprintf(
+				`DELETE FROM %s WHERE target_id=? AND bucket < ?`, tbl), l.id, cut); err != nil {
+				return err
+			}
+		}
+		s.mxw.Exec(`DELETE FROM traceroutes WHERE target_id=? AND ts < ?`, l.id, cut)
 	}
 	return nil
 }

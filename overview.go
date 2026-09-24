@@ -213,8 +213,15 @@ func (s *Store) Overview(probeID int64, now int64, publicOnly bool) (*Overview, 
 				}
 			}
 			mins := minRows[t.ID]
+			// The "current" window is 15 minutes, but never less than three
+			// passes: a target measured every 30 minutes would otherwise
+			// always look as if it had no data.
+			window := int64(900)
+			if w := 3 * t.IntervalS; w > window {
+				window = w
+			}
 			for _, r := range mins {
-				if r.b >= now-900 {
+				if r.b >= now-window {
 					cur.add(r.sent, r.lost, r.sk)
 				}
 			}

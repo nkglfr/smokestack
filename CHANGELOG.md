@@ -5,6 +5,13 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- **Free interval** (idea #14): any value from 10 seconds to a day, bounded
+  only by the burst rule. The status window now follows the interval, so a
+  target measured every 30 minutes no longer reads as having no data.
+- **Retention per target** (idea #17): keep a target's measurements for a
+  number of days instead of the instance tiers — raw passes, every rollup
+  tier and its traceroutes.
+
 - **The public navigation adapts** (idea #11): Federation and Pairing appear
   only when federation is enabled, Host network only with an AS number. No
   more tabs leading to empty pages.

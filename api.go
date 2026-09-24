@@ -646,6 +646,7 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 		AlertsOff  *bool   `json:"alerts_off"`
 		TraceHours *int    `json:"trace_hours"`
 		HideHost   *bool   `json:"hide_host"`
+		KeepDays   *int    `json:"keep_days"`
 		Public     *bool   `json:"public"`
 		Enabled    *bool   `json:"enabled"`
 	}
@@ -694,6 +695,13 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.AlertsOff != nil {
 		t.AlertsOff = *in.AlertsOff
+	}
+	if in.KeepDays != nil {
+		if *in.KeepDays < 0 || *in.KeepDays > 3650 {
+			writeErr(w, 400, "keep_days must be between 0 (instance default) and 3650")
+			return
+		}
+		t.KeepDays = *in.KeepDays
 	}
 	if in.HideHost != nil {
 		t.HideHost = *in.HideHost

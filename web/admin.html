@@ -392,9 +392,14 @@ async function viewTargets(m){
         <div class="field"><label>Address family</label><select id="tfam">
           <option value="0">Auto (literal address, else IPv4 then IPv6)</option>
           <option value="4">IPv4 only</option><option value="6">IPv6 only</option></select></div>
-        <div class="field"><label>Interval</label><select id="tiv">
-          <option value="30">30 s</option><option value="60">60 s</option>
-          <option value="300">5 min</option><option value="600">10 min</option></select></div>
+        <div class="field"><label>Interval (seconds, 10 to 86400)</label>
+          <input id="tiv" type="number" min="10" max="86400" value="60" list="ivs">
+          <datalist id="ivs">${[[30,"30 s"],[60,"1 min"],[120,"2 min"],[300,"5 min"],[600,"10 min"],
+            [1800,"30 min"],[3600,"1 hour"]].map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</datalist>
+          <div style="font-size:11px;color:var(--ink3);margin-top:3px">The burst must fit:
+            packets × spacing + timeout under 75 % of the interval.</div></div>
+        <div class="field"><label>Keep measurements for (days, 0 = instance tiers)</label>
+          <input id="tkeep" type="number" min="0" max="3650" value="0"></div>
         <div class="field"><label>Packets</label><input id="tpk" type="number" value="20"></div>
         <div class="field"><label>Spacing (ms)</label><input id="tsp" type="number" value="500"></div>
         <div class="field"><label>Timeout (ms)</label><input id="tto" type="number" value="2000"></div>
@@ -495,7 +500,7 @@ async function viewTargets(m){
   if(EDIT){
     $("#tcat").value=EDIT.category_id; $("#ttitle").value=EDIT.title; $("#thost").value=EDIT.host;
     $("#tproto").value=EDIT.proto; $("#tport").value=EDIT.port||""; $("#tfam").value=String(EDIT.family||0);
-    $("#tiv").value=String(EDIT.interval_s); $("#tpk").value=EDIT.packets; $("#tsp").value=EDIT.spacing_ms;
+    $("#tiv").value=String(EDIT.interval_s); $("#tkeep").value=EDIT.keep_days||0; $("#tpk").value=EDIT.packets; $("#tsp").value=EDIT.spacing_ms;
     $("#tto").value=EDIT.timeout_ms; $("#tpub").checked=!!EDIT.public;
     $("#canceledit").onclick=()=>{EDIT=null;render();};
   } else { $("#tiv").value="60"; }
@@ -504,7 +509,7 @@ async function viewTargets(m){
     const body={category_id:parseInt($("#tcat").value,10),title:$("#ttitle").value,
       host:cleanHost($("#thost").value),family:parseInt($("#tfam").value,10),proto:$("#tproto").value,
       port:$("#tproto").value==="tcp"?parseInt($("#tport").value||"0",10):0,
-      interval_s:parseInt($("#tiv").value,10),packets:parseInt($("#tpk").value,10),
+      interval_s:parseInt($("#tiv").value,10), keep_days:parseInt($("#tkeep").value||"0",10),packets:parseInt($("#tpk").value,10),
       spacing_ms:parseInt($("#tsp").value,10),timeout_ms:parseInt($("#tto").value,10),
       pin_ip:$("#tpin").value.trim(), alerts_off:!$("#talert").checked,
       trace_hours:parseInt($("#thrs").value||"0",10), hide_host:$("#thide").checked,

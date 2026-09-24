@@ -645,6 +645,21 @@ the status code is not the reason. The message under the target's name says
 which one it is — most often a target created without a port, which now says
 so explicitly.
 
+### Interval and retention, per target
+
+The **interval** is free: anything from 10 seconds to a day. The only rule is
+the one that already existed — the burst must fit, so
+`packets × spacing + timeout` stays under 75 % of the interval. A target
+measured every 30 minutes is handled correctly: the "current" window used for
+its status follows its interval instead of being stuck at 15 minutes.
+
+The **retention** can be set per target, in days, in *Keep measurements for*.
+Left at 0, the instance tiers apply: raw passes 48 h, one-minute buckets one
+year, five-minute buckets three years, hourly and daily buckets without
+limit. A test target has no business keeping ten years of daily aggregates,
+and only the operator can decide that. The purge runs every six hours and
+covers the raw passes, every rollup tier and the traceroutes of that target.
+
 ### What the public pages show
 
 The public navigation adapts on its own: **Federation** and **Pairing**

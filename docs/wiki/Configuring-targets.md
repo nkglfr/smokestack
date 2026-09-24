@@ -11,10 +11,11 @@ change.
 
 | Setting | What it does | Sensible values |
 |---|---|---|
-| **Interval** | Time between two passes | 60 s for most things, 30 s for a link you watch closely, 300 s for a distant or fragile target |
+| **Interval** | Time between two passes, free from 10 s to a day | 60 s for most things, 30 s for a link you watch closely, 1800 s for a distant or fragile target |
 | **Packets** | How many probes per pass | 10 is a good default; 20 gives finer percentiles but hits rate limiters harder |
 | **Spacing** | Delay between two packets of a pass | 200 to 300 ms. Below 100 ms you are testing the target's rate limiter |
 | **Timeout** | How long a reply is still counted | 1000 ms on a national path, 2000 ms intercontinental |
+| **Keep measurements for** | Retention of this target, in days | 0 to follow the instance tiers; 7 or 30 for a test target |
 
 A burst must fit in its interval, with margin: `packets × spacing + timeout`
 must stay under 75 % of the interval. smokestack refuses a target that does
