@@ -263,10 +263,12 @@ them, which the form states to the visitor.
    later, including the category and the protocol. For a TCP target, the host
    and the port are separate fields, with the usual ports suggested. The star
    marks *critical targets*, always shown at the top of the home page.
-   **Ready-made targets** offers well-known public services (resolvers in
-   both IPv4 and IPv6, a few HTTPS endpoints, the NTP pool) with gentle
-   settings: tick what you want, their category is created if needed. Entries
-   already configured are shown as added. Each target is **public**
+   **Ready-made targets** offers well-known public services with gentle
+   settings: public resolvers in IPv4 and IPv6, a few HTTPS endpoints, and
+   French university time servers taken from the RENATER list, all with a
+   stable address. Tick what you want, their category is created if needed.
+   Entries already configured are shown as added. No pool name is offered, for
+   the reason given under *A single target never answers*. Each target is **public**
    or **private**: a private target is measured like any other and visible in
    the back-office, but never appears on the public pages nor in the public API
    — useful for a test, an internal address or a customer link. Switch it at any

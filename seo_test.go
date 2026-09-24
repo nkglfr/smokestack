@@ -170,3 +170,21 @@ func TestInjectedPagesAreNotCachedByETag(t *testing.T) {
 		t.Errorf("Cache-Control: %q", rec.Header().Get("Cache-Control"))
 	}
 }
+
+// The catalogue must not suggest a rotating name: a pool points at a
+// different machine every few minutes, which makes its graph meaningless.
+func TestCatalogueHasNoRotatingName(t *testing.T) {
+	seen := map[string]bool{}
+	for _, s := range suggestedCatalogue {
+		if seen[s.Key] {
+			t.Errorf("duplicate key %q", s.Key)
+		}
+		seen[s.Key] = true
+		if strings.Contains(s.Host, "pool.ntp.org") {
+			t.Errorf("%s suggests a pool name: %s", s.Key, s.Host)
+		}
+		if s.Proto == "tcp" && s.Port == 0 {
+			t.Errorf("%s is a TCP target without a port", s.Key)
+		}
+	}
+}

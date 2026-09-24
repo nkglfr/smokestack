@@ -39,7 +39,15 @@ var suggestedCatalogue = []suggestedTarget{
 	{Key: "ghhttp", Group: "Reference services", GroupFR: "Services de référence", Title: "GitHub, HTTPS", Host: "github.com", Proto: "tcp", Port: 443, Family: 0},
 	{Key: "wiki", Group: "Reference services", GroupFR: "Services de référence", Title: "Wikipedia, HTTPS", Host: "www.wikipedia.org", Proto: "tcp", Port: 443, Family: 0},
 
-	{Key: "ntp", Group: "Time", GroupFR: "Temps", Title: "pool.ntp.org", Host: "pool.ntp.org", Proto: "icmp", Family: 0, Note: "The address resolves to a nearby server of the pool"},
+	// University time servers from the RENATER list of French NTP servers,
+	// all with a stable address. A pool name is deliberately absent: it
+	// points at a different machine every few minutes, so its graph mixes
+	// servers and the silent ones look like packet loss.
+	{Key: "ntp-jussieu", Group: "University time servers", GroupFR: "Serveurs de temps universitaires", Title: "Sorbonne Université (Jussieu)", Host: "ntp1.jussieu.fr", Proto: "icmp", Family: 4, Note: "Stratum 1, GPS reference; listed as open access"},
+	{Key: "ntp-lyon", Group: "University time servers", GroupFR: "Serveurs de temps universitaires", Title: "Université Lyon 1", Host: "ntp.univ-lyon1.fr", Proto: "icmp", Family: 4, Note: "Stratum 2, open access"},
+	{Key: "ntp-lyon6", Group: "University time servers", GroupFR: "Serveurs de temps universitaires", Title: "Université Lyon 1 (IPv6)", Host: "ntp.univ-lyon1.fr", Proto: "icmp", Family: 6, Note: "The same server over IPv6: compares both stacks on one path"},
+	{Key: "ntp-caen", Group: "University time servers", GroupFR: "Serveurs de temps universitaires", Title: "Université de Caen", Host: "ntp.unicaen.fr", Proto: "icmp", Family: 4, Note: "Stratum 2, open access"},
+	{Key: "ntp-nice", Group: "University time servers", GroupFR: "Serveurs de temps universitaires", Title: "Université Côte d'Azur (Nice)", Host: "ntp.unice.fr", Proto: "icmp", Family: 4, Note: "Stratum 2, open access"},
 }
 
 // Reasonable settings for a first target: a gentle burst that fits well

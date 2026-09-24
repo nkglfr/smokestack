@@ -9,6 +9,9 @@ install the newest one directly, whatever versions came in between.
   into the public pages changes with every measurement, but the pages still
   carried the version-wide `ETag`, so a browser or a proxy could be told
   "not modified" and show an outdated description or summary.
+- The ready-made targets drop `pool.ntp.org` and offer French **university
+  time servers** instead (Sorbonne, Lyon 1 in IPv4 and IPv6, Caen, Nice), all
+  with a stable address.
 - **Rotating names are detected**: a target whose name answered from several
   addresses in 24 hours is flagged in the back-office, with a button to pin
   the address actually measured. A pool name such as `fr.pool.ntp.org` points
