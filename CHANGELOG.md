@@ -3,7 +3,7 @@
 Versions are published as signed releases; servers with automatic updates
 install the newest one directly, whatever versions came in between.
 
-## 0.2.6
+## Unreleased
 
 - The back-office invites operators to post their instance URL in the
   project's *Show and tell* discussions, to find networks to pair with.
@@ -45,6 +45,8 @@ install the newest one directly, whatever versions came in between.
 - A wiki page on **sizing and adjusting targets**: how to tell ICMP rate
   limiting, a rotating name and a real path problem apart, with the settings
   to use. Linked from the back-office.
+
+## 0.2.6
 
 - The changelog is checked when a version is published: the release workflow
   reads the section of the version being tagged and uses it as the release

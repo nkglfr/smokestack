@@ -36,9 +36,16 @@ jobs:
           V="${GITHUB_REF_NAME#v}"
           awk -v v="## $V" '$0 == v {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
           if [ ! -s notes.md ]; then
-            echo "CHANGELOG.md has no '## $V' section: add it, then tag again." >&2
-            grep '^## ' CHANGELOG.md | head -3 >&2
-            exit 1
+            # Pending work is written under "## Unreleased" until a number is
+            # chosen: use it, so the notes can never drift from the tag.
+            awk '$0 == "## Unreleased" {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
+            if [ -s notes.md ]; then
+              echo "Release notes taken from the Unreleased section."
+            else
+              echo "CHANGELOG.md has no '## $V' section and no '## Unreleased' section." >&2
+              grep '^## ' CHANGELOG.md | head -3 >&2
+              exit 1
+            fi
           fi
           echo "Release notes taken from CHANGELOG.md:"; cat notes.md
 

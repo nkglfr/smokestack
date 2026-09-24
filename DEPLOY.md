@@ -469,10 +469,18 @@ make release-key                 # creates release.key (secret) and prints the p
 git tag v0.2.2 && git push origin v0.2.2
 ```
 
-The version must have its section in [CHANGELOG.md](CHANGELOG.md), named
-exactly `## X.Y.Z`: the workflow reads it as the release notes and stops
-before publishing anything if it is missing, which is what keeps the
-changelog and the published versions from drifting apart.
+The version must be described in [CHANGELOG.md](CHANGELOG.md), either in a
+section named exactly `## X.Y.Z` or in the `## Unreleased` section where
+pending work is written until a number is chosen. The workflow reads it as
+the release notes and stops before publishing anything if neither exists,
+which is what keeps the changelog and the published versions from drifting
+apart. After a release, rename `## Unreleased` to the version you tagged.
+
+Let git pick the number, so it can never collide with an existing tag:
+
+```sh
+git tag $(git describe --tags --abbrev=0 | awk -F. '{printf "%s.%s.%d", $1, $2, $3+1}') && git push origin --tags
+```
 
 A tag with a hyphen (`v0.2.0-rc1`) is published as a **pre-release**: it can
 be downloaded and installed by hand, but servers with automatic updates never
