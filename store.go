@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode"
 )
 
 // Toutes les tables de mesure partagent la meme forme et la meme
@@ -514,9 +515,105 @@ func migrateTCPPorts(db *sql.DB) {
 	}
 }
 
+// normalizeHost cleans what people paste: a leading tab or spaces, a
+// non-breaking or zero-width space, a URL around the name, brackets around
+// an IPv6 address, a trailing dot. What remains must be an IP address or a
+// host name, otherwise the target is refused with a clear message rather
+// than measured forever against something impossible.
+// preCleanHost removes what a copy-paste brings along, before the host is
+// split from its port: doing it the other way round made "https://x/y" come
+// out as the host "https", split on the first colon.
+func preCleanHost(raw string) (string, error) {
+	h := strings.Map(func(r rune) rune {
+		switch r {
+		case '\u00a0', '\u200b', '\u200c', '\u200d', '\ufeff', 0:
+			return -1
+		}
+		return r
+	}, raw)
+	// Whitespace is only stripped at both ends. Removing it inside would
+	// silently glue two values together: "1.1.1.1 8.8.8.8" would become a
+	// plausible host name and be measured forever.
+	h = strings.TrimSpace(h)
+	if strings.ContainsFunc(h, unicode.IsSpace) {
+		return "", fmt.Errorf("the host contains a space: paste a single address or name")
+	}
+	if i := strings.Index(h, "://"); i >= 0 { // a pasted URL
+		h = h[i+3:]
+	}
+	if i := strings.IndexAny(h, "/?#"); i >= 0 {
+		h = h[:i]
+	}
+	if i := strings.LastIndex(h, "@"); i >= 0 { // user:pass@host
+		h = h[i+1:]
+	}
+	return h, nil
+}
+
+func normalizeHost(raw string) (string, error) {
+	h, err := preCleanHost(raw)
+	if err != nil {
+		return "", err
+	}
+	h = strings.Trim(h, "[]")
+	h = strings.TrimSuffix(h, ".")
+	if h == "" {
+		return "", fmt.Errorf("the host is empty")
+	}
+	if len(h) > 253 {
+		return "", fmt.Errorf("the host is too long")
+	}
+	if ip := net.ParseIP(h); ip != nil {
+		return ip.String(), nil // canonical form
+	}
+	lower := strings.ToLower(h)
+	for _, label := range strings.Split(lower, ".") {
+		if label == "" || len(label) > 63 {
+			return "", fmt.Errorf("%q is neither an IP address nor a host name", strings.TrimSpace(raw))
+		}
+		for i, r := range label {
+			ok := (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') ||
+				(r == '-' && i > 0 && i < len(label)-1) || r == '_'
+			if !ok {
+				return "", fmt.Errorf("%q is neither an IP address nor a host name", strings.TrimSpace(raw))
+			}
+		}
+	}
+	return lower, nil
+}
+
 // checkTarget validates the settings shared by creation and update. The
 // burst must fit in the interval, with a margin.
 func checkTarget(t *Target) error {
+	// The host is cleaned before anything else: a tab pasted in front of an
+	// address must not create a target that can never be measured.
+	pre, err := preCleanHost(t.Host)
+	if err != nil {
+		return err
+	}
+	host, port := pre, ""
+	if h, p, e := net.SplitHostPort(pre); e == nil && net.ParseIP(pre) == nil {
+		host, port = h, p
+	}
+	clean, err2 := normalizeHost(host)
+	if err2 != nil {
+		return err2
+	}
+	t.Host = clean
+	if port != "" && t.Port == 0 {
+		if n, err := strconv.Atoi(strings.TrimSpace(port)); err == nil {
+			t.Port = n
+		}
+	}
+	t.Title = strings.TrimSpace(t.Title)
+	t.PinIP = strings.TrimSpace(t.PinIP)
+	if t.PinIP != "" {
+		ip := net.ParseIP(t.PinIP)
+		if ip == nil {
+			return fmt.Errorf("the pinned address %q is not an IP address", t.PinIP)
+		}
+		t.PinIP = ip.String()
+	}
 	if t.Family != 0 && t.Family != 4 && t.Family != 6 {
 		return fmt.Errorf("family must be 0 (auto), 4 or 6")
 	}

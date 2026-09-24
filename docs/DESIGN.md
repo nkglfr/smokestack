@@ -317,6 +317,14 @@ at all — and the last one is kept per target and shown in the back-office.
 Loss alone does not tell an operator whether the packets were filtered, the
 name was wrong or the host has no IPv6.
 
+**Pasted hosts.** What people paste carries tabs, spaces, a URL, brackets or
+invisible characters. The host is cleaned on save, on creation and on update
+alike, and a `host:port` fills the port field. Whitespace is only stripped at
+both ends, never inside: removing it there would silently turn
+`1.1.1.1 8.8.8.8` into a plausible host name, measured forever against
+nothing. Anything that is neither an IP address nor a host name is refused
+with the reason.
+
 **TCP targets.** The host and the port are stored separately, so a target can
 move between ICMP and TCP without rewriting its address; older targets stored
 as `host:port` are migrated on start.

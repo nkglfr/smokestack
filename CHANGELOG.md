@@ -9,6 +9,10 @@ install the newest one directly, whatever versions came in between.
   into the public pages changes with every measurement, but the pages still
   carried the version-wide `ETag`, so a browser or a proxy could be told
   "not modified" and show an outdated description or summary.
+- **Pasted hosts are cleaned**: leading tabs or spaces, a whole URL, brackets
+  around an IPv6 address, a trailing dot and invisible characters no longer
+  create a target that can never be measured. What cannot be a host is
+  refused with the reason.
 - The ready-made targets drop `pool.ntp.org` and offer French **university
   time servers** instead (Sorbonne, Lyon 1 in IPv4 and IPv6, Caen, Nice), all
   with a stable address.

@@ -263,6 +263,14 @@ them, which the form states to the visitor.
    later, including the category and the protocol. For a TCP target, the host
    and the port are separate fields, with the usual ports suggested. The star
    marks *critical targets*, always shown at the top of the home page.
+
+   The host is cleaned when you save: a tab or spaces around a pasted
+   address, a whole URL (`https://example.net/page` keeps `example.net`),
+   brackets around an IPv6 address, a trailing dot, invisible characters from
+   a web page. A pasted `host:port` fills the port field. Anything that cannot
+   be a host is refused with the reason — two addresses pasted at once, for
+   instance, rather than being glued together into a name that would never
+   answer.
    **Ready-made targets** offers well-known public services with gentle
    settings: public resolvers in IPv4 and IPv6, a few HTTPS endpoints, and
    French university time servers taken from the RENATER list, all with a

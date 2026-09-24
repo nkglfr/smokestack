@@ -452,6 +452,16 @@ async function viewTargets(m){
   };
 
   /* target form */
+  // Clean a pasted value straight away: a leading tab, a trailing space, a
+  // whole URL. The server checks it again anyway.
+  const cleanHost=v=>v.replace(/[\u00a0\u200b-\u200d\ufeff]/g,"").trim()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//i,"").replace(/[/?#].*$/,"")
+    .replace(/^\[|\]$/g,"").replace(/\.$/,"");
+  $("#thost").addEventListener("blur",()=>{$("#thost").value=cleanHost($("#thost").value);});
+  $("#thost").addEventListener("paste",e=>{
+    const txt=(e.clipboardData||window.clipboardData).getData("text");
+    if(txt){e.preventDefault();$("#thost").value=cleanHost(txt);}
+  });
   const syncProto=()=>{$("#portfield").hidden=$("#tproto").value!=="tcp";};
   $("#tproto").onchange=syncProto;
   if(EDIT){
@@ -464,7 +474,7 @@ async function viewTargets(m){
   syncProto();
   $("#savetgt").onclick=async()=>{
     const body={category_id:parseInt($("#tcat").value,10),title:$("#ttitle").value,
-      host:$("#thost").value,family:parseInt($("#tfam").value,10),proto:$("#tproto").value,
+      host:cleanHost($("#thost").value),family:parseInt($("#tfam").value,10),proto:$("#tproto").value,
       port:$("#tproto").value==="tcp"?parseInt($("#tport").value||"0",10):0,
       interval_s:parseInt($("#tiv").value,10),packets:parseInt($("#tpk").value,10),
       spacing_ms:parseInt($("#tsp").value,10),timeout_ms:parseInt($("#tto").value,10),
