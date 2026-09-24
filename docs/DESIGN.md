@@ -333,7 +333,11 @@ per-target setting is stored as an exception (`alerts_off`) rather than as a
 preference, so a request that omits the field leaves alerting on: silencing a
 target has to be deliberate.
 
-**Rotating names, said out loud.** A visitor reading a median and a loss
+**Rotating names, said out loud — but not in detail.** The public side
+carries the count of addresses a name answered from, never the list: those
+belong to somebody else's infrastructure and can be numerous. The list is
+served only to an authenticated caller, which is exactly who needs it to
+pin one. A visitor reading a median and a loss
 figure assumes they describe one machine. When the name answered from
 several addresses, the public page says otherwise, above the figures, and so
 does the indexed description; the back-office offers to pin one address. The

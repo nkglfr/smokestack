@@ -75,8 +75,9 @@ Each pass measures whichever server DNS returned, in a different place and
 under a different load, and the ones ignoring ICMP look like packet loss.
 
 **smokestack tells you.** A target whose name answered from several addresses
-carries a notice in the back-office, and its public page explains it to
-visitors. The addresses seen in the last 24 hours are listed.
+carries a notice in the back-office, listing the addresses seen in the last
+24 hours. Its public page explains the situation to visitors too, but gives
+only how many addresses answered — not which ones.
 
 **What to change.** Press **Pin** to freeze the address actually measured, or
 better, target a specific machine. For time servers, prefer a named

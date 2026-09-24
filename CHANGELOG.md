@@ -5,6 +5,11 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- The load-balanced notice on a public page no longer lists the addresses,
+  only how many there are: they describe the inside of a third-party service
+  and there can be many. The list is no longer in the public API either — it
+  stays in the back-office, where it serves to pick one to pin.
+
 - The back-office invites operators to post their instance URL in the
   project's *Show and tell* discussions, to find networks to pair with.
 - The *Unique targets* checkbox no longer crowds the section header: the

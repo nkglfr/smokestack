@@ -31,9 +31,13 @@ type Spark struct {
 type OverviewTarget struct {
 	ID   int64  `json:"id"`
 	Slug string `json:"slug"`
-	// Addresses: les adresses réellement sondées sur 24 h. Plusieurs
-	// adresses = service en répartition de charge, donc des mesures qui
-	// mélangent des machines différentes. PinIP: adresse figée.
+	// AddrCount: combien d'adresses différentes ont répondu sur 24 h.
+	// Plusieurs adresses = service en répartition de charge, donc des
+	// mesures qui mélangent des machines différentes. La liste elle-même
+	// ne sort jamais publiquement : elle décrit l'intérieur d'un service
+	// tiers et peut être longue. Addresses n'est rempli que pour un
+	// appelant authentifié. PinIP: adresse figée.
+	AddrCount int      `json:"addr_count,omitempty"`
 	Addresses []string `json:"addresses,omitempty"`
 	PinIP     string   `json:"pin_ip,omitempty"`
 	Title     string   `json:"title"`
@@ -188,7 +192,7 @@ func (s *Store) Overview(probeID int64, now int64, publicOnly bool) (*Overview, 
 			}
 			ot := &OverviewTarget{ID: t.ID, Slug: t.Slug, Title: t.Title, Host: t.Host, Proto: t.Proto,
 				Interval: t.IntervalS, Featured: feat[t.ID], Public: t.Public,
-				Addresses: addrs[t.ID], PinIP: t.PinIP,
+				AddrCount: len(addrs[t.ID]), PinIP: t.PinIP,
 				Hours: make([]string, 48)}
 
 			var base, day, cur ovAgg
@@ -279,6 +283,9 @@ func (s *Store) Overview(probeID int64, now int64, publicOnly bool) (*Overview, 
 			}
 			out.Counts["targets"]++
 			out.Counts[ot.Status]++
+			if !publicOnly {
+				ot.Addresses = addrs[t.ID]
+			}
 			oc.Targets = append(oc.Targets, ot)
 		}
 		if len(oc.Targets) > 0 {

@@ -642,9 +642,14 @@ Two more cases worth knowing:
   addresses carries a notice above its figures, explaining that each pass
   measures whichever server DNS returned, that those servers may sit in
   different places and carry different loads, and that one ignoring ICMP
-  shows up as loss. The addresses seen are listed. A visitor therefore knows
-  what the median and the loss actually describe. The same sentence goes into
-  the page description read by search engines.
+  shows up as loss. A visitor therefore knows what the median and the loss
+  actually describe. The same sentence goes into the page description read by
+  search engines.
+
+  Only the **number** of addresses is public, never the list: those addresses
+  describe the inside of somebody else's service, and there can be dozens.
+  The list stays in the back-office, where it is what the operator needs to
+  pick one to pin.
 
   The back-office detects it: a target whose name answered from several
   addresses in the last 24 hours carries a notice and a **Pin** button, which

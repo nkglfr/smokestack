@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -186,5 +187,65 @@ func TestCatalogueHasNoRotatingName(t *testing.T) {
 		if s.Proto == "tcp" && s.Port == 0 {
 			t.Errorf("%s is a TCP target without a port", s.Key)
 		}
+	}
+}
+
+// The addresses a rotating name answered from describe the inside of a
+// third-party service and can be many: the public overview must carry only
+// their count, never the list.
+func TestPublicOverviewHidesAddresses(t *testing.T) {
+	store := seoStore(t)
+	defer store.Close()
+	list, err := store.ActiveTargets()
+	if err != nil || len(list) == 0 {
+		t.Fatal(err)
+	}
+	id := list[0].ID
+	now := time.Now().Unix()
+	for i, ip := range []string{"192.0.2.1", "192.0.2.2", "198.51.100.3"} {
+		if err := store.RecordBatch([]queuedMeasure{{m: Measurement{TargetID: id, ProbeID: 1,
+			TS: now - int64(i*60), Sent: 5, IP: ip, RTTus: []float64{1000, 1100, 1050, 1080, 1090}}}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pub, err := store.Overview(1, now, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(pub)
+	for _, ip := range []string{"192.0.2.2", "198.51.100.3"} {
+		if strings.Contains(string(b), ip) {
+			t.Errorf("the public overview exposes %s", ip)
+		}
+	}
+	var count int
+	for _, c := range pub.Categories {
+		for _, tg := range c.Targets {
+			if tg.ID == id {
+				count = tg.AddrCount
+				if len(tg.Addresses) != 0 {
+					t.Errorf("addresses are public: %v", tg.Addresses)
+				}
+			}
+		}
+	}
+	if count != 3 {
+		t.Errorf("the count must be public: %d", count)
+	}
+	// An operator, on the other hand, needs the list.
+	priv, err := store.Overview(1, now, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, c := range priv.Categories {
+		for _, tg := range c.Targets {
+			if tg.ID == id && len(tg.Addresses) == 3 {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Error("the back-office view must carry the addresses")
 	}
 }
