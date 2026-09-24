@@ -79,7 +79,7 @@
     "once_hint": "Show each target only once: a faulty target stays in the faults section and is left out of the critical targets and of its category."
   },
   "detail": {
-    "navigator": "Navigator — last 12 months",
+    "navigator": "Whole year — drag to choose a period",
     "hint": "Drag on the chart to zoom, double-click to reset.",
     "resolution": "Resolution",
     "preset_3h": "3 h",
@@ -88,7 +88,9 @@
     "preset_3m": "3 mo",
     "preset_1y": "1 y",
     "rotating": "This name answers from {n} different addresses: it is a load-balanced service. Each pass measures whichever server DNS returned, so the figures below mix machines that may sit in different places and carry different loads. A server that ignores ICMP shows up as loss.",
-    "pinned": "Measured at a fixed address, {ip}: the name may point elsewhere, the figures below always describe the same machine."
+    "pinned": "Measured at a fixed address, {ip}: the name may point elsewhere, the figures below always describe the same machine.",
+    "last24_hint": "One block per 30 minutes: green when the target matched its baseline, amber when latency or jitter drifted, red on packet loss, grey when nothing was measured.",
+    "nav_hint": "The full history at a glance. Drag across it to zoom the graph above on a period, double-click to come back."
   },
   "fed": {
     "title": "Federation",

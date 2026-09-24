@@ -410,8 +410,10 @@ function renderDetail() {
     <div class="card" style="margin-top:10px"><div class="card-b" style="padding-block:10px">
       <div class="lbl" style="margin-bottom:5px">${esc(t("home.last24h"))}</div>${hbarHTML(tg)}
       <div class="hbar-l"><span>−24 h</span><span>−12 h</span><span>${esc(t("common.updated"))}</span></div>
-      <div class="lbl" style="margin:12px 0 3px">${esc(t("detail.navigator"))}</div><canvas id="nv" height="58"></canvas></div></div>
-    <div class="stats" id="stats"></div><p class="faint" style="font-size:12.5px;margin-top:12px">${esc(t("detail.hint"))}</p>
+      <p class="strip-hint">${esc(t("detail.last24_hint"))}</p>
+      <div class="lbl" style="margin:14px 0 3px">${esc(t("detail.navigator"))}</div><canvas id="nv" height="58"></canvas>
+      <p class="strip-hint">${esc(t("detail.nav_hint"))}</p></div></div>
+    <div class="stats" id="stats"></div>
     <section class="section" id="trsec" hidden style="margin-top:22px"><div class="section-h"><h2>${esc(t("trace.title"))}</h2>
       <span class="sub">${esc(t("trace.sub"))}</span></div><div class="card"><div class="card-b scroll-x" id="trbox"></div></div></section>
   </div></div></div>`;

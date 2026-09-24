@@ -79,7 +79,7 @@
     "once_hint": "Mostrar cada destino una sola vez: un destino con fallo permanece en la sección de fallos y desaparece de los destinos críticos y de su categoría."
   },
   "detail": {
-    "navigator": "Navegador — últimos 12 meses",
+    "navigator": "Año completo — arrastre para elegir un periodo",
     "hint": "Arrastre sobre el gráfico para ampliar, doble clic para volver.",
     "resolution": "Resolución",
     "preset_3h": "3 h",
@@ -88,7 +88,9 @@
     "preset_3m": "3 meses",
     "preset_1y": "1 año",
     "rotating": "Este nombre responde desde {n} direcciones distintas: es un servicio con reparto de carga. Cada pasada mide el servidor que devolvió el DNS, así que las cifras de abajo mezclan máquinas que pueden estar en lugares distintos y con cargas distintas. Un servidor que ignora ICMP aparece como pérdida.",
-    "pinned": "Medido en una dirección fija, {ip}: el nombre puede apuntar a otro sitio, las cifras de abajo describen siempre la misma máquina."
+    "pinned": "Medido en una dirección fija, {ip}: el nombre puede apuntar a otro sitio, las cifras de abajo describen siempre la misma máquina.",
+    "last24_hint": "Un bloque por cada 30 minutos: verde si el destino cumplió su referencia, ámbar si la latencia o el jitter se desviaron, rojo si hubo pérdida, gris si no se midió nada.",
+    "nav_hint": "Todo el historial de un vistazo. Arrastre sobre él para ampliar el gráfico de arriba a un periodo; doble clic para volver."
   },
   "fed": {
     "title": "Federación",

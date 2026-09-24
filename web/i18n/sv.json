@@ -79,7 +79,7 @@
     "once_hint": "Visa varje mål endast en gång: ett mål med fel stannar i felavsnittet och försvinner från de kritiska målen och från sin kategori."
   },
   "detail": {
-    "navigator": "Navigator — senaste 12 månaderna",
+    "navigator": "Hela året — dra för att välja en period",
     "hint": "Dra i diagrammet för att zooma, dubbelklicka för att återställa.",
     "resolution": "Upplösning",
     "preset_3h": "3 h",
@@ -88,7 +88,9 @@
     "preset_3m": "3 mån",
     "preset_1y": "1 år",
     "rotating": "Det här namnet svarar från {n} olika adresser: det är en lastbalanserad tjänst. Varje omgång mäter den server som DNS gav, så siffrorna nedan blandar maskiner som kan stå på olika platser och ha olika belastning. En server som ignorerar ICMP visas som förlust.",
-    "pinned": "Mätt mot en fast adress, {ip}: namnet kan peka någon annanstans, siffrorna nedan beskriver alltid samma maskin."
+    "pinned": "Mätt mot en fast adress, {ip}: namnet kan peka någon annanstans, siffrorna nedan beskriver alltid samma maskin.",
+    "last24_hint": "Ett block per 30 minuter: grönt när målet följde sin referens, bärnsten när latens eller jitter avvek, rött vid paketförlust, grått när inget mättes.",
+    "nav_hint": "Hela historiken på en gång. Dra över den för att zooma grafen ovan till en period, dubbelklicka för att återgå."
   },
   "fed": {
     "title": "Federation",

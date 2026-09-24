@@ -79,7 +79,7 @@
     "once_hint": "Mostra ogni destinazione una sola volta: una destinazione in errore resta nella sezione dei guasti e sparisce dalle destinazioni critiche e dalla sua categoria."
   },
   "detail": {
-    "navigator": "Navigatore — ultimi 12 mesi",
+    "navigator": "Anno intero — trascina per scegliere un periodo",
     "hint": "Trascina sul grafico per ingrandire, doppio clic per tornare.",
     "resolution": "Risoluzione",
     "preset_3h": "3 h",
@@ -88,7 +88,9 @@
     "preset_3m": "3 mesi",
     "preset_1y": "1 anno",
     "rotating": "Questo nome risponde da {n} indirizzi diversi: è un servizio con bilanciamento del carico. Ogni passaggio misura il server restituito dal DNS, quindi i valori sotto mescolano macchine che possono trovarsi in luoghi diversi e con carichi diversi. Un server che ignora l'ICMP appare come perdita.",
-    "pinned": "Misurato su un indirizzo fisso, {ip}: il nome può puntare altrove, i valori sotto descrivono sempre la stessa macchina."
+    "pinned": "Misurato su un indirizzo fisso, {ip}: il nome può puntare altrove, i valori sotto descrivono sempre la stessa macchina.",
+    "last24_hint": "Un blocco ogni 30 minuti: verde se la destinazione era conforme al riferimento, ambra se latenza o jitter si sono scostati, rosso in caso di perdita, grigio se non è stato misurato nulla.",
+    "nav_hint": "L'intera storia a colpo d'occhio. Trascina per ingrandire il grafico sopra su un periodo, doppio clic per tornare."
   },
   "fed": {
     "title": "Federazione",

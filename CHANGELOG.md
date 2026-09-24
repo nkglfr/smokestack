@@ -5,6 +5,14 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- The notices on a target page (load-balanced name, pinned address, shared
+  graph) now span the full width of the page instead of stopping short of the
+  graph above them.
+- The two strips under the graph say what they are: the 24-hour ribbon
+  explains that each block is 30 minutes and what its colour means, and the
+  year-long navigator is now labelled *drag to choose a period*, with the
+  explanation next to it rather than lost under the figures.
+
 - The changelog is sorted per released version, and `scripts/changelog-check.sh`
   keeps it that way: the CI refuses a published version without its own
   section, and checks that sections stay in descending order. Entries for

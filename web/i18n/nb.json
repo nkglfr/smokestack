@@ -79,7 +79,7 @@
     "once_hint": "Vis hvert mål bare én gang: et mål med feil blir stående i feilseksjonen og forsvinner fra de kritiske målene og fra kategorien sin."
   },
   "detail": {
-    "navigator": "Navigator — siste 12 måneder",
+    "navigator": "Hele året — dra for å velge en periode",
     "hint": "Dra i diagrammet for å zoome, dobbeltklikk for å tilbakestille.",
     "resolution": "Oppløsning",
     "preset_3h": "3 t",
@@ -88,7 +88,9 @@
     "preset_3m": "3 mnd",
     "preset_1y": "1 år",
     "rotating": "Dette navnet svarer fra {n} ulike adresser: det er en lastbalansert tjeneste. Hver runde måler den serveren DNS ga, så tallene nedenfor blander maskiner som kan stå på ulike steder og ha ulik last. En server som ignorerer ICMP vises som tap.",
-    "pinned": "Målt mot en fast adresse, {ip}: navnet kan peke et annet sted, tallene nedenfor beskriver alltid samme maskin."
+    "pinned": "Målt mot en fast adresse, {ip}: navnet kan peke et annet sted, tallene nedenfor beskriver alltid samme maskin.",
+    "last24_hint": "Én blokk per 30 minutter: grønn når målet fulgte referansen, ravgul når latens eller jitter avvek, rød ved pakketap, grå når ingenting ble målt.",
+    "nav_hint": "Hele historikken på én gang. Dra over den for å zoome grafen over til en periode, dobbeltklikk for å gå tilbake."
   },
   "fed": {
     "title": "Føderasjon",

@@ -730,6 +730,17 @@ limit. A test target has no business keeping ten years of daily aggregates,
 and only the operator can decide that. The purge runs every six hours and
 covers the raw passes, every rollup tier and the traceroutes of that target.
 
+### What a target page shows
+
+Under the graph, two strips:
+
+- **Last 24 hours**: one block per 30 minutes, green when the target matched
+  its baseline, amber when latency or jitter drifted, red on packet loss,
+  grey when nothing was measured. It is the same ribbon as on the home page.
+- **Whole year**: the full history in miniature. Dragging across it zooms the
+  graph above on a period; a double-click comes back. Both carry that
+  explanation on the page, so a visitor does not have to guess.
+
 ### What the public pages show
 
 The public navigation adapts on its own: **Federation** and **Pairing**

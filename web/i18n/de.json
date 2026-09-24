@@ -79,7 +79,7 @@
     "once_hint": "Jedes Ziel nur einmal anzeigen: Ein gestörtes Ziel bleibt im Störungsbereich und erscheint nicht mehr bei den kritischen Zielen und in seiner Kategorie."
   },
   "detail": {
-    "navigator": "Navigator — letzte 12 Monate",
+    "navigator": "Ganzes Jahr — ziehen, um einen Zeitraum zu wählen",
     "hint": "Zum Zoomen über das Diagramm ziehen, Doppelklick zum Zurücksetzen.",
     "resolution": "Auflösung",
     "preset_3h": "3 Std.",
@@ -88,7 +88,9 @@
     "preset_3m": "3 Mon.",
     "preset_1y": "1 J.",
     "rotating": "Dieser Name antwortet von {n} verschiedenen Adressen: ein lastverteilter Dienst. Jede Runde misst den Server, den das DNS geliefert hat, daher vermischen die Zahlen unten Maschinen an möglicherweise verschiedenen Orten und mit unterschiedlicher Last. Ein Server, der ICMP ignoriert, erscheint als Verlust.",
-    "pinned": "Auf einer festen Adresse gemessen, {ip}: der Name kann auf etwas anderes zeigen, die Zahlen unten beschreiben immer dieselbe Maschine."
+    "pinned": "Auf einer festen Adresse gemessen, {ip}: der Name kann auf etwas anderes zeigen, die Zahlen unten beschreiben immer dieselbe Maschine.",
+    "last24_hint": "Ein Block je 30 Minuten: grün, wenn das Ziel seiner Referenz entsprach, bernstein bei abweichender Latenz oder Jitter, rot bei Paketverlust, grau wenn nichts gemessen wurde.",
+    "nav_hint": "Die gesamte Historie auf einen Blick. Ziehen Sie darüber, um den Graphen oben auf einen Zeitraum zu zoomen; Doppelklick kehrt zurück."
   },
   "fed": {
     "title": "Föderation",

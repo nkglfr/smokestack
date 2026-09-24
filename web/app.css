@@ -195,7 +195,7 @@ table.t td { padding: 10px; border-top: 1px solid var(--line-2); vertical-align:
 
 /* --- avertissements de la page de détail --- */
 .note-rot, .note-pin { font-size: 12.5px; line-height: 1.5; border-radius: 10px;
-  padding: 12px 14px; margin: 16px 0 6px; max-width: 70ch; }
+  padding: 12px 14px; margin: 16px 0 6px; }
 .note-rot strong, .note-pin strong { font-weight: 600; }
 
 .note-rot { color: #92400e; background: #fffbeb; border: 1px solid #fde68a; }
@@ -206,5 +206,8 @@ table.t td { padding: 10px; border-top: 1px solid var(--line-2); vertical-align:
 
 /* --- bandeau d'un graphe partagé --- */
 .note-share { font-size: 12.5px; line-height: 1.5; border-radius: 10px; padding: 12px 14px;
-  margin: 16px 0 6px; max-width: 74ch; color: var(--ink2);
+  margin: 16px 0 6px; color: var(--ink2);
   background: var(--bg-soft); border: 1px solid var(--line); }
+
+/* --- légendes sous les bandes de la page de détail --- */
+.strip-hint { font-size: 11.5px; line-height: 1.45; color: var(--ink3); margin: 6px 0 0; }

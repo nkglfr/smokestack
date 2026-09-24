@@ -79,7 +79,7 @@
     "once_hint": "Elk doel maar één keer tonen: een doel met een storing blijft in het storingsoverzicht en verdwijnt uit de kritieke doelen en uit zijn categorie."
   },
   "detail": {
-    "navigator": "Navigator — afgelopen 12 maanden",
+    "navigator": "Heel jaar — sleep om een periode te kiezen",
     "hint": "Sleep over de grafiek om in te zoomen, dubbelklik om terug te gaan.",
     "resolution": "Resolutie",
     "preset_3h": "3 u",
@@ -88,7 +88,9 @@
     "preset_3m": "3 mnd",
     "preset_1y": "1 jaar",
     "rotating": "Deze naam antwoordt vanaf {n} verschillende adressen: het is een dienst met load balancing. Elke ronde meet de server die DNS teruggaf, dus de cijfers hieronder mengen machines die op verschillende plaatsen kunnen staan en verschillende belasting hebben. Een server die ICMP negeert, verschijnt als verlies.",
-    "pinned": "Gemeten op een vast adres, {ip}: de naam kan naar iets anders wijzen, de cijfers hieronder beschrijven altijd dezelfde machine."
+    "pinned": "Gemeten op een vast adres, {ip}: de naam kan naar iets anders wijzen, de cijfers hieronder beschrijven altijd dezelfde machine.",
+    "last24_hint": "Eén blok per 30 minuten: groen als het doel aan zijn referentie voldeed, amber bij afwijkende latentie of jitter, rood bij pakketverlies, grijs als er niets is gemeten.",
+    "nav_hint": "De volledige geschiedenis in één oogopslag. Sleep erover om de grafiek hierboven op een periode in te zoomen; dubbelklik om terug te keren."
   },
   "fed": {
     "title": "Federatie",
