@@ -511,6 +511,15 @@ languages, the instance default (publisher page), then English.
 | `/pairing` | identity, fingerprint, pairing instructions |
 | `/about` | operator, contacts, measurement method |
 
+Each target also has its own address, `/t/<slug>`; the older `#t=<id>` form
+still opens the same page. Pages are built in the browser, so a crawler would
+otherwise see an empty document: the server injects the title, description,
+canonical address, `hreflang` alternates, social cards and JSON-LD, and puts
+a plain summary of the public targets inside `<noscript>`. `/sitemap.xml` and
+`/robots.txt` are generated from the same data, so a new instance is indexed
+without anyone maintaining a list, and private targets never appear. One
+setting turns all of it off, and the back-office is always `noindex`.
+
 All share one stylesheet (automatic dark theme), the translation library and
 a common footer. The link to the official website comes from a value compiled
 into the binary and cannot be changed from the back-office.

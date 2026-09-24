@@ -3,6 +3,15 @@
 Versions are published as signed releases; servers with automatic updates
 install the newest one directly, whatever versions came in between.
 
+## 0.2.3
+
+- **Public pages are indexable.** Title, description, canonical address,
+  language alternates, social cards and structured data on every page, plus a
+  summary readable without JavaScript. Each target gets a readable address
+  `/t/<name>`, `/sitemap.xml` lists the public pages and targets, and
+  `/robots.txt` keeps crawlers out of the back-office and the API. One switch
+  in the publisher page turns it all off. Private targets are never exposed.
+
 ## 0.2.2
 
 - **Fixed: editing a target saved only part of it.** The category, interval,

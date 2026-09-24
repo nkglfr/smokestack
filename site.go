@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 )
 
 // Site porte les metadonnees de l'instance : qui l'exploite, comment
@@ -20,6 +21,8 @@ type Site struct {
 	NOCPhone string `json:"noc_phone"`
 	// Contact: the form keeps the operator's address private. ShowEmail
 	// puts it back on the public page for those who prefer that.
+	// SearchIndex: let search engines index the public pages.
+	SearchIndex   bool   `json:"search_index"`
 	ContactForm   bool   `json:"contact_form"`
 	ShowEmail     bool   `json:"show_email"`
 	ContactNotify string `json:"contact_notify,omitempty"` // never public
@@ -42,6 +45,7 @@ func defaultSite() Site {
 		Owner:       "",
 		Email:       "",
 		ContactForm: true,
+		SearchIndex: true,
 		Timezone:    "Europe/Paris",
 		DefaultLang: "en",
 		Description: "Latency and packet loss measured from our network to public destinations.",
@@ -54,6 +58,15 @@ func (s *Store) Site() Site {
 		var v Site
 		if err := json.Unmarshal([]byte(raw), &v); err == nil {
 			site = v
+			// Settings added after an instance was first configured keep
+			// their default instead of the zero value: an upgrade must not
+			// silently de-index a site or switch its contact form off.
+			if !strings.Contains(raw, `"search_index"`) {
+				site.SearchIndex = true
+			}
+			if !strings.Contains(raw, `"contact_form"`) {
+				site.ContactForm = true
+			}
 		}
 	}
 	return site

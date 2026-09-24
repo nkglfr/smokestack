@@ -287,7 +287,9 @@ func main() {
 	api.SuggestedRoutes(mux)
 	api.ContactRoutes(mux)
 
-	page := func(name string) http.HandlerFunc {
+	// Public pages get their metadata and a no-JavaScript summary injected
+	// on the way out, so that a crawler sees a real page.
+	page := func(name string, meta func(*http.Request) (pageMeta, bool)) http.HandlerFunc {
 		return withAssetCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			b, err := fs.ReadFile(sub, name)
 			if err != nil {
@@ -297,19 +299,49 @@ func main() {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
 			w.Header().Set("X-Frame-Options", "DENY")
 			w.Header().Set("Referrer-Policy", "same-origin")
+			if meta != nil {
+				m, ok := meta(r)
+				if !ok {
+					http.NotFound(w, r)
+					return
+				}
+				b = inject(b, api.seoHead(r, m), m.Body)
+			}
 			w.Write(b)
 		}), 0).ServeHTTP
 	}
+	fixed := func(m pageMeta) func(*http.Request) (pageMeta, bool) {
+		return func(*http.Request) (pageMeta, bool) { return m, true }
+	}
 	// Chemins lisibles pour les deux pages qui ont une adresse a
 	// communiquer : le back-office et la page d'appairage.
-	mux.HandleFunc("GET /admin", page("admin.html"))
-	mux.HandleFunc("GET /admin/", page("admin.html"))
-	mux.HandleFunc("GET /pairing", page("pairing.html"))
-	mux.HandleFunc("GET /pairing/", page("pairing.html"))
-	mux.HandleFunc("GET /federation", page("federation.html"))
-	mux.HandleFunc("GET /network", page("network.html"))
-	mux.HandleFunc("GET /about", page("about.html"))
-	mux.HandleFunc("GET /{$}", page("index.html"))
+	noIndex := fixed(pageMeta{Path: "/admin", Title: "Back-office", NoIndex: true})
+	mux.HandleFunc("GET /admin", page("admin.html", noIndex))
+	mux.HandleFunc("GET /admin/", page("admin.html", noIndex))
+	pairing := fixed(pageMeta{Path: "/pairing", Title: "Federation pairing",
+		Description: "Identity, key fingerprint and anchors of this instance, and how to pair with it."})
+	mux.HandleFunc("GET /pairing", page("pairing.html", pairing))
+	mux.HandleFunc("GET /pairing/", page("pairing.html", pairing))
+	mux.HandleFunc("GET /federation", page("federation.html", fixed(pageMeta{Path: "/federation",
+		Title: "Federation",
+		Description: "Networks paired with this instance, latency measured in both directions, " +
+			"and the inter-AS matrix."})))
+	mux.HandleFunc("GET /network", page("network.html", fixed(pageMeta{Path: "/network",
+		Title: "Host network",
+		Description: "The autonomous system these measurements are taken from, as seen in global " +
+			"routing and as declared by its operator."})))
+	mux.HandleFunc("GET /about", page("about.html", fixed(pageMeta{Path: "/about",
+		Title:       "About and contact",
+		Description: "Operator, contacts and measurement method of this latency monitoring instance."})))
+	mux.HandleFunc("GET /{$}", page("index.html", func(r *http.Request) (pageMeta, bool) {
+		return pageMeta{Path: "/", Body: api.homeBody(r), Schema: api.orgSchema(r)}, true
+	}))
+	// One readable address per target, listed in the sitemap.
+	mux.HandleFunc("GET /t/{slug}", page("index.html", func(r *http.Request) (pageMeta, bool) {
+		return api.targetMeta(r, r.PathValue("slug"))
+	}))
+	mux.HandleFunc("GET /robots.txt", api.robotsTxt)
+	mux.HandleFunc("GET /sitemap.xml", api.sitemapXML)
 	mux.Handle("GET /", withAssetCache(http.FileServer(http.FS(sub)), 300))
 	mux.HandleFunc("GET /api/v1/admin/probe/status", api.need(RoleViewer, api.probeStatus))
 	go ovCache.Loop(stop)

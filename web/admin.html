@@ -913,6 +913,14 @@ async function viewSite(m){
         used only if SMTP is configured in <a href="#" data-goto="notify">NOC alerting</a>; otherwise
         messages simply wait in Messages.</div>
     </div></div>
+    <div class="card"><h3>Search engines</h3><div class="body">
+      <label class="chk"><input type="checkbox" id="search_index" ${s.search_index?"checked":""}>
+        <span>Let search engines index the public pages<small>On by default. Each page gets a title, a
+          description and a summary readable without JavaScript, every target gets a readable address
+          (<span class="mono">/t/name</span>), and <span class="mono">/sitemap.xml</span> lists them all.
+          Off puts a <span class="mono">noindex</span> on every page and blocks crawlers in
+          <span class="mono">robots.txt</span>.</small></span></label>
+    </div></div>
     <div class="card"><h3>Public traceroutes</h3><div class="body">
       <label class="chk"><input type="checkbox" id="public_traceroutes" ${s.public_traceroutes?"checked":""}>
         <span>Show traceroutes on the public target pages<small>Off by default: hops reveal the inside
@@ -932,6 +940,7 @@ async function viewSite(m){
       const body={};ids.forEach(k=>body[k]=$("#"+k).value);
       body.public_traceroutes=$("#public_traceroutes").checked;
       body.contact_form=$("#contact_form").checked;
+      body.search_index=$("#search_index").checked;
       body.show_email=$("#show_email").checked;
       try{await api("PUT","/api/v1/admin/site",body);toast("Saved");}
       catch(e){toast(e.message,true);}

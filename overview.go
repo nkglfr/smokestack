@@ -30,6 +30,7 @@ type Spark struct {
 
 type OverviewTarget struct {
 	ID       int64    `json:"id"`
+	Slug     string   `json:"slug"`
 	Title    string   `json:"title"`
 	Host     string   `json:"host"`
 	Proto    string   `json:"proto"`
@@ -179,7 +180,7 @@ func (s *Store) Overview(probeID int64, now int64, publicOnly bool) (*Overview, 
 			if !t.Enabled {
 				continue
 			}
-			ot := &OverviewTarget{ID: t.ID, Title: t.Title, Host: t.Host, Proto: t.Proto,
+			ot := &OverviewTarget{ID: t.ID, Slug: t.Slug, Title: t.Title, Host: t.Host, Proto: t.Proto,
 				Interval: t.IntervalS, Featured: feat[t.ID], Public: t.Public,
 				Hours: make([]string, 48)}
 

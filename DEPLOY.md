@@ -206,6 +206,32 @@ limiting applies to the proxy's address.
 ## 4. First steps
 
 1. Open `https://latency.example.net/admin` and log in with the printed credentials.
+### Search engines
+
+Public pages are indexable out of the box. The service gives each one a
+title, a description, a canonical address, language alternates for the ten
+shipped languages, social cards and structured data, plus a summary readable
+**without JavaScript** listing every public target and its current state —
+without that summary a crawler would see an empty page, since the interface
+is built in the browser.
+
+- each target has a readable address, `/t/<name>`, which is what visitors
+  paste and what gets indexed; older `#t=<id>` links keep working;
+- `/sitemap.xml` lists the public pages and every public target, and updates
+  itself as targets come and go;
+- `/robots.txt` points at the sitemap and keeps crawlers out of `/admin` and
+  the API;
+- private targets appear in none of this;
+- the back-office always carries `noindex`.
+
+Turn it off in *Instance → Publisher page* if the instance is meant to stay
+out of search results: every page then carries `noindex`, the sitemap
+disappears and `robots.txt` refuses everything.
+
+The canonical addresses use the **Website** field of the publisher page. Set
+it to the address visitors use, otherwise they fall back to the host of the
+request.
+
 ### Being reachable without publishing your address
 
 By default the public *About* page carries a **contact form** instead of your

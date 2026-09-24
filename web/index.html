@@ -363,9 +363,16 @@ function openTarget(id, from, to) {
 // Opening a target adds a history entry, so the browser's Back button
 // returns to the overview; zooming only rewrites the current one.
 function writeHash(push) {
-  const h = S.view === "detail" ? `#t=${S.target.id}` + (S.preset === -1 ? `&from=${S.from}&to=${S.to}` : `&p=${S.preset}`) : "";
-  const url = location.pathname + location.search + h;
-  if (push && location.hash !== h) history.pushState(null, "", url);
+  // A target has its own readable address, /t/<slug>: it is what search
+  // engines index and what people paste. The time window stays in the hash.
+  let path = "/", h = "";
+  if (S.view === "detail" && S.target) {
+    path = "/t/" + encodeURIComponent(S.target.slug || "");
+    h = S.preset === -1 ? `#from=${S.from}&to=${S.to}` : `#p=${S.preset}`;
+    if (!S.target.slug) { path = "/"; h = `#t=${S.target.id}` + (S.preset === -1 ? `&from=${S.from}&to=${S.to}` : `&p=${S.preset}`); }
+  }
+  const url = path + location.search + h;
+  if (push && location.pathname + location.hash !== path + h) history.pushState(null, "", url);
   else history.replaceState(null, "", url);
 }
 function renderDetail() {
@@ -501,8 +508,16 @@ function bindChart() {
 
 /* ------------------------------------------------------------- démarrage */
 function render() { S.view === "detail" && S.target ? renderDetail() : renderHome(); }
+function bySlug(slug) {
+  for (const c of (S.ov ? S.ov.categories : [])) for (const t of c.targets) if (t.slug === slug) return t;
+  return null;
+}
 function fromHash() {
-  const p = new URLSearchParams(location.hash.slice(1)); const id = +p.get("t");
+  const p = new URLSearchParams(location.hash.slice(1));
+  // /t/<slug>, then the older #t=<id> form so old links keep working.
+  const m = location.pathname.match(/^\/t\/([^/]+)\/?$/);
+  const tg = m ? bySlug(decodeURIComponent(m[1])) : null;
+  const id = tg ? tg.id : +p.get("t");
   if (id && byId(id)) {
     if (p.get("from") && p.get("to")) openTarget(id, +p.get("from"), +p.get("to"));
     else { openTarget(id); const pi = +p.get("p"); if (pi > 0 && pi < PRESETS.length) { S.preset = pi; S.from = S.to - PRESETS[pi][1]; paint(); } }
@@ -516,7 +531,9 @@ function fromHash() {
   App.boot("home", () => { if (first) { first = false; if (fromHash()) return; } render(); });
   setInterval(async () => { await loadOverview(); if (S.view === "home") renderHome(); else if (S.target) { S.target = byId(S.target.id) || S.target; } }, 30000);
   let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(render, 160); });
-  addEventListener("hashchange", () => { if (!fromHash()) { S.view = "home"; renderHome(); } });
+  const route = () => { if (!fromHash()) { S.view = "home"; S.target = null; renderHome(); } };
+  addEventListener("hashchange", route);
+  addEventListener("popstate", route);
 })();
 </script>
 </body>
