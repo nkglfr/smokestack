@@ -5,6 +5,12 @@ install the newest one directly, whatever versions came in between.
 
 ## 0.2.6
 
+- The back-office invites operators to post their instance URL in the
+  project's *Show and tell* discussions, to find networks to pair with.
+- The *Unique targets* checkbox no longer crowds the section header: the
+  count sits next to the title, and the checkbox became a pill that moves to
+  its own line on a narrow screen instead of breaking apart.
+
 - **Fixed: the pairing page showed version 0.1**, a string left hard-coded in
   the first version of the federation profile.
 - **Fixed: the host network page could fail with a JSON error.** It fetched

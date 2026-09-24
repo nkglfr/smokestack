@@ -684,6 +684,14 @@ async function viewFed(m){
       to the public URL of another instance; its administrator sees it here, compares your
       fingerprint with the one exchanged out of band, reads your justification, then accepts
       or declines. Showing a pairing publicly also requires both sides to agree.</p>
+    <div class="note" style="margin:0 0 16px">
+      <strong>Looking for networks to pair with?</strong> Operators running smokestack post the public
+      URL of their instance in
+      <a href="https://github.com/nkglfr/smokestack/discussions/categories/show-and-tell" target="_blank"
+         rel="noreferrer">Show and tell</a> on the project's discussions. Add yours — your instance URL,
+      your AS number and where you measure from — and pick the ones whose paths interest you.
+      Pairing still needs a human decision on both sides, so publishing your URL commits you to nothing.
+    </div>
     <div id="f">Loading…</div>`;
   try{
     const [id,pairings,peers,info]=await Promise.all([

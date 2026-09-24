@@ -101,7 +101,12 @@ button { font: inherit; color: inherit; background: none; border: none; cursor: 
 .section-h { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .section-h h2 { font-size: 16px; font-weight: 650; letter-spacing: -.01em; margin: 0; }
 .section-h .sub { font-size: 12.5px; color: var(--ink-3); }
-.section-h .right { margin-left: auto; }
+/* The right-hand side of a section header holds one control: it stays on
+   one line, and moves to its own line rather than wrapping inside itself. */
+.section-h .right { margin-left: auto; display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+@media (max-width: 620px) {
+  .section-h .right { margin-left: 0; width: 100%; }
+}
 .card { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius);
         box-shadow: var(--shadow); }
 .card-b { padding: clamp(14px, 2vw, 20px); }
@@ -179,7 +184,10 @@ table.t td { padding: 10px; border-top: 1px solid var(--line-2); vertical-align:
 .btn-primary:disabled { opacity: .6; cursor: default; }
 
 /* --- étiquette « cible unique » et sa pastille d'information --- */
-.once-lbl { font-size: 12px; display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
+.once-lbl { font-size: 12px; display: inline-flex; align-items: center; gap: 7px; cursor: pointer;
+  white-space: nowrap; padding: 3px 9px 3px 6px; border: 1px solid var(--line); border-radius: 999px; }
+.once-lbl:hover { background: var(--bg-soft); }
+.once-lbl input { margin: 0; }
 .info { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px;
         border-radius: 50%; background: var(--accent); color: #fff; font-size: 10.5px; font-weight: 700;
         font-style: italic; font-family: Georgia, serif; cursor: help; flex: none; }

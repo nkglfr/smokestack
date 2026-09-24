@@ -321,11 +321,11 @@ function renderHome() {
       <div><h3>${esc(t("home.ex_bands_t"))}</h3><p>${esc(t("home.ex_bands"))}</p></div>
       <div><h3>${esc(t("home.ex_colours_t"))}</h3><p>${esc(t("home.ex_colours"))}</p></div></div></details>
     <section class="section"><div class="section-h"><h2><span class="dot d-${faults.length ? heroK : "ok"}"></span> ${esc(t("home.faults"))}</h2>
-      <span class="sub">${esc(t("home.faults_sub"))}</span><span class="right">
-        <label class="faint once-lbl" title="${esc(t("home.once_hint"))}">
-          <input type="checkbox" id="once" ${once() ? "checked" : ""}> ${esc(t("home.once"))}
-          <span class="info" role="img" tabindex="0" aria-label="${esc(t("home.once_hint"))}">i</span></label>
-        <span class="badge b-${faults.length ? heroK : "ok"}">${faults.length}</span></span></div>
+      <span class="badge b-${faults.length ? heroK : "ok"}">${faults.length}</span>
+      <span class="sub">${esc(t("home.faults_sub"))}</span>
+      <span class="right"><label class="faint once-lbl" title="${esc(t("home.once_hint"))}">
+        <input type="checkbox" id="once" ${once() ? "checked" : ""}> ${esc(t("home.once"))}
+        <span class="info" role="img" tabindex="0" aria-label="${esc(t("home.once_hint"))}">i</span></label></span></div>
       ${faults.length ? `<div class="rows">${faults.map(x => rowHTML(x, true)).join("")}</div>` : `<div class="empty"><span class="dot d-ok"></span>${esc(t("home.no_fault"))}</div>`}</section>`;
   const hide = once() ? new Set(faults.map(x => x.id)) : new Set();
   const feat = all.filter(x => x.featured && !hide.has(x.id));
