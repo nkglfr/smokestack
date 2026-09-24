@@ -93,7 +93,7 @@
     "nav_hint": "Die gesamte Historie auf einen Blick. Ziehen Sie darüber, um den Graphen oben auf einen Zeitraum zu zoomen; Doppelklick kehrt zurück.",
     "events": "Ereignisse in diesem Zeitraum",
     "route_changed": "Route geändert",
-    "ev_hint": "Eine gestrichelte Marke im Graphen zeigt ein Ereignis für dieses Ziel. Routenwechsel werden erfasst, lösen aber keinen Alarm aus: nichts ist defekt, der Pfad ist nur nicht mehr derselbe."
+    "ev_hint": "Eine gestrichelte Marke zeigt einen Routenwechsel auf dem Hinweg von dieser Sonde zu diesem Ziel: Der Traceroute durchquerte andere Netze als zuvor. Das betrifft nur dieses Ziel, nicht die Instanz, und sagt nichts über den Rückweg, der von hier unsichtbar ist. Es wird kein Alarm ausgelöst: nichts ist defekt, der Pfad ist nur nicht mehr derselbe. Ziele ohne Pfadwechsel tragen keine Marke."
   },
   "fed": {
     "title": "Föderation",

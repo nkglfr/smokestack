@@ -738,6 +738,26 @@ under it: date, what happened, and for a route change the AS path before and
 after. Writing the path across the plot, as earlier versions did, made the
 graph unreadable and told a visitor nothing.
 
+**What a route change actually means, and why only some graphs carry one.**
+It is measured, not inferred: the probe records a traceroute towards that
+target while it is healthy, and compares it with the previous one. A mark
+appears when the **AS path changed** — the packets now cross different
+networks on their way there.
+
+Four consequences worth stating, because they are what people get wrong:
+
+- it describes **the path from this probe to this target**, not the state of
+  the internet, not the instance, and not another target on the same page;
+- it is the **forward path only**. Routing is asymmetric: the return path is
+  invisible from here, and it may have changed without any mark, or not
+  changed while this one did;
+- it compares **AS paths, not addresses**, so an operator balancing traffic
+  across parallel links of its own network raises nothing;
+- **no mark simply means no change was seen**. A target whose path is stable,
+  one whose traceroutes are disabled, or one too recent to have two healthy
+  references, carries none. Absence of a mark is not proof of a stable path,
+  only of nothing observed.
+
 
 Under the graph, two strips:
 

@@ -93,7 +93,7 @@
     "nav_hint": "Todo el historial de un vistazo. Arrastre sobre él para ampliar el gráfico de arriba a un periodo; doble clic para volver.",
     "events": "Eventos en este periodo",
     "route_changed": "ruta cambiada",
-    "ev_hint": "Una marca discontinua en el gráfico señala un hecho en este destino. Los cambios de ruta se registran sin generar alerta: nada está roto, solo el camino ya no es el mismo."
+    "ev_hint": "Una marca discontinua señala un cambio de ruta en el camino de ida, desde esta sonda hasta este destino: el traceroute atravesó redes distintas a las anteriores. Solo afecta a este destino, no a la instancia, y no dice nada del camino de vuelta, invisible desde aquí. No se genera alerta: nada está roto, el camino simplemente ya no es el mismo. Los destinos cuyo camino nunca cambió no llevan marca."
   },
   "fed": {
     "title": "Federación",

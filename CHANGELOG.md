@@ -12,7 +12,9 @@ install the newest one directly, whatever versions came in between.
   AS path across the plot next to a vertical line, which told a visitor
   nothing. The graph now carries a dashed mark with a number, and a list
   underneath spells each one out: date, what happened, and the two AS paths.
-  The list also says that a route change raises no alert.
+  The list also says what the mark actually means: the forward path from this
+  probe to this target crossed different networks, nothing about the return
+  path or about the instance, and no alert is raised.
 - The two strips under the graph say what they are: the 24-hour ribbon
   explains that each block is 30 minutes and what its colour means, and the
   year-long navigator is now labelled *drag to choose a period*, with the

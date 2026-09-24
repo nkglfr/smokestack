@@ -93,7 +93,7 @@
     "nav_hint": "De volledige geschiedenis in één oogopslag. Sleep erover om de grafiek hierboven op een periode in te zoomen; dubbelklik om terug te keren.",
     "events": "Gebeurtenissen in deze periode",
     "route_changed": "route gewijzigd",
-    "ev_hint": "Een streepjesmarkering in de grafiek toont een gebeurtenis voor dit doel. Routewijzigingen worden vastgelegd zonder alarm: er is niets stuk, het pad is alleen niet meer hetzelfde."
+    "ev_hint": "Een streepjesmarkering toont een routewijziging op het heenpad, van deze sonde naar dit doel: de traceroute liep via andere netwerken dan eerder. Het betreft alleen dit doel, niet de instantie, en zegt niets over het terugpad, dat van hieruit onzichtbaar is. Er komt geen alarm: er is niets stuk, het pad is alleen niet meer hetzelfde. Doelen waarvan het pad nooit wijzigde krijgen geen markering."
   },
   "fed": {
     "title": "Federatie",

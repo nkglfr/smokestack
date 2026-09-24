@@ -93,7 +93,7 @@
     "nav_hint": "The full history at a glance. Drag across it to zoom the graph above on a period, double-click to come back.",
     "events": "Events over this period",
     "route_changed": "route changed",
-    "ev_hint": "A dashed mark on the graph shows when something happened on this target. Route changes are recorded but raise no alert: nothing is broken, the path is simply not the same."
+    "ev_hint": "A dashed mark shows a route change on the forward path from this probe to this target: the traceroute crossed different networks than before. It concerns this target only, not the instance, and says nothing about the return path, which is invisible from here. No alert is raised: nothing is broken, the path is simply not the same. Targets whose path never changed carry no mark."
   },
   "fed": {
     "title": "Federation",

@@ -93,7 +93,7 @@
     "nav_hint": "Hele historikken på én gang. Træk hen over den for at zoome grafen ovenfor til en periode; dobbeltklik for at vende tilbage.",
     "events": "Hændelser i denne periode",
     "route_changed": "rute ændret",
-    "ev_hint": "En stiplet markering i grafen viser en hændelse for målet. Ruteændringer registreres uden alarm: intet er i stykker, vejen er bare ikke den samme."
+    "ev_hint": "En stiplet markering viser en ruteændring på vejen derhen, fra denne sonde til dette mål: traceroute gik gennem andre net end før. Det gælder kun dette mål, ikke instansen, og siger intet om vejen tilbage, som er usynlig herfra. Ingen alarm udløses: intet er i stykker, vejen er bare ikke den samme. Mål, hvis vej aldrig har ændret sig, har ingen markeringer."
   },
   "fed": {
     "title": "Føderation",

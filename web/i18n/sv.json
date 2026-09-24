@@ -93,7 +93,7 @@
     "nav_hint": "Hela historiken på en gång. Dra över den för att zooma grafen ovan till en period, dubbelklicka för att återgå.",
     "events": "Händelser under perioden",
     "route_changed": "rutt ändrad",
-    "ev_hint": "En streckad markering i grafen visar en händelse för målet. Ruttändringar registreras utan larm: inget är trasigt, vägen är bara inte densamma."
+    "ev_hint": "En streckad markering visar en ruttändring på vägen dit, från denna sond till detta mål: traceroute gick genom andra nät än förut. Det gäller bara detta mål, inte instansen, och säger inget om vägen tillbaka, som är osynlig härifrån. Inget larm utlöses: inget är trasigt, vägen är bara inte densamma. Mål vars väg aldrig ändrats har inga markeringar."
   },
   "fed": {
     "title": "Federation",

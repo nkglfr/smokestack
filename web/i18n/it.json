@@ -93,7 +93,7 @@
     "nav_hint": "L'intera storia a colpo d'occhio. Trascina per ingrandire il grafico sopra su un periodo, doppio clic per tornare.",
     "events": "Eventi in questo periodo",
     "route_changed": "rotta cambiata",
-    "ev_hint": "Un segno tratteggiato sul grafico indica un fatto su questa destinazione. I cambi di rotta sono registrati senza allarme: nulla è rotto, il percorso semplicemente non è più lo stesso."
+    "ev_hint": "Un segno tratteggiato indica un cambio di rotta sul percorso di andata, da questa sonda verso questa destinazione: il traceroute ha attraversato reti diverse da prima. Riguarda solo questa destinazione, non l'istanza, e non dice nulla del percorso di ritorno, invisibile da qui. Nessun allarme: nulla è rotto, il percorso semplicemente non è più lo stesso. Le destinazioni il cui percorso non è mai cambiato non hanno segni."
   },
   "fed": {
     "title": "Federazione",

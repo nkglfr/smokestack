@@ -139,6 +139,14 @@ one, and notes a change of **AS path** as an event — visible on the graph, in
 the log, and used as context if a degradation follows. Nobody is alerted for
 it on its own.
 
+**What the mark on a graph means.** It is the forward path, from your probe
+to that one target, and nothing else: the traceroute now crosses different
+networks than before. It says nothing about the return path — routing is
+asymmetric and the way back is invisible from your side — and nothing about
+your other targets, each of which has its own path. A graph without a mark
+means no change was observed on that path, which is not the same as proof
+that it never moved.
+
 Two settings matter:
 
 - **Reference traceroute every**, per target: leave it at the instance
