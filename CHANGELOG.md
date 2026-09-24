@@ -5,6 +5,23 @@ install the newest one directly, whatever versions came in between.
 
 ## 0.2.6
 
+- **Fixed: the pairing page showed version 0.1**, a string left hard-coded in
+  the first version of the federation profile.
+- **Fixed: the host network page could fail with a JSON error.** It fetched
+  RIPEstat and PeeringDB while the visitor waited, so a reverse proxy in front
+  could answer with its own HTML error page. The server now answers from its
+  cache and refreshes in the background, and the page waits instead of
+  breaking — whatever a proxy answers.
+- **Fixed: a raw translation key could appear on a page** (`detail.rotating`).
+  Dictionaries gain keys with every version and were cached for an hour; they
+  are now revalidated, and a key a dictionary does not know shows nothing
+  rather than its own name.
+- The load-balanced notice is restyled: addresses as chips, room above it.
+- **Contact: four modes** — form, email address assembled in JavaScript
+  against harvesters, links to your own tools, or nothing — plus an optional
+  built-in robot check (proof of work, no third party, nothing to read so it
+  works in every language).
+
 - Alerting can be switched off **per target** as well as globally: a target
   left out is still measured and its incidents still recorded.
 - **Notification channels**: alerts now leave through channels you configure

@@ -21,7 +21,7 @@
 <script src="/i18n.js"></script>
 <script src="/app.js"></script>
 <script>
-let INFO = null, ERR = null;
+let INFO = null, ERR = null, PENDING = false;
 
 function kv(rows) {
   return `<div class="kv">` + rows.filter(r => r[1] !== "" && r[1] != null)
@@ -30,6 +30,10 @@ function kv(rows) {
 
 function render() {
   const t = I18N.t, esc = App.esc, box = document.getElementById("body");
+  if (PENDING && !INFO) {
+    box.innerHTML = `<div class="note">${esc(t("common.loading"))}</div>`;
+    return;
+  }
   if (ERR) { box.innerHTML = `<div class="note">${esc(t("common.unavailable"))} — ${esc(ERR)}</div>`; return; }
   if (!INFO) return;
   const i = INFO, p = i.peeringdb;
@@ -111,9 +115,33 @@ function render() {
 }
 
 const hash = (location.hash.match(/AS(\d+)/i) || [])[1];
-fetch(hash ? "/api/v1/asn/" + hash : "/api/v1/asn")
-  .then(async r => { const d = await r.json(); if (!r.ok) throw new Error(d.error || r.status); return d; })
-  .then(d => { INFO = d; }).catch(e => { ERR = e.message; })
+// The data comes from RIPEstat and PeeringDB, fetched in the background: on
+// a cold cache the server answers "pending" instead of making the visitor
+// wait. A reverse proxy in front may also answer with an HTML error page,
+// which must not surface as "Unexpected token '<'".
+async function loadASN() {
+  const r = await fetch(hash ? "/api/v1/asn/" + hash : "/api/v1/asn");
+  const text = await r.text();
+  let d = null;
+  try { d = JSON.parse(text); } catch (e) {
+    throw new Error(r.status >= 400
+      ? `the server answered HTTP ${r.status} (a reverse proxy error page, not smokestack)`
+      : "unexpected answer from the server");
+  }
+  if (!r.ok) throw new Error(d.error || r.status);
+  return d;
+}
+
+let RETRIES = 0;
+function retryLater() {
+  if (RETRIES++ > 10) return;
+  setTimeout(() => loadASN().then(d => { INFO = d.pending ? null : d; PENDING = !!d.pending; render(); })
+    .catch(e => { ERR = e.message; render(); }), 3000);
+}
+
+loadASN()
+  .then(d => { if (d.pending) { PENDING = true; retryLater(); } else { INFO = d; } })
+  .catch(e => { ERR = e.message; })
   .finally(() => App.boot("network", render));
 </script>
 </body>

@@ -240,7 +240,22 @@ land in *Accounts → Messages* in the back-office, with the sender's address so
 you can reply from your own mail client — the instance never sends mail on a
 visitor's behalf.
 
-In *Instance → Publisher page*:
+In *Instance → Publisher page*, **how visitors reach you**:
+
+| Mode | What the page shows |
+|---|---|
+| **Contact form** | The form; messages land in *Messages*. Your address stays private |
+| **Email address** | The address, assembled in JavaScript: a harvester reading the HTML finds nothing |
+| **Links** | Links to your own tools (support portal, social account…), one per line as `Label \| URL` |
+| **Nothing** | No contact block at all |
+
+The form can carry a **robot check**: a built-in proof-of-work challenge. There
+is nothing to read, so it works in every language; there is no third-party
+service, so no visitor data leaves your instance; it is invisible to a person
+and costs a bot about a second of computation per message, on top of the
+three-messages-per-hour limit.
+
+Other settings:
 
 | Setting | Effect |
 |---|---|

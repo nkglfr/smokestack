@@ -240,6 +240,9 @@
     "sending": "Envoi…",
     "sent": "Message envoyé. Merci, nous vous répondrons.",
     "error": "Le message n'a pas pu être envoyé :",
-    "privacy": "Nom, adresse et message sont conservés sur cette instance jusqu'à leur suppression par l'opérateur. Rien d'autre n'est collecté."
+    "privacy": "Nom, adresse et message sont conservés sur cette instance jusqu'à leur suppression par l'opérateur. Rien d'autre n'est collecté.",
+    "verifying": "Vérification que vous n'êtes pas un robot…",
+    "other_ways": "Autres moyens de nous joindre",
+    "email_label": "Adresse électronique"
   }
 }

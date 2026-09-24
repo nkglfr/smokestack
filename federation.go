@@ -235,7 +235,7 @@ func (f *Federation) Profile() FedProfile {
 		Fprint:   f.Fingerprint(),
 		NOCEmail: site.NOCEmail,
 		Anchors:  f.anchors,
-		Software: "smokestack/0.1",
+		Software: "smokestack/" + Version,
 	}
 }
 

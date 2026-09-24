@@ -240,6 +240,9 @@
     "sending": "Sender…",
     "sent": "Beskeden er sendt. Tak, vi vender tilbage.",
     "error": "Beskeden kunne ikke sendes:",
-    "privacy": "Navn, adresse og besked gemmes på denne instans, indtil operatøren sletter dem. Der indsamles intet andet."
+    "privacy": "Navn, adresse og besked gemmes på denne instans, indtil operatøren sletter dem. Der indsamles intet andet.",
+    "verifying": "Kontrollerer, at du ikke er en robot…",
+    "other_ways": "Andre måder at nå os på",
+    "email_label": "E-mail"
   }
 }

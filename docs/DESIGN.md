@@ -304,6 +304,19 @@ therefore keeps the send time per sequence number on its own side and uses
 the echoed one only when it is present and plausible; otherwise those
 answered probes were counted as lost.
 
+**No third party in the page.** The robot check on the contact form is a
+proof-of-work challenge signed by the instance: the browser looks for a nonce
+whose SHA-256 has enough leading zero bits. Nothing to read, so it works in
+every language; no external script, so no visitor is exposed to a captcha
+provider. The email mode assembles the address in JavaScript rather than
+printing it, and the server strips it from the public API in every other
+mode.
+
+**Third parties are never on the critical path.** RIPEstat and PeeringDB are
+read in the background and served from cache; a handler never waits on them,
+because a page that waits a minute is a page a reverse proxy replaces with
+its own error.
+
 **Channels.** Delivery is a set of small adapters: a subject and a body go
 in, an SMTP session or one provider HTTP call comes out. Adding a provider
 means one case in `notify.go`, not touching the alerting logic. SMTP is

@@ -394,6 +394,16 @@ func (s *ASNService) Refresh(asn string) (*ASNInfo, error) {
 	return info, nil
 }
 
+// Cached returns what is stored, and whether it is still fresh. Handlers
+// use it so that a slow third party never becomes a slow page.
+func (s *ASNService) Cached(asn string) (*ASNInfo, bool) {
+	c := s.cached(asn)
+	if c == nil {
+		return nil, false
+	}
+	return c, time.Since(time.Unix(c.FetchedAt, 0)) < asnCacheTTL
+}
+
 func (s *ASNService) Get(asn string) (*ASNInfo, error) {
 	if c := s.cached(asn); c != nil &&
 		time.Since(time.Unix(c.FetchedAt, 0)) < asnCacheTTL {
@@ -483,10 +493,18 @@ func (a *API) asnOurs(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "AS number not set")
 		return
 	}
-	info, err := a.asn.Get(asn)
-	if err != nil {
-		writeErr(w, 503, err.Error())
+	// Never fetch from RIPEstat or PeeringDB while a visitor waits: those
+	// calls can take a minute, and a reverse proxy in front then answers
+	// with its own HTML error page, which the page cannot parse.
+	info, fresh := a.asn.Cached(asn)
+	if info == nil {
+		go a.asn.Refresh(asn)
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, map[string]any{"pending": true, "asn": asn})
 		return
+	}
+	if !fresh {
+		go a.asn.Refresh(asn)
 	}
 	w.Header().Set("Cache-Control", "public, max-age=900")
 	writeJSON(w, info)
@@ -502,10 +520,18 @@ func (a *API) asnOne(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "AS outside the scope of this instance")
 		return
 	}
-	info, err := a.asn.Get(asn)
-	if err != nil {
-		writeErr(w, 503, err.Error())
+	// Never fetch from RIPEstat or PeeringDB while a visitor waits: those
+	// calls can take a minute, and a reverse proxy in front then answers
+	// with its own HTML error page, which the page cannot parse.
+	info, fresh := a.asn.Cached(asn)
+	if info == nil {
+		go a.asn.Refresh(asn)
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, map[string]any{"pending": true, "asn": asn})
 		return
+	}
+	if !fresh {
+		go a.asn.Refresh(asn)
 	}
 	w.Header().Set("Cache-Control", "public, max-age=900")
 	writeJSON(w, info)

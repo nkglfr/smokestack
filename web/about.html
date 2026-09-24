@@ -70,9 +70,68 @@ App.boot("about", render);
 /* ------------------------------------------------------- contact form */
 /* The operator's address stays private: visitors write from here and the
    message lands in the back-office. */
+// Four ways to be reachable: the form, an address assembled in JavaScript
+// (a harvester reading the HTML finds nothing), links to your own tools, or
+// nothing at all.
+function contactMode(site) {
+  const m = site.contact_mode;
+  if (m === "form" || m === "email" || m === "links" || m === "off") return m;
+  return site.contact_form ? "form" : "off";
+}
+
+// A proof-of-work check instead of a third-party captcha: nothing to read,
+// so it works in every language, and no visitor data leaves the instance.
+async function solveChallenge(state) {
+  const c = await fetch("/api/v1/contact/challenge").then(r => r.json());
+  const enc = new TextEncoder();
+  const need = c.bits;
+  const zeros = buf => {
+    let n = 0;
+    for (const byte of new Uint8Array(buf)) {
+      if (byte === 0) { n += 8; continue; }
+      for (let m = 128; m > 0; m >>= 1) { if (byte & m) return n; n++; }
+      return n;
+    }
+    return n;
+  };
+  for (let i = 0; i < 20e6; i++) {
+    const nonce = String(i);
+    const h = await crypto.subtle.digest("SHA-256", enc.encode(c.salt + nonce));
+    if (zeros(h) >= need) return { salt: c.salt, ts: c.ts, sig: c.sig, nonce };
+    if (i % 2000 === 0 && state) state.textContent = I18N.t("contact.verifying");
+  }
+  throw new Error("verification failed");
+}
+
+function contactAlternatives(site) {
+  const box = document.getElementById("cform"), t = I18N.t, esc = App.esc;
+  const mode = contactMode(site);
+  if (mode === "email" && site.email) {
+    // Assembled at display time, never present as text in the HTML.
+    const [user, domain] = site.email.split("@");
+    box.innerHTML = `<div class="card" style="margin-top:14px"><div class="card-b">
+      <h3 style="margin:0 0 8px;font-size:15px">${esc(t("contact.title"))}</h3>
+      <div id="cmail"></div></div></div>`;
+    const a = document.createElement("a");
+    a.href = "mailto:" + user + String.fromCharCode(64) + domain;
+    a.textContent = user + String.fromCharCode(64) + domain;
+    const wrap = document.getElementById("cmail");
+    wrap.appendChild(a);
+    return;
+  }
+  if (mode === "links" && (site.contact_links || []).length) {
+    box.innerHTML = `<div class="card" style="margin-top:14px"><div class="card-b">
+      <h3 style="margin:0 0 8px;font-size:15px">${esc(t("contact.other_ways"))}</h3>
+      <ul style="margin:0;padding-left:18px">${site.contact_links.map(l =>
+        `<li><a href="${esc(l.url)}" rel="noreferrer">${esc(l.label || l.url)}</a></li>`).join("")}</ul>
+      </div></div>`;
+  }
+}
+
 function contactForm(site) {
   const box = document.getElementById("cform");
-  if (!box || !site.contact_form) return;
+  if (!box) return;
+  if (contactMode(site) !== "form") { contactAlternatives(site); return; }
   const t = I18N.t, esc = App.esc;
   box.innerHTML = `<div class="card" style="margin-top:14px"><div class="card-b">
     <h3 style="margin:0 0 4px;font-size:15px">${esc(t("contact.title"))}</h3>
@@ -96,9 +155,12 @@ function contactForm(site) {
   btn.onclick = async () => {
     btn.disabled = true; state.style.color = ""; state.textContent = t("contact.sending");
     try {
+      let proof = {};
+      if (site.captcha) proof = await solveChallenge(state);
       const r = await fetch("/api/v1/contact", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          salt: proof.salt, sig: proof.sig, nonce: proof.nonce, ts: proof.ts,
           name: document.getElementById("cf-name").value,
           email: document.getElementById("cf-mail").value,
           subject: document.getElementById("cf-sub").value,

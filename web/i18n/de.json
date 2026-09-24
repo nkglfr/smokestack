@@ -240,6 +240,9 @@
     "sending": "Wird gesendet…",
     "sent": "Nachricht gesendet. Vielen Dank, wir melden uns.",
     "error": "Die Nachricht konnte nicht gesendet werden:",
-    "privacy": "Name, Adresse und Nachricht werden auf dieser Instanz gespeichert, bis der Betreiber sie löscht. Sonst wird nichts erfasst."
+    "privacy": "Name, Adresse und Nachricht werden auf dieser Instanz gespeichert, bis der Betreiber sie löscht. Sonst wird nichts erfasst.",
+    "verifying": "Prüfung, dass Sie kein Roboter sind…",
+    "other_ways": "Andere Wege, uns zu erreichen",
+    "email_label": "E-Mail"
   }
 }

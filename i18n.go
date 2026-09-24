@@ -290,7 +290,10 @@ func (a *API) i18nDict(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "unknown language")
 		return
 	}
-	w.Header().Set("Cache-Control", "public, max-age=3600")
+	// A dictionary gains keys with every version. Cached for an hour, a
+	// proxy or a browser would serve an old copy to a new page, which then
+	// shows raw keys such as "detail.rotating" instead of a sentence.
+	w.Header().Set("Cache-Control", "no-cache")
 	writeJSON(w, d)
 }
 

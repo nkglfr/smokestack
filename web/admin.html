@@ -944,9 +944,21 @@ async function viewSite(m){
         <select id="default_lang">${(LANGS||[]).map(l=>`<option value="${esc(l.code)}" ${l.code===(s.default_lang||"en")?"selected":""}>${esc(l.name)}</option>`).join("")}</select></div>
     </div></div></div>
     <div class="card"><h3>Contacts</h3><div class="body">
-      <label class="chk"><input type="checkbox" id="contact_form" ${s.contact_form?"checked":""}>
-        <span>Contact form on the public “About” page<small>Visitors write from the site and the message
-          lands in <a href="#" data-goto="messages">Messages</a>. Your address stays private.</small></span></label>
+      <div class="field" style="max-width:420px"><label>How visitors reach you</label>
+        <select id="contact_mode">
+          ${[["form","Contact form (messages land in the back-office)"],
+             ["email","Email address, assembled in JavaScript against harvesters"],
+             ["links","Links to your own tools"],
+             ["off","Nothing at all"]].map(([v,l])=>
+            `<option value="${v}" ${(s.contact_mode||(s.contact_form?"form":"off"))===v?"selected":""}>${esc(l)}</option>`).join("")}
+        </select></div>
+      <label class="chk"><input type="checkbox" id="captcha" ${s.captcha?"checked":""}>
+        <span>Add a robot check to the form<small>A built-in proof-of-work check: nothing to read, so it
+          works in every language, no third-party service, and no visitor data leaves your instance.
+          Invisible to a person, expensive for a bot.</small></span></label>
+      <div class="field"><label>Links (label | URL, one per line) — used by the “links” mode</label>
+        <textarea id="contact_links" rows="3" placeholder="Support portal | https://support.example.net
+Mastodon | https://mastodon.example/@noc">${esc((s.contact_links||[]).map(l=>`${l.label} | ${l.url}`).join("\n"))}</textarea></div>
       <label class="chk"><input type="checkbox" id="show_email" ${s.show_email?"checked":""}>
         <span>Also publish the general email address<small>Off by default: an address on a public page
           ends up on spam lists. Leave it off to be reachable only through the form.</small></span></label>
@@ -988,7 +1000,13 @@ async function viewSite(m){
                  "contact_notify"];
       const body={};ids.forEach(k=>body[k]=$("#"+k).value);
       body.public_traceroutes=$("#public_traceroutes").checked;
-      body.contact_form=$("#contact_form").checked;
+      body.contact_mode=$("#contact_mode").value;
+      body.contact_form=$("#contact_mode").value==="form";
+      body.captcha=$("#captcha").checked;
+      body.contact_links=$("#contact_links").value.split("\n").map(l=>{
+        const i=l.indexOf("|"); if(i<0) return null;
+        const label=l.slice(0,i).trim(), url=l.slice(i+1).trim();
+        return (label&&url)?{label,url}:null;}).filter(Boolean);
       body.search_index=$("#search_index").checked;
       body.show_email=$("#show_email").checked;
       try{await api("PUT","/api/v1/admin/site",body);toast("Saved");}

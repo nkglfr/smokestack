@@ -240,6 +240,9 @@
     "sending": "Versturen…",
     "sent": "Bericht verstuurd. Bedankt, we nemen contact op.",
     "error": "Het bericht kon niet worden verstuurd:",
-    "privacy": "Naam, adres en bericht blijven op deze instantie staan tot de operator ze verwijdert. Er wordt niets anders verzameld."
+    "privacy": "Naam, adres en bericht blijven op deze instantie staan tot de operator ze verwijdert. Er wordt niets anders verzameld.",
+    "verifying": "Controle dat u geen robot bent…",
+    "other_ways": "Andere manieren om ons te bereiken",
+    "email_label": "E-mail"
   }
 }

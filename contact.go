@@ -1,6 +1,10 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -155,20 +159,97 @@ func (s *Store) DeleteContact(id int64) error {
 
 func (a *API) ContactRoutes(mux *http.ServeMux) {
 	contactSchema(a.store)
+	mux.HandleFunc("GET /api/v1/contact/challenge", a.contactChallenge)
 	mux.HandleFunc("POST /api/v1/contact", a.contactPost)
 	mux.HandleFunc("GET /api/v1/admin/messages", a.auth(a.messagesGet))
 	mux.HandleFunc("PATCH /api/v1/admin/messages/{id}", a.auth(a.messagesPatch))
 	mux.HandleFunc("DELETE /api/v1/admin/messages/{id}", a.auth(a.messagesDelete))
 }
 
+// A proof-of-work challenge instead of a third-party captcha: nothing to
+// read, so it works in every language, nothing to click, and no visitor data
+// leaves the instance. The browser looks for a nonce whose SHA-256 starts
+// with enough zero bits — about a second of work, invisible to a person,
+// expensive for a bot sending thousands of messages.
+const (
+	captchaBits = 18
+	captchaTTL  = 600
+)
+
+func captchaSign(salt string, ts int64, secret []byte) string {
+	m := hmac.New(sha256.New, secret)
+	fmt.Fprintf(m, "%s|%d", salt, ts)
+	return hex.EncodeToString(m.Sum(nil))
+}
+
+func (a *API) captchaSecret() []byte {
+	s := a.store.Setting("captcha_secret", "")
+	if s == "" {
+		b := make([]byte, 32)
+		rand.Read(b)
+		s = hex.EncodeToString(b)
+		a.store.SetSetting("captcha_secret", s)
+	}
+	return []byte(s)
+}
+
+func (a *API) contactChallenge(w http.ResponseWriter, r *http.Request) {
+	b := make([]byte, 12)
+	rand.Read(b)
+	salt := hex.EncodeToString(b)
+	ts := time.Now().Unix()
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, map[string]any{"salt": salt, "ts": ts, "bits": captchaBits,
+		"sig": captchaSign(salt, ts, a.captchaSecret())})
+}
+
+// checkCaptcha verifies the signature, the age and the work itself.
+func (a *API) checkCaptcha(salt, sig, nonce string, ts int64) error {
+	if salt == "" || sig == "" || nonce == "" {
+		return fmt.Errorf("the verification is missing")
+	}
+	now := time.Now().Unix()
+	if ts > now+60 || now-ts > captchaTTL {
+		return fmt.Errorf("the verification expired, please send again")
+	}
+	if !hmac.Equal([]byte(sig), []byte(captchaSign(salt, ts, a.captchaSecret()))) {
+		return fmt.Errorf("invalid verification")
+	}
+	sum := sha256.Sum256([]byte(salt + nonce))
+	if leadingZeroBits(sum[:]) < captchaBits {
+		return fmt.Errorf("invalid verification")
+	}
+	return nil
+}
+
+func leadingZeroBits(b []byte) int {
+	n := 0
+	for _, x := range b {
+		if x == 0 {
+			n += 8
+			continue
+		}
+		for m := byte(0x80); m > 0; m >>= 1 {
+			if x&m != 0 {
+				return n
+			}
+			n++
+		}
+		return n
+	}
+	return n
+}
+
 func (a *API) contactPost(w http.ResponseWriter, r *http.Request) {
 	site := a.store.Site()
-	if !site.ContactForm {
+	if ContactModeOf(site) != "form" {
 		writeErr(w, 404, "the contact form is disabled on this instance")
 		return
 	}
 	var in struct {
 		Name, Email, Subject, Message, Lang, Website string
+		Salt, Sig, Nonce                             string
+		TS                                           int64
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&in); err != nil {
 		writeErr(w, 400, "invalid message")
@@ -178,6 +259,12 @@ func (a *API) contactPost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, 400, err.Error())
 		return
+	}
+	if site.Captcha {
+		if err := a.checkCaptcha(in.Salt, in.Sig, in.Nonce, in.TS); err != nil {
+			writeErr(w, 400, err.Error())
+			return
+		}
 	}
 	ip := clientIP(r)
 	if !contactAllowed(ip) {

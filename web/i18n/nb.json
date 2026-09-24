@@ -240,6 +240,9 @@
     "sending": "Sender…",
     "sent": "Meldingen er sendt. Takk, vi kommer tilbake til deg.",
     "error": "Meldingen kunne ikke sendes:",
-    "privacy": "Navn, adresse og melding lagres på denne instansen til operatøren sletter dem. Ingenting annet samles inn."
+    "privacy": "Navn, adresse og melding lagres på denne instansen til operatøren sletter dem. Ingenting annet samles inn.",
+    "verifying": "Sjekker at du ikke er en robot…",
+    "other_ways": "Andre måter å nå oss på",
+    "email_label": "E-post"
   }
 }

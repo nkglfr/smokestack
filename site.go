@@ -11,6 +11,11 @@ import (
 // SmokePing, en plus complet, parce qu'une sonde publique sans
 // exploitant identifiable n'inspire pas confiance et ne sert a rien
 // quand un confrere veut signaler une anomalie.
+type ContactLink struct {
+	Label string `json:"label"`
+	URL   string `json:"url"`
+}
+
 type Site struct {
 	Title    string `json:"title"`
 	Org      string `json:"org"`
@@ -22,17 +27,23 @@ type Site struct {
 	// Contact: the form keeps the operator's address private. ShowEmail
 	// puts it back on the public page for those who prefer that.
 	// SearchIndex: let search engines index the public pages.
-	SearchIndex   bool   `json:"search_index"`
-	ContactForm   bool   `json:"contact_form"`
-	ShowEmail     bool   `json:"show_email"`
-	ContactNotify string `json:"contact_notify,omitempty"` // never public
-	URL           string `json:"url"`
-	PeeringDB     string `json:"peeringdb"`
-	Location      string `json:"location"`
-	Description   string `json:"description"`
-	Legal         string `json:"legal"`
-	Timezone      string `json:"timezone"`
-	DefaultLang   string `json:"default_lang"`
+	SearchIndex bool `json:"search_index"`
+	ContactForm bool `json:"contact_form"`
+	// ContactMode : "form" (defaut), "email" (adresse assemblee en
+	// JavaScript, illisible par un moissonneur), "links" (outils externes)
+	// ou "off". Captcha : epreuve de calcul integree, sans service tiers.
+	ContactMode   string        `json:"contact_mode,omitempty"`
+	ContactLinks  []ContactLink `json:"contact_links,omitempty"`
+	Captcha       bool          `json:"captcha,omitempty"`
+	ShowEmail     bool          `json:"show_email"`
+	ContactNotify string        `json:"contact_notify,omitempty"` // never public
+	URL           string        `json:"url"`
+	PeeringDB     string        `json:"peeringdb"`
+	Location      string        `json:"location"`
+	Description   string        `json:"description"`
+	Legal         string        `json:"legal"`
+	Timezone      string        `json:"timezone"`
+	DefaultLang   string        `json:"default_lang"`
 	// PublicTraceroutes shows anomaly traceroutes on public pages. Off by
 	// default: hops reveal the inside of the operator's network.
 	PublicTraceroutes bool `json:"public_traceroutes"`
@@ -45,11 +56,25 @@ func defaultSite() Site {
 		Owner:       "",
 		Email:       "",
 		ContactForm: true,
+		ContactMode: "form",
 		SearchIndex: true,
 		Timezone:    "Europe/Paris",
 		DefaultLang: "en",
 		Description: "Latency and packet loss measured from our network to public destinations.",
 	}
+}
+
+// ContactModeOf keeps older instances working: they only had the
+// contact_form switch, so an unset mode follows it.
+func ContactModeOf(site Site) string {
+	switch site.ContactMode {
+	case "form", "email", "links", "off":
+		return site.ContactMode
+	}
+	if site.ContactForm {
+		return "form"
+	}
+	return "off"
 }
 
 func (s *Store) Site() Site {
@@ -89,7 +114,9 @@ func (a *API) siteGet(w http.ResponseWriter, r *http.Request) {
 	if !a.authenticated(r) {
 		site.NOCPhone = ""
 		site.ContactNotify = ""
-		if !site.ShowEmail {
+		// In "email" mode the address is what the page shows, assembled in
+		// JavaScript so a harvester reading the HTML finds nothing.
+		if !site.ShowEmail && ContactModeOf(site) != "email" {
 			site.Email = ""
 		}
 	}

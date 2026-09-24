@@ -240,6 +240,9 @@
     "sending": "Skickar…",
     "sent": "Meddelandet är skickat. Tack, vi återkommer.",
     "error": "Meddelandet kunde inte skickas:",
-    "privacy": "Namn, adress och meddelande sparas på denna instans tills operatören raderar dem. Inget annat samlas in."
+    "privacy": "Namn, adress och meddelande sparas på denna instans tills operatören raderar dem. Inget annat samlas in.",
+    "verifying": "Kontrollerar att du inte är en robot…",
+    "other_ways": "Andra sätt att nå oss",
+    "email_label": "E-post"
   }
 }

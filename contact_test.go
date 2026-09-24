@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"crypto/sha256"
+	"strconv"
+	"testing"
+	"time"
+)
 
 func TestCheckContact(t *testing.T) {
 	ok := func(name, email, subject, body, hp string) (*ContactMessage, error) {
@@ -41,5 +46,75 @@ func TestContactRateLimit(t *testing.T) {
 	}
 	if !contactAllowed("192.0.2.2") {
 		t.Error("another sender must not be affected")
+	}
+}
+
+// The built-in robot check: a signed challenge, real work to solve, and
+// refusals that say why. No third party is involved.
+func TestCaptcha(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	a := &API{store: store}
+	secret := a.captchaSecret()
+	if len(secret) < 32 {
+		t.Fatal("a secret should have been generated")
+	}
+	if string(a.captchaSecret()) != string(secret) {
+		t.Error("the secret must be stable across calls")
+	}
+	salt, ts := "abc123", time.Now().Unix()
+	sig := captchaSign(salt, ts, secret)
+
+	// Solving it: find a nonce with enough leading zero bits.
+	nonce := ""
+	for i := 0; i < 5_000_000; i++ {
+		n := strconv.Itoa(i)
+		sum := sha256.Sum256([]byte(salt + n))
+		if leadingZeroBits(sum[:]) >= captchaBits {
+			nonce = n
+			break
+		}
+	}
+	if nonce == "" {
+		t.Fatal("no solution found")
+	}
+	if err := a.checkCaptcha(salt, sig, nonce, ts); err != nil {
+		t.Errorf("a solved challenge must pass: %v", err)
+	}
+	for _, c := range []struct {
+		name, salt, sig, nonce string
+		ts                     int64
+	}{
+		{"no work done", salt, sig, "0", ts},
+		{"forged signature", salt, "deadbeef", nonce, ts},
+		{"expired", salt, captchaSign(salt, ts-captchaTTL-60, secret), nonce, ts - captchaTTL - 60},
+		{"nothing supplied", "", "", "", ts},
+	} {
+		if err := a.checkCaptcha(c.salt, c.sig, c.nonce, c.ts); err == nil {
+			t.Errorf("%s should have been refused", c.name)
+		}
+	}
+	if leadingZeroBits([]byte{0x00, 0x00, 0x3f}) != 18 {
+		t.Errorf("leadingZeroBits: %d", leadingZeroBits([]byte{0x00, 0x00, 0x3f}))
+	}
+}
+
+// Older instances only had the contact_form switch: their behaviour must not
+// change when the mode setting appears.
+func TestContactModeCompatibility(t *testing.T) {
+	if m := ContactModeOf(Site{ContactForm: true}); m != "form" {
+		t.Errorf("an older instance with the form on: %q", m)
+	}
+	if m := ContactModeOf(Site{ContactForm: false}); m != "off" {
+		t.Errorf("an older instance with the form off: %q", m)
+	}
+	if m := ContactModeOf(Site{ContactForm: true, ContactMode: "links"}); m != "links" {
+		t.Errorf("an explicit mode wins: %q", m)
+	}
+	if m := ContactModeOf(Site{ContactMode: "nonsense", ContactForm: true}); m != "form" {
+		t.Errorf("an unknown mode falls back: %q", m)
 	}
 }

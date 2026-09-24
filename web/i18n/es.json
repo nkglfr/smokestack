@@ -240,6 +240,9 @@
     "sending": "Enviando…",
     "sent": "Mensaje enviado. Gracias, le responderemos.",
     "error": "No se pudo enviar el mensaje:",
-    "privacy": "Nombre, dirección y mensaje se guardan en esta instancia hasta que el operador los borre. No se recoge nada más."
+    "privacy": "Nombre, dirección y mensaje se guardan en esta instancia hasta que el operador los borre. No se recoge nada más.",
+    "verifying": "Comprobando que no es un robot…",
+    "other_ways": "Otras formas de contactarnos",
+    "email_label": "Correo electrónico"
   }
 }
