@@ -279,6 +279,12 @@ them, which the form states to the visitor.
    and the port are separate fields, with the usual ports suggested. The star
    marks *critical targets*, always shown at the top of the home page.
 
+   **Deleting a target archives it**: its measurements stay, its name becomes
+   free again so a target of the same name can be recreated, and the new one
+   never inherits the old measurements. Archived targets are listed under the
+   target list, where each can be **purged for good** — target and
+   measurements — as a separate, deliberate action.
+
    The host is cleaned when you save: a tab or spaces around a pasted
    address, a whole URL (`https://example.net/page` keeps `example.net`),
    brackets around an IPv6 address, a trailing dot, invisible characters from
@@ -602,12 +608,16 @@ included, and listed on the same screen.
 
 ### Where the logs are
 
-Three places, in this order:
+Four places, in this order:
 
 1. **The target list in the back-office** shows, under a target's name, why
    its last pass failed. That is the fastest answer.
-2. **The service log**, one line when a target starts failing and one when it
-   comes back:
+2. ***Accounts → Service log*** in the back-office: the last 500 lines the
+   service wrote, with a filter and an optional five-second refresh. Kept in
+   memory, for when you have no shell at hand. With an isolated probe, that
+   process logs on its own side and the page says so.
+3. **The service log itself**, one line when a target starts failing and one
+   when it comes back:
 
    ```sh
    journalctl -u smokestack -u smokestack-probe -f      # native install
@@ -618,7 +628,7 @@ Three places, in this order:
    target "Transit Paris" (192.0.2.1): no reply to 10 ICMP echo requests sent to 192.0.2.1 …
    target "Transit Paris" (192.0.2.1): answering again
    ```
-3. **The raw archive**, hourly NDJSON files under
+4. **The raw archive**, hourly NDJSON files under
    `/var/lib/smokestack/raw/` or on S3, which carry every pass with its
    error, for a post-mortem.
 

@@ -217,6 +217,7 @@ func OpenStore(dir string) (*Store, error) {
 	addColumn(cfg, "targets", "port INTEGER NOT NULL DEFAULT 0")
 	addColumn(cfg, "targets", "pin_ip TEXT NOT NULL DEFAULT ''")
 	addColumn(cfg, "targets", "alerts_off INTEGER NOT NULL DEFAULT 0")
+	addColumn(cfg, "targets", "archived_at INTEGER NOT NULL DEFAULT 0")
 	migrateTCPPorts(cfg)
 
 	// Deux pools sur metrics.db : l'ecriture des mesures dispose de sa
@@ -287,6 +288,11 @@ type Target struct {
 	// AlertsOff : exception plutôt que reglage, pour qu'un champ absent
 	// d'une requete laisse l'alerte active au lieu de la couper.
 	AlertsOff bool `json:"alerts_off"`
+	// ArchivedAt : une cible supprimee est archivee, pas effacee. Son
+	// historique reste attache a elle, son nom redevient libre, et son
+	// identifiant reste pris pour que la cible suivante n'herite pas de
+	// ses mesures.
+	ArchivedAt int64 `json:"archived_at,omitempty"`
 }
 
 type Category struct {
@@ -323,8 +329,8 @@ func (s *Store) TouchProbe(id int64) {
 func (s *Store) ActiveTargets() ([]*Target, error) {
 	rows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off
-		   FROM targets WHERE enabled=1 ORDER BY id`)
+		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at
+		   FROM targets WHERE enabled=1 AND archived_at=0 ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -339,7 +345,7 @@ func scanTargets(rows *sql.Rows) ([]*Target, error) {
 		var pub, en, off int
 		if err := rows.Scan(&t.ID, &t.CategoryID, &t.Slug, &t.Title, &t.Host,
 			&t.Proto, &t.IntervalS, &t.Packets, &t.SpacingMs, &t.TimeoutMs,
-			&pub, &en, &t.Family, &t.Port, &t.PinIP, &off); err != nil {
+			&pub, &en, &t.Family, &t.Port, &t.PinIP, &off, &t.ArchivedAt); err != nil {
 			return nil, err
 		}
 		t.Public, t.Enabled, t.AlertsOff = pub == 1, en == 1, off == 1
@@ -383,8 +389,8 @@ func (s *Store) Tree(publicOnly bool) ([]*Category, error) {
 
 	trows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off
-		   FROM targets ORDER BY title`)
+		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at
+		   FROM targets WHERE archived_at=0 ORDER BY title`)
 	if err != nil {
 		return nil, err
 	}
@@ -407,7 +413,7 @@ func (s *Store) Tree(publicOnly bool) ([]*Category, error) {
 func (s *Store) TargetByID(id int64) (*Target, error) {
 	rows, err := s.cfg.Query(
 		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off
+		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at
 		   FROM targets WHERE id=?`, id)
 	if err != nil {
 		return nil, err
@@ -679,8 +685,64 @@ func (s *Store) CreateTarget(t *Target) (int64, error) {
 	return res.LastInsertId()
 }
 
-func (s *Store) DeleteTarget(id int64) error {
-	_, err := s.cfg.Exec(`DELETE FROM targets WHERE id=?`, id)
+// ArchiveTarget replaces deletion: the measurements stay attached to this
+// target, its name becomes free again, and its identifier stays taken — SQLite
+// would otherwise hand the same one to the next target, which would then
+// inherit this one's history.
+func (s *Store) ArchiveTarget(id int64) error {
+	t, err := s.TargetByID(id)
+	if err != nil {
+		return err
+	}
+	if t.ArchivedAt != 0 {
+		return fmt.Errorf("this target is already archived")
+	}
+	now := time.Now().Unix()
+	stamp := time.Unix(now, 0).UTC().Format("2006-01-02")
+	slug := fmt.Sprintf("%s-histo-%d", t.Slug, now)
+	if len(slug) > 120 {
+		slug = slug[len(slug)-120:]
+	}
+	_, err = s.cfg.Exec(`UPDATE targets SET slug=?, title=?, enabled=0, public=0,
+	                     alerts_off=1, archived_at=? WHERE id=?`,
+		slug, fmt.Sprintf("%s (archived %s)", t.Title, stamp), now, id)
+	s.notifyTargets()
+	return err
+}
+
+// ArchivedTargets lists what was archived, most recent first.
+func (s *Store) ArchivedTargets() ([]*Target, error) {
+	rows, err := s.cfg.Query(
+		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
+		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at
+		   FROM targets WHERE archived_at>0 ORDER BY archived_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanTargets(rows)
+}
+
+// PurgeTarget removes an archived target and every measurement attached to
+// it. Deliberate and irreversible, which is why it is a separate action.
+func (s *Store) PurgeTarget(id int64) error {
+	t, err := s.TargetByID(id)
+	if err != nil {
+		return err
+	}
+	if t.ArchivedAt == 0 {
+		return fmt.Errorf("archive this target first")
+	}
+	for _, q := range []string{
+		`DELETE FROM samples WHERE target_id=?`, `DELETE FROM roll_1m WHERE target_id=?`,
+		`DELETE FROM roll_5m WHERE target_id=?`, `DELETE FROM roll_1h WHERE target_id=?`,
+		`DELETE FROM roll_1d WHERE target_id=?`, `DELETE FROM live WHERE target_id=?`,
+		`DELETE FROM traceroutes WHERE target_id=?`, `DELETE FROM target_errors WHERE target_id=?`,
+		`DELETE FROM target_addresses WHERE target_id=?`,
+	} {
+		s.mxw.Exec(q, id)
+	}
+	_, err = s.cfg.Exec(`DELETE FROM targets WHERE id=?`, id)
 	s.notifyTargets()
 	return err
 }

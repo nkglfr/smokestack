@@ -15,18 +15,20 @@ import (
 )
 
 type API struct {
-	store     *Store
-	archive   *Archive
-	fed       *Federation
-	token     string
-	probeID   int64
-	limiter   *attemptLimiter
-	i18n      *I18n
-	alerter   *Alerter
-	asn       *ASNService
-	upd       *Updater
-	writer    *Writer
-	probeMode string
+	store   *Store
+	archive *Archive
+	fed     *Federation
+	token   string
+	probeID int64
+	limiter *attemptLimiter
+	i18n    *I18n
+	alerter *Alerter
+	// probeInProcess : sonde embarquee, donc son journal est ici aussi.
+	probeInProcess bool
+	asn            *ASNService
+	upd            *Updater
+	writer         *Writer
+	probeMode      string
 
 	setupMu   sync.Mutex
 	setupCode string
@@ -54,6 +56,7 @@ func (a *API) Routes(mux *http.ServeMux) {
 	}))
 	mux.HandleFunc("GET /api/v1/admin/targets", a.auth(a.targetsGet))
 	mux.HandleFunc("POST /api/v1/admin/targets", a.auth(a.targetsPost))
+	mux.HandleFunc("GET /api/v1/admin/targets/archived", a.auth(a.targetsArchived))
 	mux.HandleFunc("PATCH /api/v1/admin/targets/{id}", a.auth(a.targetsPatch))
 	mux.HandleFunc("DELETE /api/v1/admin/targets/{id}", a.auth(a.targetsDelete))
 	mux.HandleFunc("POST /api/v1/admin/targets/{id}/check", a.auth(a.targetsCheck))
@@ -557,10 +560,21 @@ func (a *API) targetsDelete(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "invalid identifier")
 		return
 	}
-	if err := a.store.DeleteTarget(id); err != nil {
-		writeErr(w, 500, err.Error())
+	// Deleting archives: the history stays, the name becomes free again.
+	// "?purge=1" removes an already archived target and its measurements.
+	if r.URL.Query().Get("purge") != "" {
+		if err := a.store.PurgeTarget(id); err != nil {
+			writeErr(w, 400, err.Error())
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	if err := a.store.ArchiveTarget(id); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	go ovCache.build()
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -873,4 +887,15 @@ func (a *API) channelsTest(w http.ResponseWriter, r *http.Request, u *User) {
 		return
 	}
 	writeErr(w, 404, "channel not found")
+}
+
+// targetsArchived lists the archived targets: their measurements are still
+// there, and each can be purged for good.
+func (a *API) targetsArchived(w http.ResponseWriter, r *http.Request) {
+	list, err := a.store.ArchivedTargets()
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, list)
 }

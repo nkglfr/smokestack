@@ -156,3 +156,67 @@ func TestTargetPatchFields(t *testing.T) {
 		}
 	}
 }
+
+// Deleting a target archives it: the name becomes free, the history stays
+// attached to the archived one, and above all the new target must not
+// inherit its measurements — SQLite reuses identifiers otherwise.
+func TestArchiveFreesTheNameWithoutMixingHistory(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	cat, _ := store.CreateCategory("c", "C", "C", true)
+	mk := func() (int64, error) {
+		return store.CreateTarget(&Target{CategoryID: cat, Slug: "transit-paris", Title: "Transit Paris",
+			Host: "192.0.2.1", Proto: "icmp", IntervalS: 60, Packets: 10, SpacingMs: 100,
+			TimeoutMs: 1000, Public: true, Enabled: true})
+	}
+	first, err := mk()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// One measurement, so history mixing would be visible.
+	if err := store.RecordBatch([]queuedMeasure{{m: Measurement{TargetID: first, ProbeID: 1,
+		TS: time.Now().Unix(), Sent: 10, RTTus: []float64{1000, 1100, 1050}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ArchiveTarget(first); err != nil {
+		t.Fatal(err)
+	}
+	// The name is free again.
+	second, err := mk()
+	if err != nil {
+		t.Fatalf("the name should be free after archiving: %v", err)
+	}
+	if second == first {
+		t.Fatal("the new target reuses the archived one's identifier, and would inherit its history")
+	}
+	// The archived one keeps its history and is out of the active lists.
+	act, _ := store.ActiveTargets()
+	for _, tg := range act {
+		if tg.ID == first {
+			t.Error("an archived target must not be measured any more")
+		}
+	}
+	arch, err := store.ArchivedTargets()
+	if err != nil || len(arch) != 1 || !strings.Contains(arch[0].Title, "archived") {
+		t.Errorf("archived list: %+v %v", arch, err)
+	}
+	if arch[0].Slug == "transit-paris" {
+		t.Error("the archived slug must have been renamed")
+	}
+	// Archiving twice is refused; purging needs an archived target.
+	if err := store.ArchiveTarget(first); err == nil {
+		t.Error("archiving twice should be refused")
+	}
+	if err := store.PurgeTarget(second); err == nil {
+		t.Error("purging an active target should be refused")
+	}
+	if err := store.PurgeTarget(first); err != nil {
+		t.Errorf("purge: %v", err)
+	}
+	if arch, _ := store.ArchivedTargets(); len(arch) != 0 {
+		t.Error("the purged target is still listed")
+	}
+}

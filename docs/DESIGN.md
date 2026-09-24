@@ -348,6 +348,20 @@ address, which the probe then uses instead of resolving. Without that, a
 pool graph mixes different machines and the passes towards a server that
 ignores ICMP look exactly like packet loss.
 
+**Deleting is archiving.** A target row is never removed on delete: it is
+renamed (`<slug>-histo-<timestamp>`), disabled, taken off the public side and
+out of alerting. Two reasons. The name becomes usable again, which is what an
+operator expects after deleting something. And the identifier stays taken:
+SQLite would otherwise hand it to the next target, which would inherit the
+deleted one's samples, rollups and traceroutes — a graph showing another
+target's past. Purging is a separate action, and removes the measurements with
+the row.
+
+**The log is also in the interface.** The last lines are kept in a bounded
+in-memory ring and shown in the back-office, while still going to stdout for
+journald or Docker. A log belongs in the system's hands, not in the database;
+but the person who needs it does not always have a shell.
+
 **Why a target fails.** Every pass carries the reason it could not measure —
 resolution failure, missing IPv6 stack on the probe, send error, or no reply
 at all — and the last one is kept per target and shown in the back-office.

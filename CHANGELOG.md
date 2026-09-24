@@ -5,6 +5,15 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- **Deleting a target now archives it.** Its name becomes free again, so a
+  target of the same name can be recreated, and its measurements stay
+  attached to the archived one. This also fixes a worse problem found while
+  testing: SQLite handed the deleted target's identifier to the next one,
+  which then inherited its history. Archived targets are listed and can be
+  purged for good.
+- **A service log screen in the back-office**: the last 500 lines, with a
+  filter and optional auto-refresh, for when you have no shell at hand.
+
 - **Failing targets are logged**: one line when a target starts failing, with
   the reason, and one when it answers again. Until now the reason was only in
   the back-office, so `journalctl` and `docker logs` said nothing.

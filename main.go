@@ -139,6 +139,9 @@ func seed(store *Store) error {
 }
 
 func main() {
+	// Keep the last log lines in memory as well, so the back-office can
+	// show them: the operator who needs them does not always have a shell.
+	captureLog(os.Stderr)
 	if runCLI(os.Args[1:]) {
 		return
 	}
@@ -285,7 +288,9 @@ func main() {
 	api.OverviewRoutes(mux)
 	api.TracerouteRoutes(mux)
 	api.SuggestedRoutes(mux)
+	api.probeInProcess = cfg.Probe.Enabled && cfg.Probe.Mode != "external"
 	api.ContactRoutes(mux)
+	api.LogRoutes(mux)
 
 	// Public pages get their metadata and a no-JavaScript summary injected
 	// on the way out, so that a crawler sees a real page.

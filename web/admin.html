@@ -231,6 +231,7 @@ const NAV=[
   {id:"update", label:"Updates", min:4},
   {grp:"Accounts"},
   {id:"users",  label:"Users", min:4},
+  {id:"logs",   label:"Service log", min:3},
   {id:"audit",  label:"Audit log", min:3}
 ];
 const LVL={viewer:1,editor:2,admin:3,master:4};
@@ -287,7 +288,7 @@ async function changePassword(){
 function render(){
   const m=$("#main");
   const views={dash:viewDash,targets:viewTargets,traces:viewTraces,messages:viewMessages,alerts:viewAlerts,channels:viewChannels,fed:viewFed,notify:viewNotify,
-    storage:viewStorage,site:viewSite,net:viewNet,langs:viewLangs,update:viewUpdate,users:viewUsers,audit:viewAudit};
+    storage:viewStorage,site:viewSite,net:viewNet,langs:viewLangs,update:viewUpdate,users:viewUsers,logs:viewLogs,audit:viewAudit};
   return (views[VIEW]||viewDash)(m);
 }
 
@@ -421,7 +422,12 @@ async function viewTargets(m){
         <a href="https://github.com/nkglfr/smokestack/wiki/Configuring-targets" target="_blank" rel="noreferrer">sizing
         and adjusting targets</a> (rate limiting, rotating names, suggested settings).</p>
       <div id="sug">Loading…</div></div></div>
-    <div class="card"><h3>Targets</h3><div class="body" id="tlist">Loading…</div></div>`;
+    <div class="card"><h3>Targets</h3><div class="body" id="tlist">Loading…</div></div>
+    <div class="card"><h3>Archived targets</h3><div class="body">
+      <p style="margin:0 0 10px;font-size:13px;color:var(--ink2)">Deleting a target archives it: its
+        measurements stay, its name becomes free again, and a new target of the same name never inherits
+        its history. Purging removes an archived target and its measurements for good.</p>
+      <div id="arch">Loading…</div></div></div>`;
 
   const tree=await api("GET","/api/v1/tree").catch(()=>[]);
   $("#tcat").innerHTML=(tree||[]).map(c=>
@@ -516,6 +522,23 @@ async function viewTargets(m){
     };
   }catch(e){$("#sug").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
 
+  /* archived targets */
+  try{
+    const arch=await api("GET","/api/v1/admin/targets/archived");
+    $("#arch").innerHTML=(arch&&arch.length)?`<table class="resp"><thead><tr><th>Target</th>
+      <th>Archived</th><th></th></tr></thead><tbody>`+arch.map(t=>`<tr>
+      <td class="ttl" data-l=""><div>${esc(t.title)}</div>
+        <div class="mono" style="font-size:11.5px;color:var(--ink2)">${esc(t.host)}${t.port?":"+t.port:""}</div></td>
+      <td data-l="Archived">${new Date(t.archived_at*1000).toLocaleDateString()}</td>
+      <td class="acts" data-l=""><button class="btn d s" data-purge="${t.id}">Purge for good</button></td>
+      </tr>`).join("")+`</tbody></table>`:`<div class="empty">Nothing archived.</div>`;
+    document.querySelectorAll("[data-purge]").forEach(b=>b.onclick=async()=>{
+      if(!confirm("Purge this archived target and all its measurements? This cannot be undone.")) return;
+      try{await api("DELETE","/api/v1/admin/targets/"+b.dataset.purge+"?purge=1");
+        toast("Archived target purged");render();}catch(e){toast(e.message,true);}
+    });
+  }catch(e){$("#arch").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
+
   /* target list */
   try{
     const [list,feat]=await Promise.all([api("GET","/api/v1/admin/targets"),api("GET","/api/v1/admin/featured").catch(()=>[])]);
@@ -586,7 +609,7 @@ async function viewTargets(m){
     });
     document.querySelectorAll("[data-trace]").forEach(b=>b.onclick=()=>{TR_TARGET=+b.dataset.trace;go("traces");});
     document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
-      if(!confirm("Delete this target? Its measurement history is kept.")) return;
+      if(!confirm("Delete this target? It is archived: the measurements are kept, the name becomes free again.")) return;
       try{await api("DELETE","/api/v1/admin/targets/"+b.dataset.del);
         toast("Target deleted");render();}catch(e){toast(e.message,true);}
     });
@@ -1401,6 +1424,37 @@ async function viewUsers(m){
 }
 
 /* --------------------------------------------------------- audit log */
+async function viewLogs(m){
+  m.innerHTML=`<h2>Service log</h2>
+    <p class="lead">The last lines the service wrote, kept in memory. The same lines go to
+      <span class="mono">journalctl -u smokestack</span> or <span class="mono">docker compose logs</span>,
+      which hold the full history; this screen is for when you do not have a shell at hand.
+      One line appears when a target starts failing, with the reason, and one when it answers again.</p>
+    <div class="acts">
+      <input id="lgf" placeholder="filter, e.g. target or update" style="max-width:280px">
+      <label class="chk" style="margin:0"><input type="checkbox" id="lgauto"><span>Refresh every 5 s</span></label>
+      <button class="btn" id="lgr">Refresh</button></div>
+    <div class="card"><div class="body" style="padding:0"><pre id="lg" style="margin:0;padding:12px;
+      max-height:65vh;overflow:auto;font-size:12px;line-height:1.5;white-space:pre-wrap">Loading…</pre></div></div>
+    <div id="lgnote"></div>`;
+  let TIMER=null;
+  const load=async()=>{
+    try{
+      const d=await api("GET","/api/v1/admin/logs");
+      const f=$("#lgf").value.trim().toLowerCase();
+      const lines=(d.lines||[]).filter(l=>!f||l.toLowerCase().includes(f));
+      $("#lg").textContent=lines.length?lines.join("\n"):"(nothing yet)";
+      $("#lg").scrollTop=$("#lg").scrollHeight;
+      $("#lgnote").innerHTML=d.probe?"":`<div class="note">The probe runs in its own process: its own
+        lines are in <span class="mono">journalctl -u smokestack-probe</span> or in the container log,
+        not here.</div>`;
+    }catch(e){$("#lg").textContent=e.message;}
+  };
+  $("#lgr").onclick=load; $("#lgf").oninput=load;
+  $("#lgauto").onchange=()=>{ if($("#lgauto").checked){TIMER=setInterval(load,5000);} else {clearInterval(TIMER);} };
+  load();
+}
+
 async function viewAudit(m){
   m.innerHTML=`<h2>Audit log</h2>
     <p class="lead">The last two hundred administrative actions, including sign-ins and failed sign-ins.</p>
