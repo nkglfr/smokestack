@@ -56,6 +56,28 @@
   @media(min-width:900px){.shell{grid-template-columns:212px minmax(0,1fr)}}
   nav.side{border-right:1px solid var(--line);padding:14px 10px;background:var(--panel)}
   @media(min-width:900px){nav.side{min-height:calc(100vh - 56px)}}
+  .burger{display:none;font-size:16px;line-height:1;padding:6px 10px}
+  .scrim{position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:30}
+  @media(max-width:899px){
+    .burger{display:inline-flex}
+    nav.side{position:fixed;top:0;left:0;bottom:0;width:250px;z-index:40;overflow-y:auto;
+      transform:translateX(-100%);transition:transform .18s ease;box-shadow:0 10px 40px rgba(15,23,42,.18)}
+    nav.side.open{transform:none}
+    .topin{gap:8px}
+    .who{display:none}
+    .body{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    table{min-width:max-content}
+    table.resp{min-width:0;width:100%}
+    table.resp thead{display:none}
+    table.resp tr{display:block;border-top:1px solid var(--line2);padding:10px 0}
+    table.resp td{display:flex;justify-content:space-between;gap:12px;border:0;padding:3px 0;text-align:right}
+    table.resp td::before{content:attr(data-l);color:var(--ink3);font-size:11.5px;
+      text-transform:uppercase;letter-spacing:.04em;text-align:left}
+    table.resp td[data-l=""]::before{content:""}
+    table.resp td.acts{flex-wrap:wrap;justify-content:flex-start;padding-top:8px}
+    /* title, host and category stacked, not side by side */
+    table.resp td.ttl{display:block;text-align:left;padding-bottom:6px}
+  }
   nav.side button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;
     background:none;border:none;padding:8px 11px;border-radius:8px;font-size:13px;color:var(--ink2)}
   nav.side button:hover{background:#fff}
@@ -218,6 +240,7 @@ function shell(){
   }
   $("#app").innerHTML=`
     <div class="top"><div class="topin">
+      <button class="btn s burger" id="nav-burger" aria-label="Menu" aria-expanded="false">☰</button>
       <div class="brand" id="home" style="cursor:pointer" title="Dashboard"><span class="logo">S</span><span>smokestack</span>
         <span class="badge b-n" style="margin-left:6px">admin</span></div>
       <span class="spacer"></span>
@@ -226,11 +249,21 @@ function shell(){
       <button class="btn s" id="pw">Password</button>
       <button class="btn s" id="out">Sign out</button>
     </div></div>
-    <div class="shell"><nav class="side">${nav}</nav><main id="main"></main></div>`;
+    <div class="shell"><nav class="side" id="side">${nav}</nav><main id="main"></main></div>
+    <div class="scrim" id="scrim" hidden></div>`;
   $("#home").onclick=()=>{EDIT=null;go("dash");};
   $("#out").onclick=async()=>{await api("POST","/api/v1/auth/logout");location.reload();};
   $("#pw").onclick=changePassword;
-  document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>{VIEW=b.dataset.v;shell();});
+  // The sidebar slides over the page on small screens and closes as soon
+  // as a screen is chosen, so the content is never hidden behind it.
+  const side=$("#side"), scrim=$("#scrim"), nb=$("#nav-burger");
+  const closeNav=()=>{side.classList.remove("open");scrim.hidden=true;nb.setAttribute("aria-expanded","false");};
+  document.querySelectorAll("[data-v]").forEach(b=>b.onclick=()=>{closeNav();VIEW=b.dataset.v;shell();});
+  nb.onclick=e=>{e.stopPropagation();const open=!side.classList.contains("open");
+    side.classList.toggle("open",open);scrim.hidden=!open;nb.setAttribute("aria-expanded",String(open));};
+  scrim.onclick=closeNav;
+  document.addEventListener("keydown",e=>{if(e.key==="Escape")closeNav();});
+  addEventListener("resize",()=>{if(innerWidth>=900)closeNav();});
   render();
 }
 function go(view){VIEW=view;if(view!=="targets") EDIT=null;shell();}
@@ -463,16 +496,22 @@ async function viewTargets(m){
   try{
     const [list,feat]=await Promise.all([api("GET","/api/v1/admin/targets"),api("GET","/api/v1/admin/featured").catch(()=>[])]);
     const F=new Set(feat||[]);
-    $("#tlist").innerHTML=(list&&list.length)?`<table>
-      <thead><tr><th title="Critical target: always shown at the top of the home page">★</th><th>Title</th><th>Host</th>
+    // Host and category sit under the title: fewer columns, and the table
+    // turns into one card per target on a phone.
+    const cname={}; (tree||[]).forEach(c=>cname[c.id]=c.menu_en||c.menu_fr);
+    $("#tlist").innerHTML=(list&&list.length)?`<table class="resp">
+      <thead><tr><th title="Critical target: always shown at the top of the home page">★</th><th>Target</th>
       <th>Family</th><th>Check</th><th>Interval</th><th>Visibility</th><th></th></tr></thead><tbody>`+
-      list.map(t=>`<tr><td><button class="btn s" data-star="${t.id}" title="Critical target"
+      list.map(t=>`<tr><td data-l=""><button class="btn s" data-star="${t.id}" title="Critical target"
           style="color:${F.has(t.id)?"#d97706":"var(--ink3)"}">${F.has(t.id)?"★":"☆"}</button></td>
-        <td>${esc(t.title)}</td><td class="mono">${esc(t.host)}${t.port?":"+t.port:""}</td>
-        <td>${FAMILY[t.family||0]}</td><td>${esc(t.proto)}</td><td>${t.interval_s} s</td>
-        <td><button class="btn s" data-vis="${t.id}" data-pub="${t.public?1:0}"
+        <td class="ttl" data-l="" style="text-align:left"><div style="font-weight:550">${esc(t.title)}</div>
+          <div class="mono" style="font-size:11.5px;color:var(--ink2)">${esc(t.host)}${t.port?":"+t.port:""}</div>
+          <div style="font-size:11.5px;color:var(--ink3)">${esc(cname[t.category_id]||"—")}</div></td>
+        <td data-l="Family">${FAMILY[t.family||0]}</td><td data-l="Check">${esc(t.proto)}</td>
+        <td data-l="Interval">${t.interval_s} s</td>
+        <td data-l="Visibility"><button class="btn s" data-vis="${t.id}" data-pub="${t.public?1:0}"
           title="Click to switch">${t.public?'<span class="badge b-ok">public</span>':'<span class="badge b-warn">private</span>'}</button></td>
-        <td style="text-align:right;white-space:nowrap">
+        <td class="acts" data-l="" style="text-align:right;white-space:nowrap">
           <button class="btn s" data-edit="${t.id}">Edit</button>
           <button class="btn s" data-now="${t.id}" title="Measure right away">Check now</button>
           <button class="btn s" data-trace="${t.id}">Traceroute</button>

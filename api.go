@@ -586,11 +586,22 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "target not found")
 		return
 	}
+	// The JSON tags matter: without them "category_id", "interval_s",
+	// "spacing_ms" and "timeout_ms" would never be decoded, and editing
+	// those fields would silently do nothing.
 	var in struct {
-		Title, Host, Proto                    *string
-		Family, Packets, SpacingMs, TimeoutMs *int
-		IntervalS                             *int64
-		Public, Enabled                       *bool
+		CategoryID *int64  `json:"category_id"`
+		Title      *string `json:"title"`
+		Host       *string `json:"host"`
+		Proto      *string `json:"proto"`
+		Family     *int    `json:"family"`
+		Port       *int    `json:"port"`
+		IntervalS  *int64  `json:"interval_s"`
+		Packets    *int    `json:"packets"`
+		SpacingMs  *int    `json:"spacing_ms"`
+		TimeoutMs  *int    `json:"timeout_ms"`
+		Public     *bool   `json:"public"`
+		Enabled    *bool   `json:"enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, 400, err.Error())
@@ -604,6 +615,14 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 	set(&t.Title, in.Title)
 	set(&t.Host, in.Host)
 	set(&t.Proto, in.Proto)
+	// The category and the TCP port are editable too: a target often moves
+	// from one category to another, and a TCP target changes port.
+	if in.CategoryID != nil {
+		t.CategoryID = *in.CategoryID
+	}
+	if in.Port != nil {
+		t.Port = *in.Port
+	}
 	if in.Family != nil {
 		t.Family = *in.Family
 	}

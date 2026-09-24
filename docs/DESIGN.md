@@ -289,6 +289,13 @@ By default it is shown once, in the faults section, and left out of the other
 lists; a checkbox switches that off and the choice is kept in the visitor's
 browser, not on the server.
 
+**Editing a target.** `PATCH /api/v1/admin/targets/{id}` changes any field,
+category included, and only the fields present in the body. Its decoding
+struct carries explicit JSON tags: without them, the fields whose name holds
+an underscore (`category_id`, `interval_s`, `spacing_ms`, `timeout_ms`) are
+silently ignored, and the back-office appears to save without saving. A test
+sets every field and reads them back.
+
 **TCP targets.** The host and the port are stored separately, so a target can
 move between ICMP and TCP without rewriting its address; older targets stored
 as `host:port` are migrated on start.

@@ -298,6 +298,11 @@ type overviewCache struct {
 var ovCache overviewCache
 
 func (c *overviewCache) build() error {
+	// Defensive: the cache is rebuilt in the background from several
+	// handlers, and a nil store must never take the service down.
+	if c == nil || c.store == nil {
+		return nil
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	start := time.Now()

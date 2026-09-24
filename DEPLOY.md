@@ -465,6 +465,7 @@ the following release.
 | Lost the admin password | `sudo smokestack user add -email other@example.net` creates another master |
 | Health check | `curl -s http://127.0.0.1:8080/healthz` → `ok` |
 | A target appears several times on the home page | It is faulty *and* critical *and* in a category. The **Show each target once** box at the top of the faults section keeps it in one place; the choice is remembered in the visitor's browser |
+| The back-office on a phone | The menu slides over the page and closes when a screen is chosen; the target list shows one card per target, with its host and category under the name |
 | Nobody can reach you | The *About* page shows the contact form, not your address. Check it is enabled in *Publisher page*, and look in *Messages* |
 | Interface unreachable from a browser | By default it listens on `127.0.0.1` only: set `SMOKESTACK_LISTEN_IP=0.0.0.0` in `/etc/smokestack/smokestack.env` and restart, or use a reverse proxy. Check the firewall too. |
 | `listen address: ... invalid` in the log | Fix the value named in the message in `/etc/smokestack/smokestack.env` |
