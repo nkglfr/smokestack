@@ -220,3 +220,93 @@ func TestArchiveFreesTheNameWithoutMixingHistory(t *testing.T) {
 		t.Error("the purged target is still listed")
 	}
 }
+
+// A public target can keep its address private: the graph is public, the
+// host is not, and nothing that would give it away either.
+func TestHideHostOnPublicSide(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	cat, _ := store.CreateCategory("c", "C", "C", true)
+	id, err := store.CreateTarget(&Target{CategoryID: cat, Slug: "cust", Title: "Customer link",
+		Host: "10.11.12.13", Proto: "tcp", Port: 443, PinIP: "10.11.12.13", HideHost: true,
+		IntervalS: 60, Packets: 10, SpacingMs: 100, TimeoutMs: 1000, Public: true, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Unix()
+	if err := store.RecordBatch([]queuedMeasure{{m: Measurement{TargetID: id, ProbeID: 1,
+		TS: now - 60, Sent: 10, IP: "10.11.12.13", RTTus: []float64{1000, 1100, 1050}}}}); err != nil {
+		t.Fatal(err)
+	}
+	// Public tree and overview: the title is there, the address is not.
+	pubTree, err := store.Tree(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(pubTree)
+	if !strings.Contains(string(b), "Customer link") {
+		t.Error("a hidden-address target is still public")
+	}
+	if strings.Contains(string(b), "10.11.12.13") {
+		t.Error("the public tree exposes the hidden address")
+	}
+	ov, err := store.Overview(1, now, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ = json.Marshal(ov)
+	if strings.Contains(string(b), "10.11.12.13") {
+		t.Error("the public overview exposes the hidden address")
+	}
+	// The operator still sees it.
+	priv, _ := store.Tree(false)
+	b, _ = json.Marshal(priv)
+	if !strings.Contains(string(b), "10.11.12.13") {
+		t.Error("the back-office must still show the address")
+	}
+}
+
+// The order of the categories is the order of the public sections.
+func TestCategoryOrder(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	var ids []int64
+	for _, n := range []string{"alpha", "beta", "gamma"} {
+		id, err := store.CreateCategory(n, n, n, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	names := func() []string {
+		cats, _ := store.Tree(false)
+		var out []string
+		for _, c := range cats {
+			out = append(out, c.MenuEN)
+		}
+		return out
+	}
+	start := names()
+	last := start[len(start)-1]
+	if err := store.MoveCategory(ids[len(ids)-1], true); err != nil {
+		t.Fatal(err)
+	}
+	after := names()
+	if after[len(after)-1] == last {
+		t.Errorf("moving up changed nothing: %v then %v", start, after)
+	}
+	// Moving the first one up is a no-op, not an error.
+	first, _ := store.Tree(false)
+	if err := store.MoveCategory(first[0].ID, true); err != nil {
+		t.Errorf("moving the first one up: %v", err)
+	}
+	if got := names(); got[0] != first[0].MenuEN {
+		t.Errorf("the first one moved: %v", got)
+	}
+}

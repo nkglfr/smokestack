@@ -368,6 +368,8 @@ async function viewTargets(m){
       site: useful for tests, for internal addresses, or for a customer link.</p>
 
     <div class="card"><h3>Categories</h3><div class="body">
+      <p style="margin:0 0 8px;font-size:13px;color:var(--ink2)">The order here is the order of the
+        sections on the public page.</p>
       <div id="clist">Loading…</div>
       <div class="row2" style="margin-top:14px">
         <div class="field"><label>Short identifier</label><input id="cslug" placeholder="transit"></div>
@@ -401,6 +403,9 @@ async function viewTargets(m){
         <div class="field"><label>Pinned address (optional)</label>
           <input id="tpin" placeholder="leave empty to resolve the name each time"></div>
       </div>
+      <label class="chk"><input type="checkbox" id="thide"><span>Hide the address on the public page
+        <small>The graph stays public, the host or IP is not shown, and neither are its traceroutes.
+          For a dashboard you give to customers without disclosing your addressing.</small></span></label>
       <label class="chk"><input type="checkbox" id="talert" checked><span>Alert on this target
         <small>When it stays in incident longer than the threshold set in <em>My targets alerting</em>.
           Uncheck for a target you watch but never want to be woken up for.</small></span></label>
@@ -443,6 +448,8 @@ async function viewTargets(m){
       <td><input data-cfr="${c.id}" value="${esc(c.menu_fr||"")}" style="padding:4px 8px"></td>
       <td>${(c.targets||[]).length}</td>
       <td style="text-align:right;white-space:nowrap">
+        <button class="btn s" data-cup="${c.id}" title="Move up">↑</button>
+        <button class="btn s" data-cdown="${c.id}" title="Move down">↓</button>
         <button class="btn s" data-csave="${c.id}">Rename</button>
         <button class="btn d s" data-cdel="${c.id}">Delete</button></td></tr>`).join("")+
     `</tbody></table>`:`<div class="empty">No category yet.</div>`;
@@ -453,6 +460,12 @@ async function viewTargets(m){
        menu_fr:document.querySelector(`[data-cfr="${id}"]`).value});
       toast("Category renamed");render();}catch(e){toast(e.message,true);}
   });
+  const move=async(id,dir)=>{
+    try{await api("POST","/api/v1/admin/categories/"+id+"/move?dir="+dir);render();}
+    catch(e){toast(e.message,true);}
+  };
+  document.querySelectorAll("[data-cup]").forEach(b=>b.onclick=()=>move(b.dataset.cup,"up"));
+  document.querySelectorAll("[data-cdown]").forEach(b=>b.onclick=()=>move(b.dataset.cdown,"down"));
   document.querySelectorAll("[data-cdel]").forEach(b=>b.onclick=async()=>{
     if(!confirm("Delete this category?")) return;
     try{await api("DELETE","/api/v1/admin/categories/"+b.dataset.cdel);toast("Category deleted");render();}
@@ -494,7 +507,7 @@ async function viewTargets(m){
       interval_s:parseInt($("#tiv").value,10),packets:parseInt($("#tpk").value,10),
       spacing_ms:parseInt($("#tsp").value,10),timeout_ms:parseInt($("#tto").value,10),
       pin_ip:$("#tpin").value.trim(), alerts_off:!$("#talert").checked,
-      trace_hours:parseInt($("#thrs").value||"0",10),
+      trace_hours:parseInt($("#thrs").value||"0",10), hide_host:$("#thide").checked,
       public:$("#tpub").checked};
     try{
       if(EDIT){ await api("PATCH","/api/v1/admin/targets/"+EDIT.id,body); EDIT=null; toast("Target saved"); }
@@ -557,6 +570,7 @@ async function viewTargets(m){
         <td class="ttl" data-l="" style="text-align:left"><div style="font-weight:550">${esc(t.title)}</div>
           <div class="mono" style="font-size:11.5px;color:var(--ink2)">${esc(t.host)}${t.port?":"+t.port:""}</div>
           <div style="font-size:11.5px;color:var(--ink3)">${esc(cname[t.category_id]||"—")}</div>
+          ${t.hide_host?`<div class="tpin">🙈 address hidden on the public page</div>`:""}
           ${t.pin_ip?`<div class="tpin">📌 pinned to ${esc(t.pin_ip)}
             <button class="btn s" data-unpin="${t.id}">Unpin</button></div>`:
             ((t.addresses||[]).length>1?`<div class="twarn">This name answered from

@@ -268,6 +268,16 @@ func (a *API) traceroutesPublic(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, []*Traceroute{})
 		return
 	}
+	// A public target whose address is hidden must not expose its path
+	// either: the hops would give the address away immediately.
+	if !a.authenticated(r) {
+		if id, err := strconv.ParseInt(r.URL.Query().Get("target"), 10, 64); err == nil {
+			if t, err := a.store.TargetByID(id); err == nil && t.HideHost {
+				writeJSON(w, []any{})
+				return
+			}
+		}
+	}
 	a.listTraceroutes(w, r, !a.authenticated(r))
 }
 

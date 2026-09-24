@@ -181,8 +181,12 @@ func (a *API) homeBody(r *http.Request) string {
 			if t.LossPct != nil && *t.LossPct > 0 {
 				loss = fmt.Sprintf(", %.1f %% packet loss", *t.LossPct)
 			}
-			fmt.Fprintf(&b, `<li><a href="/t/%s">%s</a> (%s): %s%s</li>`+"\n",
-				esc(t.Slug), esc(t.Title), esc(t.Host), esc(med), esc(loss))
+			host := ""
+			if t.Host != "" {
+				host = " (" + esc(t.Host) + ")"
+			}
+			fmt.Fprintf(&b, `<li><a href="/t/%s">%s</a>%s: %s%s</li>`+"\n",
+				esc(t.Slug), esc(t.Title), host, esc(med), esc(loss))
 		}
 		b.WriteString("</ul>\n")
 	}
@@ -212,9 +216,13 @@ func (a *API) targetMeta(r *http.Request, slug string) (pageMeta, bool) {
 					state += fmt.Sprintf(", %.1f %% packet loss", *t.LossPct)
 				}
 			}
-			desc := fmt.Sprintf("Latency and packet loss measured from %s towards %s (%s), %s. "+
+			where := t.Title
+			if t.Host != "" {
+				where = fmt.Sprintf("%s (%s)", t.Title, t.Host)
+			}
+			desc := fmt.Sprintf("Latency and packet loss measured from %s towards %s, %s. "+
 				"Percentiles over one year, %s every %d s.",
-				org, t.Title, t.Host, state, strings.ToUpper(t.Proto), t.Interval)
+				org, where, state, strings.ToUpper(t.Proto), t.Interval)
 			// Say it here too: a page indexed without this reads as if the
 			// figures described one machine.
 			switch {

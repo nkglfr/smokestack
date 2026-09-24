@@ -263,6 +263,13 @@ curl -s -X PUT localhost:8080/api/v1/admin/storage \
                 "low_watermark":0.70,"keep_local_hours":48}}'
 ```
 
+**Hiding an address is not hiding a target.** A public target can keep its
+address private: the series, the status and the title are public, while the
+host, the port, the pinned address and the traceroutes are stripped from
+every public surface — tree, overview, target page, indexed description and
+the traceroute endpoint, since hops would give the address away in one look.
+The operator keeps seeing all of it.
+
 **Private targets.** Each target is public or private. A private target is
 measured, stored and graphed exactly like the others, but it is left out of
 every public endpoint: tree, overview, series, charts, live stream and

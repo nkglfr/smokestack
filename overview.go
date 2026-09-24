@@ -285,6 +285,12 @@ func (s *Store) Overview(probeID int64, now int64, publicOnly bool) (*Overview, 
 			out.Counts[ot.Status]++
 			if !publicOnly {
 				ot.Addresses = addrs[t.ID]
+			} else if t.HideHost {
+				// A public target whose address stays private: the graph is
+				// shown, the host is not, and neither is anything that would
+				// give it away.
+				ot.Host = ""
+				ot.AddrCount = 0
 			}
 			oc.Targets = append(oc.Targets, ot)
 		}

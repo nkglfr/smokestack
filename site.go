@@ -120,8 +120,19 @@ func (a *API) siteGet(w http.ResponseWriter, r *http.Request) {
 			site.Email = ""
 		}
 	}
+	// Which public pages make sense on this instance. An operator running
+	// no federation should not see Federation and Pairing tabs leading to
+	// empty pages, and a network page without an AS number says nothing.
+	out := map[string]any{}
+	b, _ := json.Marshal(site)
+	json.Unmarshal(b, &out)
+	out["pages"] = map[string]bool{
+		"federation": a.fed != nil && a.fed.Enabled(),
+		"pairing":    a.fed != nil && a.fed.Enabled() && site.ASN != "",
+		"network":    site.ASN != "",
+	}
 	w.Header().Set("Cache-Control", "public, max-age=600")
-	writeJSON(w, site)
+	writeJSON(w, out)
 }
 
 func (a *API) sitePut(w http.ResponseWriter, r *http.Request) {

@@ -139,6 +139,10 @@ type Peer struct {
 	pubkey     ed25519.PublicKey
 }
 
+// Enabled reports whether this instance takes part in the federation, which
+// decides whether the public pages about it are worth showing.
+func (f *Federation) Enabled() bool { return f != nil && f.enabled }
+
 type Federation struct {
 	store   *Store
 	dataDir string

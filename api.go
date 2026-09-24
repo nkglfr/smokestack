@@ -67,6 +67,7 @@ func (a *API) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/v1/admin/alerts", a.need(RoleAdmin, a.alertsPut))
 	mux.HandleFunc("POST /api/v1/admin/categories", a.auth(a.categoriesPost))
 	mux.HandleFunc("PATCH /api/v1/admin/categories/{id}", a.auth(a.categoriesPatch))
+	mux.HandleFunc("POST /api/v1/admin/categories/{id}/move", a.auth(a.categoriesMove))
 	mux.HandleFunc("DELETE /api/v1/admin/categories/{id}", a.auth(a.categoriesDelete))
 	mux.HandleFunc("POST /api/v1/admin/events", a.auth(a.eventsPost))
 }
@@ -644,6 +645,7 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 		PinIP      *string `json:"pin_ip"`
 		AlertsOff  *bool   `json:"alerts_off"`
 		TraceHours *int    `json:"trace_hours"`
+		HideHost   *bool   `json:"hide_host"`
 		Public     *bool   `json:"public"`
 		Enabled    *bool   `json:"enabled"`
 	}
@@ -692,6 +694,9 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.AlertsOff != nil {
 		t.AlertsOff = *in.AlertsOff
+	}
+	if in.HideHost != nil {
+		t.HideHost = *in.HideHost
 	}
 	if in.TraceHours != nil {
 		if *in.TraceHours < 0 || *in.TraceHours > 720 {
@@ -906,4 +911,19 @@ func (a *API) targetsArchived(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, list)
+}
+
+// categoriesMove changes the order categories appear in on the public page.
+func (a *API) categoriesMove(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, 400, "invalid identifier")
+		return
+	}
+	if err := a.store.MoveCategory(id, r.URL.Query().Get("dir") != "down"); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	go ovCache.build()
+	writeJSON(w, map[string]any{"ok": true})
 }

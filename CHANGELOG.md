@@ -5,6 +5,16 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- **The public navigation adapts** (idea #11): Federation and Pairing appear
+  only when federation is enabled, Host network only with an AS number. No
+  more tabs leading to empty pages.
+- **The order of the categories** is settable and drives the public page
+  (idea #12).
+- **A public target can hide its address** (idea #13): the graph stays
+  public, the host, port, pinned address and traceroutes are withheld
+  everywhere — page, API and indexed description. For dashboards given to
+  customers.
+
 - **"Why this loss?"** on each target: the instance reads the shape of the
   loss over 24 hours and tells rate limiting, real outages and path loss
   apart — one or two packets per burst is a limiter, whole passes lost is an

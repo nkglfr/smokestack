@@ -17,9 +17,16 @@
 
   let SITE = {}, VERSION = null;
 
+  // Pages the instance says are relevant: no Federation tab leading to an
+  // empty page on an instance that does not federate.
+  function pages() {
+    const on = (SITE.pages || {});
+    return PAGES.filter(p => on[p.id] === undefined || on[p.id]);
+  }
+
   function header(active) {
     const t = I18N.t;
-    const nav = PAGES.map(p =>
+    const nav = pages().map(p =>
       `<a href="${p.href}" ${p.id === active ? 'aria-current="page"' : ""}>${esc(t(p.key))}</a>`).join("");
     const opts = I18N.langs.map(l =>
       `<option value="${esc(l.code)}" ${l.code === I18N.lang ? "selected" : ""}>${esc(l.name)}` +
@@ -58,8 +65,9 @@
           ${SITE.location ? `<p class="faint">${esc(SITE.location)}</p>` : ""}
         </div>
         ${col(t("footer.pages"), [
-          link("/", t("footer.graphs")), link("/federation", t("footer.federation")),
-          link("/network", t("footer.network")), link("/pairing", t("footer.pairing")),
+          link("/", t("footer.graphs")),
+          ...pages().filter(p => p.id !== "home" && p.id !== "about")
+            .map(p => link(p.href, t("footer." + p.id))),
           link("/about", t("footer.about"))])}
         ${col(t("footer.operator"), [
           link(SITE.url, t("footer.website"), 1),

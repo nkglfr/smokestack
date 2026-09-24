@@ -645,6 +645,22 @@ the status code is not the reason. The message under the target's name says
 which one it is — most often a target created without a port, which now says
 so explicitly.
 
+### What the public pages show
+
+The public navigation adapts on its own: **Federation** and **Pairing**
+appear only when federation is enabled, and **Host network** only once an AS
+number is set. An instance that just watches a few targets shows two tabs,
+not five, without a single setting to tick.
+
+The **order of the categories** in the back-office is the order of the
+sections on the public page: the arrows next to each category move it.
+
+A public target can **keep its address private**: tick *Hide the address on
+the public page* in its settings. The graph, the title and the status stay
+public; the host, the port, the pinned address and the target's traceroutes
+are not served publicly at all — not on the page, not in the API, not in the
+indexed description. It is what a dashboard given to customers needs.
+
 ### Why is there loss on this target?
 
 The target list has a **Why this loss?** button. It reads the shape of the
