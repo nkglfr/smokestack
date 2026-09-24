@@ -5,6 +5,14 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- **Failing targets are logged**: one line when a target starts failing, with
+  the reason, and one when it answers again. Until now the reason was only in
+  the back-office, so `journalctl` and `docker logs` said nothing.
+- A **TCP target without a port** now says so instead of repeating Go's
+  "missing port in address".
+- The guide states plainly that a TCP target reads **no HTTP status code**: a
+  service answering 403 is measured like any other.
+
 - The load-balanced notice on a public page no longer lists the addresses,
   only how many there are: they describe the inside of a third-party service
   and there can be many. The list is no longer in the public API either — it

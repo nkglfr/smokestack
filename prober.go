@@ -75,6 +75,7 @@ type Prober struct {
 	// or rewritten one: relying on the echo alone counted those as lost.
 	sentAt  map[uint16]int64
 	running map[int64]bool
+	failing map[int64]string    // dernière erreur journalisée, par cible
 	wanted  map[int64]time.Time // immediate measurements waiting for the target
 
 	res    *resolver
@@ -89,6 +90,7 @@ func NewProber(src TargetSource, sink MeasureSink, probeID int64, tc TracerouteC
 		pending: map[uint16]*inflight{},
 		sentAt:  map[uint16]int64{},
 		running: map[int64]bool{},
+		failing: map[int64]string{},
 		wanted:  map[int64]time.Time{},
 		res:     newResolver(),
 	}
@@ -386,6 +388,20 @@ func (p *Prober) Run(t *Target) {
 		m.IP = ip.String()
 	}
 	m.Lost = m.Sent - len(m.RTTus)
+	// One line when a target starts failing, one when it comes back. The
+	// per-target reason is in the back-office, but an operator reading
+	// journalctl or docker logs should see it too.
+	p.mu.Lock()
+	was := p.failing[t.ID]
+	switch {
+	case m.Err != "" && m.Err != was:
+		p.failing[t.ID] = m.Err
+		log.Printf("target %q (%s): %s", t.Title, t.Host, m.Err)
+	case m.Err == "" && was != "":
+		delete(p.failing, t.ID)
+		log.Printf("target %q (%s): answering again", t.Title, t.Host)
+	}
+	p.mu.Unlock()
 	if m.Lost < 0 {
 		m.Lost = 0
 	}
@@ -452,8 +468,14 @@ func (p *Prober) runTCP(t *Target) ([]float64, string) {
 		network = fmt.Sprintf("tcp%d", t.Family)
 	}
 	addr := t.Host
-	if t.Port > 0 {
+	switch {
+	case t.Port > 0:
 		addr = net.JoinHostPort(t.Host, strconv.Itoa(t.Port))
+	case !strings.Contains(t.Host, ":"):
+		// Go would say "missing port in address", which tells an operator
+		// nothing about what to do.
+		return nil, fmt.Sprintf("this TCP target has no port: set one (for example 443 or 80) " +
+			"in the target settings")
 	}
 	var out []float64
 	var lastErr string

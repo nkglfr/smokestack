@@ -120,6 +120,13 @@ The back-office shows the reason under the target's name:
 TCP targets open a real connection each time: keep the packet count low, and
 prefer a service you are allowed to knock on.
 
+**A TCP target reads no HTTP status code.** It opens a connection and times
+the handshake. A service answering `403`, `401` or `500` is up and is
+measured normally; only a refused connection, a timeout or a name that does
+not resolve counts as a failure. If such a target fails while `curl` works
+from the same host, look at the reason shown under its name — a missing port
+is the usual cause.
+
 ---
 
 ## Should this be automatic?

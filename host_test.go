@@ -1,6 +1,13 @@
 package main
 
-import "testing"
+import (
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"strconv"
+	"strings"
+	"testing"
+)
 
 // What people actually paste: a tab in front, a trailing space, a full URL,
 // brackets around an IPv6 address, an invisible character from a web page.
@@ -97,5 +104,28 @@ func TestPastedURLKeepsTheHost(t *testing.T) {
 		if c.port != 0 && tg.Port != c.port {
 			t.Errorf("%q gave the port %d, expected %d", c.in, tg.Port, c.port)
 		}
+	}
+}
+
+// A TCP target without a port must say what to do, not repeat Go's
+// "missing port in address".
+func TestTCPTargetWithoutPort(t *testing.T) {
+	p := &Prober{res: newResolver(), failing: map[int64]string{}, running: map[int64]bool{}}
+	_, msg := p.runTCP(&Target{Title: "X", Host: "192.0.2.1", Proto: "tcp", Port: 0,
+		Packets: 1, SpacingMs: 100, TimeoutMs: 200})
+	if !strings.Contains(msg, "no port") || !strings.Contains(msg, "443") {
+		t.Errorf("unhelpful message: %q", msg)
+	}
+	// An HTTP status is never looked at: a service answering 403 is up.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(403)
+	}))
+	defer srv.Close()
+	host, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "http://"))
+	n, _ := strconv.Atoi(port)
+	rtts, msg := p.runTCP(&Target{Title: "403", Host: host, Proto: "tcp", Port: n,
+		Packets: 3, SpacingMs: 50, TimeoutMs: 1000})
+	if msg != "" || len(rtts) != 3 {
+		t.Errorf("a service answering 403 must be measured: %d samples, %q", len(rtts), msg)
 	}
 }

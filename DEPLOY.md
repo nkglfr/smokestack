@@ -600,6 +600,41 @@ about **their** network. The two are separate: one is about the others,
 this one is about you. Incidents are recorded either way, alerting off
 included, and listed on the same screen.
 
+### Where the logs are
+
+Three places, in this order:
+
+1. **The target list in the back-office** shows, under a target's name, why
+   its last pass failed. That is the fastest answer.
+2. **The service log**, one line when a target starts failing and one when it
+   comes back:
+
+   ```sh
+   journalctl -u smokestack -u smokestack-probe -f      # native install
+   docker compose logs -f                               # container
+   ```
+
+   ```
+   target "Transit Paris" (192.0.2.1): no reply to 10 ICMP echo requests sent to 192.0.2.1 …
+   target "Transit Paris" (192.0.2.1): answering again
+   ```
+3. **The raw archive**, hourly NDJSON files under
+   `/var/lib/smokestack/raw/` or on S3, which carry every pass with its
+   error, for a post-mortem.
+
+### What a TCP target actually checks
+
+A TCP target opens a connection and measures the time the TCP handshake
+takes. **No HTTP request is made and no status code is read**: a service
+answering `403 Forbidden`, `401` or `500` is a service that is up, and it is
+measured like any other. Only a refused connection, a timeout or a
+resolution failure counts as a failure.
+
+So if a TCP target on port 80 fails while `wget` works from the same host,
+the status code is not the reason. The message under the target's name says
+which one it is — most often a target created without a port, which now says
+so explicitly.
+
 ### A single target never answers
 
 The back-office shows the reason under the target's name. The three usual
