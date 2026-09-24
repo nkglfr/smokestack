@@ -5,6 +5,8 @@ install the newest one directly, whatever versions came in between.
 
 ## 0.2.6
 
+- Alerting can be switched off **per target** as well as globally: a target
+  left out is still measured and its incidents still recorded.
 - **Alerting on your own targets**: an alert when a target stays in incident
   longer than you choose, with the traceroute taken when the incident opened
   and compared with the last healthy path. Silence window per target,

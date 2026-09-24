@@ -397,6 +397,9 @@ async function viewTargets(m){
         <div class="field"><label>Pinned address (optional)</label>
           <input id="tpin" placeholder="leave empty to resolve the name each time"></div>
       </div>
+      <label class="chk"><input type="checkbox" id="talert" checked><span>Alert on this target
+        <small>When it stays in incident longer than the threshold set in <em>My targets alerting</em>.
+          Uncheck for a target you watch but never want to be woken up for.</small></span></label>
       <label class="chk"><input type="checkbox" id="tpub" checked><span>Public target
         <small>Shown on the public site. Uncheck for a private target: it is measured and visible
           here, but never appears on the public pages or in the public API.</small></span></label>
@@ -481,7 +484,7 @@ async function viewTargets(m){
       port:$("#tproto").value==="tcp"?parseInt($("#tport").value||"0",10):0,
       interval_s:parseInt($("#tiv").value,10),packets:parseInt($("#tpk").value,10),
       spacing_ms:parseInt($("#tsp").value,10),timeout_ms:parseInt($("#tto").value,10),
-      pin_ip:$("#tpin").value.trim(),
+      pin_ip:$("#tpin").value.trim(), alerts_off:!$("#talert").checked,
       public:$("#tpub").checked};
     try{
       if(EDIT){ await api("PATCH","/api/v1/admin/targets/"+EDIT.id,body); EDIT=null; toast("Target saved"); }
@@ -521,7 +524,7 @@ async function viewTargets(m){
     const cname={}; (tree||[]).forEach(c=>cname[c.id]=c.menu_en||c.menu_fr);
     $("#tlist").innerHTML=(list&&list.length)?`<table class="resp">
       <thead><tr><th title="Critical target: always shown at the top of the home page">★</th><th>Target</th>
-      <th>Family</th><th>Check</th><th>Interval</th><th>Visibility</th><th></th></tr></thead><tbody>`+
+      <th>Family</th><th>Check</th><th>Interval</th><th>Alerts</th><th>Visibility</th><th></th></tr></thead><tbody>`+
       list.map(t=>`<tr><td data-l=""><button class="btn s" data-star="${t.id}" title="Critical target"
           style="color:${F.has(t.id)?"#d97706":"var(--ink3)"}">${F.has(t.id)?"★":"☆"}</button></td>
         <td class="ttl" data-l="" style="text-align:left"><div style="font-weight:550">${esc(t.title)}</div>
@@ -539,6 +542,9 @@ async function viewTargets(m){
             ⚠ ${esc(t.last_error)}</div>`:""}</td>
         <td data-l="Family">${FAMILY[t.family||0]}</td><td data-l="Check">${esc(t.proto)}</td>
         <td data-l="Interval">${t.interval_s} s</td>
+        <td data-l="Alerts"><button class="btn s" data-alert="${t.id}" data-off="${t.alerts_off?1:0}"
+          title="Alert when this target stays in incident">${t.alerts_off?
+            '<span class="badge b-n">off</span>':'<span class="badge b-ok">on</span>'}</button></td>
         <td data-l="Visibility"><button class="btn s" data-vis="${t.id}" data-pub="${t.public?1:0}"
           title="Click to switch">${t.public?'<span class="badge b-ok">public</span>':'<span class="badge b-warn">private</span>'}</button></td>
         <td class="acts" data-l="" style="text-align:right;white-space:nowrap">
@@ -552,6 +558,11 @@ async function viewTargets(m){
         toast(ip?("Target pinned to "+ip):"Address no longer pinned");render();}
       catch(e){toast(e.message,true);}
     };
+    document.querySelectorAll("[data-alert]").forEach(b=>b.onclick=async()=>{
+      try{await api("PATCH","/api/v1/admin/targets/"+b.dataset.alert,{alerts_off:b.dataset.off!=="1"});
+        toast(b.dataset.off==="1"?"Alerting enabled for this target":"Alerting disabled for this target");render();}
+      catch(e){toast(e.message,true);}
+    });
     document.querySelectorAll("[data-pin]").forEach(b=>b.onclick=()=>setPin(b.dataset.pin,b.dataset.ip));
     document.querySelectorAll("[data-unpin]").forEach(b=>b.onclick=()=>setPin(b.dataset.unpin,""));
     document.querySelectorAll("[data-vis]").forEach(b=>b.onclick=async()=>{
@@ -1162,7 +1173,9 @@ async function viewAlerts(m){
     const d=await api("GET","/api/v1/admin/alerts"); const c=d.config||{};
     $("#al").innerHTML=`
       <label class="chk"><input type="checkbox" id="al_en" ${c.enabled?"checked":""}>
-        <span>Alert me when a target stays in incident<small>Off by default.</small></span></label>
+        <span>Alert me when a target stays in incident<small>Off by default. This is the global switch;
+          each target can also be left out, with the <em>Alerts</em> button in
+          <a href="#" data-goto="targets">Targets and categories</a>.</small></span></label>
       <div class="row2">
         <div class="field"><label>After how long (minutes)</label>
           <input id="al_min" type="number" min="1" max="1440" value="${c.after_minutes||5}"></div>

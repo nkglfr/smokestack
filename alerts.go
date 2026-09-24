@@ -162,6 +162,8 @@ func (a *Alerter) Tick(statuses map[int64]string, details map[int64]string) int 
 			}
 			a.store.cfg.Exec(`UPDATE local_incidents SET closed_at=? WHERE id=?`, now, inc.ID)
 			if cfg.Enabled && cfg.Recovery && inc.NotifiedAt > 0 {
+				// The recovery notice follows the alert: if one was sent,
+				// the other is owed, whatever the target setting is now.
 				t, err := a.store.TargetByID(targetID)
 				if err == nil {
 					a.send(cfg, fmt.Sprintf("[smokestack] Recovered: %s", t.Title),
@@ -180,6 +182,11 @@ func (a *Alerter) Tick(statuses map[int64]string, details map[int64]string) int 
 			continue
 		}
 		if !cfg.Enabled || inc.NotifiedAt > 0 {
+			continue
+		}
+		// A target can be left out of alerting without being left out of
+		// monitoring: the incident is still recorded and still visible.
+		if t, err := a.store.TargetByID(targetID); err == nil && t.AlertsOff {
 			continue
 		}
 		if now-inc.OpenedAt < int64(cfg.AfterMinutes)*60 {

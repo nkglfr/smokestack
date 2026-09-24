@@ -625,6 +625,7 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 		SpacingMs  *int    `json:"spacing_ms"`
 		TimeoutMs  *int    `json:"timeout_ms"`
 		PinIP      *string `json:"pin_ip"`
+		AlertsOff  *bool   `json:"alerts_off"`
 		Public     *bool   `json:"public"`
 		Enabled    *bool   `json:"enabled"`
 	}
@@ -670,6 +671,9 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.TimeoutMs != nil {
 		t.TimeoutMs = *in.TimeoutMs
+	}
+	if in.AlertsOff != nil {
+		t.AlertsOff = *in.AlertsOff
 	}
 	if in.Public != nil {
 		t.Public = *in.Public

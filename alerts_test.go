@@ -121,3 +121,50 @@ func TestSplitList(t *testing.T) {
 		t.Error("an empty list must stay empty")
 	}
 }
+
+// A target can be left out of alerting without being left out of
+// monitoring: its incidents are still recorded, nobody is woken up.
+func TestAlertingDisabledForOneTarget(t *testing.T) {
+	a, store, id, sent, _, clock := alertSetup(t)
+	// A second target, kept under alerting.
+	cat, _ := store.CreateCategory("c2", "C2", "C2", true)
+	other, err := store.CreateTarget(&Target{CategoryID: cat, Slug: "o", Title: "Peering",
+		Host: "192.0.2.2", Proto: "icmp", IntervalS: 60, Packets: 10, SpacingMs: 100,
+		TimeoutMs: 1000, Public: true, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A new target is under alerting by default: a missing field must never
+	// silence a target by accident.
+	if tg, _ := store.TargetByID(other); tg.AlertsOff {
+		t.Fatal("a new target must be alerted on by default")
+	}
+	tg, _ := store.TargetByID(id)
+	tg.AlertsOff = true
+	if err := store.UpdateTarget(tg); err != nil {
+		t.Fatal(err)
+	}
+	crit := map[int64]string{id: "crit", other: "crit"}
+	a.Tick(crit, nil)
+	*clock += 10 * 60
+	a.Tick(crit, nil)
+	if len(*sent) != 1 {
+		t.Fatalf("only the target under alerting should alert: %d alert(s)", len(*sent))
+	}
+	if !strings.Contains((*sent)[0].subject, "Peering") {
+		t.Errorf("the wrong target alerted: %q", (*sent)[0].subject)
+	}
+	inc, _ := a.Incidents(10)
+	if len(inc) != 2 {
+		t.Errorf("both incidents must be recorded: %d", len(inc))
+	}
+	// Switching it back on makes it alert at the next round.
+	tg, _ = store.TargetByID(id)
+	tg.AlertsOff = false
+	store.UpdateTarget(tg)
+	*clock += 60
+	a.Tick(crit, nil)
+	if len(*sent) != 2 {
+		t.Errorf("switched back on, the target must alert: %d", len(*sent))
+	}
+}

@@ -304,6 +304,12 @@ therefore keeps the send time per sequence number on its own side and uses
 the echoed one only when it is present and plausible; otherwise those
 answered probes were counted as lost.
 
+**Alerting, two switches.** A target stays measured whatever the alerting
+setting: incidents are recorded either way, only the message is withheld. The
+per-target setting is stored as an exception (`alerts_off`) rather than as a
+preference, so a request that omits the field leaves alerting on: silencing a
+target has to be deliberate.
+
 **Rotating names, said out loud.** A visitor reading a median and a loss
 figure assumes they describe one machine. When the name answered from
 several addresses, the public page says otherwise, above the figures, and so

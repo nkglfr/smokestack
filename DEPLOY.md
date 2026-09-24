@@ -534,6 +534,12 @@ where it breaks without opening anything.
 | Webhook | Optional, works without SMTP |
 | Tell me when it is over | A recovery notice, on by default |
 
+Alerting can be switched off **per target** with the *Alerts* button in the
+target list, or the checkbox in the target form: useful for something you
+watch on the graphs but never want to be woken up for. A new target is
+alerted on by default. A target left out is still measured, and its incidents
+are still recorded and listed — only the message is not sent.
+
 Emails use the SMTP settings of *NOC alerting*, which warns a **peer's** NOC
 about **their** network. The two are separate: one is about the others,
 this one is about you. Incidents are recorded either way, alerting off

@@ -146,3 +146,9 @@ optional notice when it recovers.
 
 It uses the SMTP settings already configured for the federation NOC alerting,
 or a webhook.
+
+Alerting has two switches: the global one on that screen, and one per target
+(*Alerts* in the target list). A target left out is still measured and its
+incidents still recorded — you simply are not woken up for it. Useful for a
+target known to be noisy, a test target, or a destination whose owner you do
+not control.
