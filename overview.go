@@ -29,22 +29,27 @@ type Spark struct {
 }
 
 type OverviewTarget struct {
-	ID       int64    `json:"id"`
-	Slug     string   `json:"slug"`
-	Title    string   `json:"title"`
-	Host     string   `json:"host"`
-	Proto    string   `json:"proto"`
-	Interval int64    `json:"interval_s"`
-	Featured bool     `json:"featured"`
-	Public   bool     `json:"public"`
-	Status   string   `json:"status"`
-	MedMs    *float64 `json:"med_ms"`
-	LossPct  *float64 `json:"loss_pct"`
-	BaseMs   *float64 `json:"base_ms"`
-	Ratio    *float64 `json:"ratio"`
-	Since    *int64   `json:"since"`
-	Hours    []string `json:"hours"`
-	Spark    Spark    `json:"spark"`
+	ID   int64  `json:"id"`
+	Slug string `json:"slug"`
+	// Addresses: les adresses réellement sondées sur 24 h. Plusieurs
+	// adresses = service en répartition de charge, donc des mesures qui
+	// mélangent des machines différentes. PinIP: adresse figée.
+	Addresses []string `json:"addresses,omitempty"`
+	PinIP     string   `json:"pin_ip,omitempty"`
+	Title     string   `json:"title"`
+	Host      string   `json:"host"`
+	Proto     string   `json:"proto"`
+	Interval  int64    `json:"interval_s"`
+	Featured  bool     `json:"featured"`
+	Public    bool     `json:"public"`
+	Status    string   `json:"status"`
+	MedMs     *float64 `json:"med_ms"`
+	LossPct   *float64 `json:"loss_pct"`
+	BaseMs    *float64 `json:"base_ms"`
+	Ratio     *float64 `json:"ratio"`
+	Since     *int64   `json:"since"`
+	Hours     []string `json:"hours"`
+	Spark     Spark    `json:"spark"`
 }
 
 type OverviewCategory struct {
@@ -149,6 +154,7 @@ func rowMed(r ovRow) float64 {
 // (roll_5m) et 2 h a la minute (roll_1m) pour l'etat courant et le
 // debut du defaut.
 func (s *Store) Overview(probeID int64, now int64, publicOnly bool) (*Overview, error) {
+	addrs := s.TargetAddresses(now - 24*3600)
 	cats, err := s.Tree(publicOnly)
 	if err != nil {
 		return nil, err
@@ -182,6 +188,7 @@ func (s *Store) Overview(probeID int64, now int64, publicOnly bool) (*Overview, 
 			}
 			ot := &OverviewTarget{ID: t.ID, Slug: t.Slug, Title: t.Title, Host: t.Host, Proto: t.Proto,
 				Interval: t.IntervalS, Featured: feat[t.ID], Public: t.Public,
+				Addresses: addrs[t.ID], PinIP: t.PinIP,
 				Hours: make([]string, 48)}
 
 			var base, day, cur ovAgg

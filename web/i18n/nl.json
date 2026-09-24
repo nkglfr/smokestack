@@ -86,7 +86,9 @@
     "preset_30h": "30 u",
     "preset_10d": "10 d",
     "preset_3m": "3 mnd",
-    "preset_1y": "1 jaar"
+    "preset_1y": "1 jaar",
+    "rotating": "Deze naam antwoordt vanaf {n} verschillende adressen: het is een dienst met load balancing. Elke ronde meet de server die DNS teruggaf, dus de cijfers hieronder mengen machines die op verschillende plaatsen kunnen staan en verschillende belasting hebben. Een server die ICMP negeert, verschijnt als verlies.",
+    "pinned": "Gemeten op een vast adres, {ip}: de naam kan naar iets anders wijzen, de cijfers hieronder beschrijven altijd dezelfde machine."
   },
   "fed": {
     "title": "Federatie",

@@ -86,7 +86,9 @@
     "preset_30h": "30 h",
     "preset_10d": "10 j",
     "preset_3m": "3 mois",
-    "preset_1y": "1 an"
+    "preset_1y": "1 an",
+    "rotating": "Ce nom répond depuis {n} adresses différentes : c'est un service en répartition de charge. Chaque passe mesure le serveur que le DNS a renvoyé, donc les chiffres ci-dessous mélangent des machines qui peuvent se trouver à des endroits différents et subir des charges différentes. Un serveur qui ignore l'ICMP apparaît comme de la perte.",
+    "pinned": "Mesuré sur une adresse figée, {ip} : le nom peut désigner autre chose, les chiffres ci-dessous décrivent toujours la même machine."
   },
   "fed": {
     "title": "Fédération",

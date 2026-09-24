@@ -16,6 +16,11 @@ install the newest one directly, whatever versions came in between.
 - The ready-made targets drop `pool.ntp.org` and offer French **university
   time servers** instead (Sorbonne, Lyon 1 in IPv4 and IPv6, Caen, Nice), all
   with a stable address.
+- **The public page explains a load-balanced target**: a name answering from
+  several addresses carries a notice above its figures — different servers,
+  possibly in different places and under different loads — with the addresses
+  seen, in the ten languages, and in the description read by search engines.
+  A pinned target says so instead.
 - **Rotating names are detected**: a target whose name answered from several
   addresses in 24 hours is flagged in the back-office, with a button to pin
   the address actually measured. A pool name such as `fr.pool.ntp.org` points

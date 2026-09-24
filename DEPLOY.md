@@ -550,9 +550,18 @@ Two more cases worth knowing:
   shows up as a lost pass: with a 5-minute interval, two silent servers out
   of three give the famous "66.7 % loss" that means nothing.
 
+  The **public page says so too**: a target whose name answered from several
+  addresses carries a notice above its figures, explaining that each pass
+  measures whichever server DNS returned, that those servers may sit in
+  different places and carry different loads, and that one ignoring ICMP
+  shows up as loss. The addresses seen are listed. A visitor therefore knows
+  what the median and the loss actually describe. The same sentence goes into
+  the page description read by search engines.
+
   The back-office detects it: a target whose name answered from several
   addresses in the last 24 hours carries a notice and a **Pin** button, which
-  freezes the address actually measured. The name stays on the page, the
+  freezes the address actually measured. Once pinned, the public page says it
+  is measured at a fixed address instead. The name stays on the page, the
   measurement becomes comparable over time. **Unpin** goes back to resolving
   the name at every pass. The pinned address is also a field of the target
   form, and `pin_ip` in the API.

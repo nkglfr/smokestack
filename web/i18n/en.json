@@ -86,7 +86,9 @@
     "preset_30h": "30 h",
     "preset_10d": "10 d",
     "preset_3m": "3 mo",
-    "preset_1y": "1 y"
+    "preset_1y": "1 y",
+    "rotating": "This name answers from {n} different addresses: it is a load-balanced service. Each pass measures whichever server DNS returned, so the figures below mix machines that may sit in different places and carry different loads. A server that ignores ICMP shows up as loss.",
+    "pinned": "Measured at a fixed address, {ip}: the name may point elsewhere, the figures below always describe the same machine."
   },
   "fed": {
     "title": "Federation",

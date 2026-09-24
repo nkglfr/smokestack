@@ -86,7 +86,9 @@
     "preset_30h": "30 h",
     "preset_10d": "10 g",
     "preset_3m": "3 mesi",
-    "preset_1y": "1 anno"
+    "preset_1y": "1 anno",
+    "rotating": "Questo nome risponde da {n} indirizzi diversi: è un servizio con bilanciamento del carico. Ogni passaggio misura il server restituito dal DNS, quindi i valori sotto mescolano macchine che possono trovarsi in luoghi diversi e con carichi diversi. Un server che ignora l'ICMP appare come perdita.",
+    "pinned": "Misurato su un indirizzo fisso, {ip}: il nome può puntare altrove, i valori sotto descrivono sempre la stessa macchina."
   },
   "fed": {
     "title": "Federazione",

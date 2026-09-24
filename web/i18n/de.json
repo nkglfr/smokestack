@@ -86,7 +86,9 @@
     "preset_30h": "30 Std.",
     "preset_10d": "10 T.",
     "preset_3m": "3 Mon.",
-    "preset_1y": "1 J."
+    "preset_1y": "1 J.",
+    "rotating": "Dieser Name antwortet von {n} verschiedenen Adressen: ein lastverteilter Dienst. Jede Runde misst den Server, den das DNS geliefert hat, daher vermischen die Zahlen unten Maschinen an möglicherweise verschiedenen Orten und mit unterschiedlicher Last. Ein Server, der ICMP ignoriert, erscheint als Verlust.",
+    "pinned": "Auf einer festen Adresse gemessen, {ip}: der Name kann auf etwas anderes zeigen, die Zahlen unten beschreiben immer dieselbe Maschine."
   },
   "fed": {
     "title": "Föderation",

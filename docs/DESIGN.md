@@ -304,7 +304,11 @@ therefore keeps the send time per sequence number on its own side and uses
 the echoed one only when it is present and plausible; otherwise those
 answered probes were counted as lost.
 
-**Rotating names.** The address actually probed travels with every
+**Rotating names, said out loud.** A visitor reading a median and a loss
+figure assumes they describe one machine. When the name answered from
+several addresses, the public page says otherwise, above the figures, and so
+does the indexed description; the back-office offers to pin one address. The
+address actually probed travels with every
 measurement and is kept per target for 24 hours. A name that answers from
 several addresses is a pool: the back-office says so and offers to pin one
 address, which the probe then uses instead of resolving. Without that, a

@@ -384,6 +384,9 @@ function renderDetail() {
     <div class="tags"><span class="tag mono">${esc(tg.host)}</span><span class="tag">${esc(tg.proto.toUpperCase())} · ${tg.interval_s} s</span>
       ${tg.public === false ? `<span class="tag" style="background:var(--warn-soft);color:var(--warn)">${esc(t("status.private"))}</span>` : ""}
       ${tg.base_ms != null ? `<span class="tag">ref. ${n2(tg.base_ms)} ms</span>` : ""}</div>
+    ${(!tg.pin_ip && tg.addresses && tg.addresses.length > 1) ? `<div class="note-rot">${esc(t("detail.rotating", { n: tg.addresses.length }))}
+      <div class="mono" style="margin-top:6px;font-size:11.5px;opacity:.85">${tg.addresses.slice(0, 6).map(esc).join(" · ")}${tg.addresses.length > 6 ? " …" : ""}</div></div>` : ""}
+    ${tg.pin_ip ? `<div class="note-pin">${esc(t("detail.pinned", { ip: tg.pin_ip }))}</div>` : ""}
     <div class="presets" id="pr">${PRESETS.map(([key], i) => `<button class="preset" data-p="${i}" aria-pressed="${S.preset === i}">${esc(t(key))}</button>`).join("")}
       <button class="preset" id="cp" style="margin-left:auto">🔗 ${esc(t("common.copy_link"))}</button></div>
     <div class="card" style="margin-top:12px"><div class="card-b"><div id="cw"><canvas id="ch" height="330"></canvas><div class="tip" id="tip"></div></div>

@@ -215,6 +215,16 @@ func (a *API) targetMeta(r *http.Request, slug string) (pageMeta, bool) {
 			desc := fmt.Sprintf("Latency and packet loss measured from %s towards %s (%s), %s. "+
 				"Percentiles over one year, %s every %d s.",
 				org, t.Title, t.Host, state, strings.ToUpper(t.Proto), t.Interval)
+			// Say it here too: a page indexed without this reads as if the
+			// figures described one machine.
+			switch {
+			case t.PinIP != "":
+				desc += fmt.Sprintf(" Measured at the fixed address %s.", t.PinIP)
+			case len(t.Addresses) > 1:
+				desc += fmt.Sprintf(" This name answers from %d different addresses, so the "+
+					"figures mix load-balanced servers that may sit in different places.",
+					len(t.Addresses))
+			}
 			body := fmt.Sprintf("<h1>%s</h1>\n<p>%s</p>\n<p>Measured from %s. <a href=\"/\">All targets</a></p>\n",
 				esc(t.Title), esc(desc), esc(org))
 			return pageMeta{

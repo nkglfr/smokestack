@@ -86,7 +86,9 @@
     "preset_30h": "30 t",
     "preset_10d": "10 d",
     "preset_3m": "3 mdr.",
-    "preset_1y": "1 år"
+    "preset_1y": "1 år",
+    "rotating": "Dette navn svarer fra {n} forskellige adresser: det er en lastbalanceret tjeneste. Hver runde måler den server, DNS gav, så tallene nedenfor blander maskiner, der kan stå forskellige steder og have forskellig belastning. En server, der ignorerer ICMP, vises som tab.",
+    "pinned": "Målt på en fast adresse, {ip}: navnet kan pege et andet sted, tallene nedenfor beskriver altid den samme maskine."
   },
   "fed": {
     "title": "Føderation",
