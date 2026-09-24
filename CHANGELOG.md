@@ -3,7 +3,7 @@
 Versions are published as signed releases; servers with automatic updates
 install the newest one directly, whatever versions came in between.
 
-## Unreleased
+## 0.2.10
 
 - **Reaching the NOC of a network on the path**: each traceroute hop with an
   AS gets a button showing what that network declares in PeeringDB — NOC
@@ -14,7 +14,6 @@ install the newest one directly, whatever versions came in between.
   front of PeeringDB.
 - Fixed: the `User-Agent` sent to RIPEstat and PeeringDB still announced
   version 0.1.
-
 - **Share a single target with a read-only link** (idea #15), made for
   troubleshooting across networks: a transit provider's support, another AS's
   NOC or a customer opens your own measurement — percentiles, loss and the
@@ -28,14 +27,12 @@ install the newest one directly, whatever versions came in between.
 - **Hops over time** (idea #16): the traceroutes screen charts the hop count
   of each traceroute over 30 days, with the AS path on hover — the visual
   counterpart of the AS-path comparison.
-
 - **Free interval** (idea #14): any value from 10 seconds to a day, bounded
   only by the burst rule. The status window now follows the interval, so a
   target measured every 30 minutes no longer reads as having no data.
 - **Retention per target** (idea #17): keep a target's measurements for a
   number of days instead of the instance tiers — raw passes, every rollup
   tier and its traceroutes.
-
 - **The public navigation adapts** (idea #11): Federation and Pairing appear
   only when federation is enabled, Host network only with an AS number. No
   more tabs leading to empty pages.
@@ -46,12 +43,16 @@ install the newest one directly, whatever versions came in between.
   everywhere — page, API and indexed description. For dashboards given to
   customers.
 
+## 0.2.9
+
 - **"Why this loss?"** on each target: the instance reads the shape of the
   loss over 24 hours and tells rate limiting, real outages and path loss
   apart — one or two packets per burst is a limiter, whole passes lost is an
   outage, several packets at once is the path. For a limiter it offers a
   gentler burst, applied in one click; for an outage it says explicitly that
   tuning would only hide it. Nothing is ever applied on its own.
+
+## 0.2.8
 
 - **Topology changes are detected**: a healthy path is compared with the
   previous one, and a change of **AS path** is recorded as an event on the
@@ -60,7 +61,6 @@ install the newest one directly, whatever versions came in between.
   nothing. When a degradation follows such a change, the alert names it
   first. A target can take its reference more often than the instance
   default, in its settings.
-
 - **Deleting a target now archives it.** Its name becomes free again, so a
   target of the same name can be recreated, and its measurements stay
   attached to the archived one. This also fixes a worse problem found while
@@ -69,7 +69,6 @@ install the newest one directly, whatever versions came in between.
   purged for good.
 - **A service log screen in the back-office**: the last 500 lines, with a
   filter and optional auto-refresh, for when you have no shell at hand.
-
 - **Failing targets are logged**: one line when a target starts failing, with
   the reason, and one when it answers again. Until now the reason was only in
   the back-office, so `journalctl` and `docker logs` said nothing.
@@ -77,18 +76,18 @@ install the newest one directly, whatever versions came in between.
   "missing port in address".
 - The guide states plainly that a TCP target reads **no HTTP status code**: a
   service answering 403 is measured like any other.
-
 - The load-balanced notice on a public page no longer lists the addresses,
   only how many there are: they describe the inside of a third-party service
   and there can be many. The list is no longer in the public API either — it
   stays in the back-office, where it serves to pick one to pin.
+
+## 0.2.7
 
 - The back-office invites operators to post their instance URL in the
   project's *Show and tell* discussions, to find networks to pair with.
 - The *Unique targets* checkbox no longer crowds the section header: the
   count sits next to the title, and the checkbox became a pill that moves to
   its own line on a narrow screen instead of breaking apart.
-
 - **Fixed: the pairing page showed version 0.1**, a string left hard-coded in
   the first version of the federation profile.
 - **Fixed: the host network page could fail with a JSON error.** It fetched
@@ -105,7 +104,6 @@ install the newest one directly, whatever versions came in between.
   against harvesters, links to your own tools, or nothing — plus an optional
   built-in robot check (proof of work, no third party, nothing to read so it
   works in every language).
-
 - Alerting can be switched off **per target** as well as globally: a target
   left out is still measured and its incidents still recorded.
 - **Notification channels**: alerts now leave through channels you configure

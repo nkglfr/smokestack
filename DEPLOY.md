@@ -477,7 +477,10 @@ git tag v0.2.2 && git push origin v0.2.2
 
 The version must be described in [CHANGELOG.md](CHANGELOG.md), either in a
 section named exactly `## X.Y.Z` or in the `## Unreleased` section where
-pending work is written until a number is chosen. The workflow reads it as
+pending work is written until a number is chosen. **After a release, rename
+that section to the version that went out**: `scripts/changelog-check.sh`,
+run by the CI, refuses a tag without its own section and a section without
+its tag, and checks that sections are in descending order. The workflow reads it as
 the release notes and stops before publishing anything if neither exists,
 which is what keeps the changelog and the published versions from drifting
 apart. After a release, rename `## Unreleased` to the version you tagged.

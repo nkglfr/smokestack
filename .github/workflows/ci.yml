@@ -36,6 +36,13 @@ jobs:
               subprocess.run(["node", "--check", t.name], check=True)
           PY
           done
+      # The changelog and the published versions drifted twice: entries piled
+      # up under one heading while three versions were already out.
+      - name: Check the changelog against the tags
+        run: |
+          git fetch --tags --quiet || true
+          sh scripts/changelog-check.sh
+
       - name: Check the installer
         run: sh -n install.sh
 
