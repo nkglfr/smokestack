@@ -10,6 +10,9 @@ install the newest one directly, whatever versions came in between.
   section, and checks that sections stay in descending order. Entries for
   0.2.7 to 0.2.10 had piled up under one heading while those four versions
   were already out.
+- Fixed: a share link created with 0 days expired after 30 days instead of
+  never. The API took an explicit 0 for a missing value and applied the
+  default; 30 days now only applies when `days` is left out.
 
 ## 0.2.10
 
