@@ -93,7 +93,9 @@
     "nav_hint": "L'historique complet d'un coup d'œil. Glissez dessus pour zoomer le graphe ci-dessus sur une période, double-cliquez pour revenir.",
     "events": "Événements sur cette période",
     "route_changed": "route changée",
-    "ev_hint": "Un repère pointillé signale un changement de route sur le chemin aller, de cette sonde vers cette cible : le traceroute a traversé d'autres réseaux qu'auparavant. Cela ne concerne que cette cible, pas l'instance, et ne dit rien du chemin retour, invisible depuis ici. Aucune alerte n'est déclenchée : rien n'est cassé, le chemin n'est simplement plus le même. Les cibles dont le chemin n'a jamais changé ne portent aucun repère."
+    "ev_hint": "Un repère pointillé signale un changement de route sur le chemin aller, de cette sonde vers cette cible : le traceroute a traversé d'autres réseaux qu'auparavant. Cela ne concerne que cette cible, pas l'instance, et ne dit rien du chemin retour, invisible depuis ici. Aucune alerte n'est déclenchée : rien n'est cassé, le chemin n'est simplement plus le même. Les cibles dont le chemin n'a jamais changé ne portent aucun repère.",
+    "aspath": "Route vers cette cible",
+    "aspath_hint": "Les systèmes autonomes traversés par les paquets à l'aller, d'après le dernier traceroute. Le chemin retour peut être différent."
   },
   "fed": {
     "title": "Fédération",

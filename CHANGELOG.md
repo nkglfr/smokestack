@@ -8,6 +8,14 @@ install the newest one directly, whatever versions came in between.
 - The notices on a target page (load-balanced name, pinned address, shared
   graph) now span the full width of the page instead of stopping short of the
   graph above them.
+- **The route to a target is shown under its graph**: the autonomous systems
+  the packets crossed on their way there, as the last traceroute measured
+  them, one box per network with its name. It follows the visibility of the
+  traceroutes it comes from — never for a private target, a target hiding its
+  address, or an instance that does not publish traces — and is available
+  through a share link.
+- The zoom hint sits under the graph it describes, instead of below the
+  figures further down.
 - **Events on a graph are readable.** A route change used to write its whole
   AS path across the plot next to a vertical line, which told a visitor
   nothing. The graph now carries a dashed mark with a number, and a list

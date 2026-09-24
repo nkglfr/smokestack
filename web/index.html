@@ -318,6 +318,25 @@ function draw(cv, s, o) {
 
 // The numbered marks on the graph, spelled out: date, what happened, and the
 // detail — the AS paths for a route change.
+// The route as measured: one box per autonomous system crossed, from this
+// network to the destination. Derived from the traceroutes, so it follows
+// their visibility rules.
+async function renderASPath(tg) {
+  const box = document.getElementById("asbox"), chain = document.getElementById("aschain");
+  if (!box || !chain) return;
+  let v = null;
+  try {
+    v = await fetch(`/api/v1/aspath?target=${tg.id}` + (SHARE ? "&share=" + encodeURIComponent(SHARE) : ""))
+      .then(r => r.ok ? r.json() : null);
+  } catch (e) { /* the graph matters more than this */ }
+  if (!v || !(v.path || []).length) { box.hidden = true; return; }
+  box.hidden = false;
+  chain.innerHTML = v.path.map((h, i) => `${i ? `<span class="asarrow">→</span>` : ""}
+    <span class="asnode${i === 0 ? " self" : ""}" title="${esc(h.name || h.asn)}${h.hops > 1 ? ` · ${h.hops} hops` : ""}">
+      <span class="asn">${esc(h.asn)}</span>${h.name ? `<span class="asname">${esc(h.name)}</span>` : ""}</span>`).join("")
+    + (v.reached ? "" : `<span class="asarrow">→</span><span class="asnode unreached">?</span>`);
+}
+
 function renderEvents() {
   const box = document.getElementById("evbox"), list = document.getElementById("evlist");
   if (!box || !list) return;
@@ -430,13 +449,18 @@ function renderDetail() {
       <span><span class="sw" style="width:16px;height:9px;background:${rgba(acc, .3)}"></span>p25–p75</span>
       <span><span class="sw" style="width:16px;height:9px;background:${rgba(acc, .15)}"></span>p5–p95</span>
       <span><span class="sw" style="width:10px;height:9px;background:var(--crit)"></span>${esc(t("metric.loss"))}</span>
-      <span class="mono faint" id="res" style="margin-left:auto"></span></div></div></div>
+      <span class="mono faint" id="res" style="margin-left:auto"></span></div>
+      <p class="strip-hint" style="margin-top:6px">${esc(t("detail.hint"))}</p></div></div>
     <div class="card" style="margin-top:10px"><div class="card-b" style="padding-block:10px">
       <div class="lbl" style="margin-bottom:5px">${esc(t("home.last24h"))}</div>${hbarHTML(tg)}
       <div class="hbar-l"><span>−24 h</span><span>−12 h</span><span>${esc(t("common.updated"))}</span></div>
       <p class="strip-hint">${esc(t("detail.last24_hint"))}</p>
       <div class="lbl" style="margin:14px 0 3px">${esc(t("detail.navigator"))}</div><canvas id="nv" height="58"></canvas>
       <p class="strip-hint">${esc(t("detail.nav_hint"))}</p></div></div>
+    <div class="card" id="asbox" hidden style="margin-top:10px"><div class="card-b" style="padding-block:12px">
+      <div class="lbl" style="margin-bottom:7px">${esc(t("detail.aspath"))}</div>
+      <div class="aschain" id="aschain"></div>
+      <p class="strip-hint">${esc(t("detail.aspath_hint"))}</p></div></div>
     <div class="card" id="evbox" hidden style="margin-top:10px"><div class="card-b" style="padding-block:12px">
       <div class="lbl" style="margin-bottom:6px">${esc(t("detail.events"))}</div>
       <ol class="evlist" id="evlist"></ol>
@@ -468,6 +492,7 @@ async function paint() {
   $("#res").textContent = `${cur.resolution} · ${cur.step_s || tg.interval_s}s · ${cur.t.length} pts`;
   S.g = draw($("#ch"), cur, { height: 330, loss: 1, events: S.events, accent: acc, from: S.from, to: S.to });
   renderEvents();
+  renderASPath(tg);
   S.ng = draw($("#nv"), nav, { height: 58, bare: 1, accent: acc, from: now - 365 * 86400, to: now }); sel();
   const jit = cur.p75.map((v, i) => v != null && cur.p25[i] != null ? v - cur.p25[i] : null);
   const st = (key, v, u) => `<div class="st"><div class="k">${esc(t(key))}</div><div class="v">${v}<span class="u">${u}</span></div></div>`;

@@ -160,3 +160,51 @@ func TestPeeringDBContactOrder(t *testing.T) {
 		}
 	}
 }
+
+// The AS-level route follows the visibility of the traceroutes it comes
+// from, and collapses consecutive hops of one network.
+func TestLastASPath(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	cat, _ := store.CreateCategory("c", "C", "C", true)
+	id, err := store.CreateTarget(&Target{CategoryID: cat, Slug: "t", Title: "T", Host: "192.0.2.9",
+		Proto: "icmp", IntervalS: 60, Packets: 10, SpacingMs: 100, TimeoutMs: 1000,
+		Public: true, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := store.LastASPath(id); ok {
+		t.Error("no traceroute yet, so no route")
+	}
+	now := time.Now().Unix()
+	if err := store.SaveTraceroute(&Traceroute{TargetID: id, ProbeID: 1, TS: now - 600,
+		Kind: "reference", Family: 4, Dest: "192.0.2.9", Reached: true, Hops: []Hop{
+			hopAS("192.0.2.1", "AS64500"), hopAS("192.0.2.2", "AS64500"),
+			hopAS("198.51.100.1", "AS174"), hopAS("198.51.100.9", "AS174"),
+			hopAS("203.0.113.5", "AS15169")}}); err != nil {
+		t.Fatal(err)
+	}
+	v, ok := store.LastASPath(id)
+	if !ok || len(v.Path) != 3 {
+		t.Fatalf("three networks expected, got %+v", v)
+	}
+	if v.Path[0].ASN != "AS64500" || v.Path[0].Hops != 2 {
+		t.Errorf("consecutive hops of one network must collapse: %+v", v.Path[0])
+	}
+	if v.Path[2].ASN != "AS15169" || !v.Reached {
+		t.Errorf("the destination network must end the route: %+v", v)
+	}
+	// A silent hop breaks nothing.
+	if err := store.SaveTraceroute(&Traceroute{TargetID: id, ProbeID: 1, TS: now - 60,
+		Kind: "reference", Family: 4, Dest: "192.0.2.9", Reached: false, Hops: []Hop{
+			hopAS("192.0.2.1", "AS64500"), hopAS("*", ""), hopAS("198.51.100.1", "AS3356")}}); err != nil {
+		t.Fatal(err)
+	}
+	v, _ = store.LastASPath(id)
+	if len(v.Path) != 2 || v.Path[1].ASN != "AS3356" || v.Reached {
+		t.Errorf("the newest reference should win: %+v", v)
+	}
+}

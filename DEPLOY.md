@@ -738,6 +738,14 @@ under it: date, what happened, and for a route change the AS path before and
 after. Writing the path across the plot, as earlier versions did, made the
 graph unreadable and told a visitor nothing.
 
+Under the graph, **Route to this target** shows the autonomous systems the
+packets crossed on their way there, one box per network, from yours to the
+destination's. It comes from the last traceroute, so it follows the same
+rules: nothing for a private target, nothing for a target hiding its address,
+and publicly only if you publish traceroutes. A share link carries it, which
+is what makes the link useful in a ticket — the other side sees the route
+without a word of explanation.
+
 **What a route change actually means, and why only some graphs carry one.**
 It is measured, not inferred: the probe records a traceroute towards that
 target while it is healthy, and compares it with the previous one. A mark

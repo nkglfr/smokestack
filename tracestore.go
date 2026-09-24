@@ -278,7 +278,97 @@ func (a *API) hopSeries(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, pts)
 }
 
+// ASPathHop : un AS du chemin, avec son nom quand on le connait.
+type ASPathHop struct {
+	ASN  string `json:"asn"`
+	Name string `json:"name,omitempty"`
+	Hops int    `json:"hops"` // combien de sauts dans cet AS
+}
+
+type ASPathView struct {
+	TS      int64       `json:"ts"`
+	Reached bool        `json:"reached"`
+	Kind    string      `json:"kind"`
+	Path    []ASPathHop `json:"path"`
+}
+
+// LastASPath returns the autonomous systems the last healthy traceroute
+// crossed: the route from this probe to that target, as measured.
+func (s *Store) LastASPath(targetID int64) (*ASPathView, bool) {
+	trs, err := s.Traceroutes(targetID, []string{"reference"}, 1)
+	if err != nil || len(trs) == 0 {
+		// No healthy reference yet: the most recent traceroute still says
+		// which networks the packets crossed.
+		trs, err = s.Traceroutes(targetID, nil, 1)
+		if err != nil || len(trs) == 0 {
+			return nil, false
+		}
+	}
+	tr := trs[0]
+	v := &ASPathView{TS: tr.TS, Reached: tr.Reached, Kind: tr.Kind}
+	for _, h := range tr.Hops {
+		as := strings.TrimSpace(h.ASN)
+		if as == "" {
+			continue
+		}
+		if n := len(v.Path); n > 0 && v.Path[n-1].ASN == as {
+			v.Path[n-1].Hops++
+			continue
+		}
+		v.Path = append(v.Path, ASPathHop{ASN: as, Hops: 1})
+	}
+	if len(v.Path) == 0 {
+		return nil, false
+	}
+	return v, true
+}
+
+// asPathView serves the AS-level route of a target, under the same rules as
+// the traceroutes it comes from: never for a private target, never for one
+// hiding its address, and publicly only if the operator publishes traces.
+func (a *API) asPathView(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.URL.Query().Get("target"), 10, 64)
+	if err != nil {
+		writeErr(w, 400, "missing target parameter")
+		return
+	}
+	t, err := a.store.TargetByID(id)
+	if err != nil {
+		writeErr(w, 404, "target not found")
+		return
+	}
+	authed := a.authenticated(r)
+	if shared, ok := a.shareGrant(r); ok && shared == id {
+		authed = true
+	}
+	if !authed {
+		if !t.Public || t.HideHost || !a.store.Site().PublicTraceroutes {
+			writeJSON(w, map[string]any{"path": []any{}})
+			return
+		}
+	}
+	v, ok := a.store.LastASPath(id)
+	if !ok {
+		writeJSON(w, map[string]any{"path": []any{}})
+		return
+	}
+	// The name of each AS, from what is already cached: no lookup while a
+	// visitor waits.
+	for i := range v.Path {
+		if info, _ := a.asn.Cached(strings.TrimPrefix(v.Path[i].ASN, "AS")); info != nil {
+			if info.PeeringDB != nil && info.PeeringDB.Name != "" {
+				v.Path[i].Name = info.PeeringDB.Name
+			} else {
+				v.Path[i].Name = info.Holder
+			}
+		}
+	}
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	writeJSON(w, v)
+}
+
 func (a *API) TracerouteRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/v1/aspath", a.asPathView)
 	mux.HandleFunc("GET /api/v1/admin/hops", a.auth(a.hopSeries))
 	mux.HandleFunc("GET /api/v1/traceroutes", a.traceroutesPublic)
 	mux.HandleFunc("GET /api/v1/admin/traceroutes", a.need(RoleViewer, a.traceroutesAdmin))

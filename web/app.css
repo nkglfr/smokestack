@@ -219,3 +219,14 @@ table.t td { padding: 10px; border-top: 1px solid var(--line-2); vertical-align:
 .evdate { color: var(--ink3); margin-right: 8px; }
 .evwhat { font-weight: 500; }
 .evdetail { color: var(--ink2); margin-left: 8px; font-size: 11.5px; }
+
+/* --- chaîne des AS traversés --- */
+.aschain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.asnode { display: inline-flex; flex-direction: column; line-height: 1.25;
+  border: 1px solid var(--line); border-radius: 8px; padding: 5px 9px; background: var(--bg-soft); }
+.asnode.self { border-color: var(--accent); }
+.asnode.unreached { color: var(--ink3); font-style: italic; }
+.asnode .asn { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 600; }
+.asnode .asname { font-size: 10.5px; color: var(--ink3); max-width: 160px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; }
+.asarrow { color: var(--ink3); font-size: 12px; }

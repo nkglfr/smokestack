@@ -93,7 +93,9 @@
     "nav_hint": "Die gesamte Historie auf einen Blick. Ziehen Sie darüber, um den Graphen oben auf einen Zeitraum zu zoomen; Doppelklick kehrt zurück.",
     "events": "Ereignisse in diesem Zeitraum",
     "route_changed": "Route geändert",
-    "ev_hint": "Eine gestrichelte Marke zeigt einen Routenwechsel auf dem Hinweg von dieser Sonde zu diesem Ziel: Der Traceroute durchquerte andere Netze als zuvor. Das betrifft nur dieses Ziel, nicht die Instanz, und sagt nichts über den Rückweg, der von hier unsichtbar ist. Es wird kein Alarm ausgelöst: nichts ist defekt, der Pfad ist nur nicht mehr derselbe. Ziele ohne Pfadwechsel tragen keine Marke."
+    "ev_hint": "Eine gestrichelte Marke zeigt einen Routenwechsel auf dem Hinweg von dieser Sonde zu diesem Ziel: Der Traceroute durchquerte andere Netze als zuvor. Das betrifft nur dieses Ziel, nicht die Instanz, und sagt nichts über den Rückweg, der von hier unsichtbar ist. Es wird kein Alarm ausgelöst: nichts ist defekt, der Pfad ist nur nicht mehr derselbe. Ziele ohne Pfadwechsel tragen keine Marke.",
+    "aspath": "Route zu diesem Ziel",
+    "aspath_hint": "Die autonomen Systeme, die die Pakete auf dem Hinweg durchquert haben, laut letztem Traceroute. Der Rückweg kann abweichen."
   },
   "fed": {
     "title": "Föderation",
