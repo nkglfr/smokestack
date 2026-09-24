@@ -5,6 +5,10 @@ install the newest one directly, whatever versions came in between.
 
 ## 0.2.3
 
+- **Fixed: pages could be served stale from a cache.** The metadata injected
+  into the public pages changes with every measurement, but the pages still
+  carried the version-wide `ETag`, so a browser or a proxy could be told
+  "not modified" and show an outdated description or summary.
 - **Rotating names are detected**: a target whose name answered from several
   addresses in 24 hours is flagged in the back-office, with a button to pin
   the address actually measured. A pool name such as `fr.pool.ntp.org` points

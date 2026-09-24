@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -140,5 +141,32 @@ func TestInjectAndShorten(t *testing.T) {
 	}
 	if len(shorten(strings.Repeat("mot ", 200), 100)) > 104 {
 		t.Error("descriptions must be shortened")
+	}
+}
+
+// An injected page must not carry the version-wide ETag: its description
+// and its summary change with every measurement, so a cache answering
+// "not modified" would serve a stale page.
+func TestInjectedPagesAreNotCachedByETag(t *testing.T) {
+	store := seoStore(t)
+	defer store.Close()
+	api := &API{store: store, probeID: 1}
+	injected := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Write(inject([]byte("<html><head></head><body></body></html>"),
+			api.seoHead(r, pageMeta{Path: "/"}), ""))
+	}
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("If-None-Match", `W/"0.2.5-"`)
+	injected(rec, req)
+	if rec.Code != 200 {
+		t.Errorf("an injected page must always be served: HTTP %d", rec.Code)
+	}
+	if rec.Header().Get("ETag") != "" {
+		t.Error("an injected page must not carry a shared ETag")
+	}
+	if rec.Header().Get("Cache-Control") != "no-cache" {
+		t.Errorf("Cache-Control: %q", rec.Header().Get("Cache-Control"))
 	}
 }

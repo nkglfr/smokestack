@@ -290,7 +290,7 @@ func main() {
 	// Public pages get their metadata and a no-JavaScript summary injected
 	// on the way out, so that a crawler sees a real page.
 	page := func(name string, meta func(*http.Request) (pageMeta, bool)) http.HandlerFunc {
-		return withAssetCache(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			b, err := fs.ReadFile(sub, name)
 			if err != nil {
 				http.NotFound(w, r)
@@ -308,7 +308,18 @@ func main() {
 				b = inject(b, api.seoHead(r, m), m.Body)
 			}
 			w.Write(b)
-		}), 0).ServeHTTP
+		})
+		if meta != nil {
+			// An injected page carries the site settings and the current
+			// state of the targets: it must not share the version-wide
+			// ETag, which would let a cache answer "not modified" with a
+			// stale description and summary.
+			return func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Cache-Control", "no-cache")
+				h.ServeHTTP(w, r)
+			}
+		}
+		return withAssetCache(h, 0).ServeHTTP
 	}
 	fixed := func(m pageMeta) func(*http.Request) (pageMeta, bool) {
 		return func(*http.Request) (pageMeta, bool) { return m, true }
