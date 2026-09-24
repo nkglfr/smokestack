@@ -3,6 +3,14 @@
 Versions are published as signed releases; servers with automatic updates
 install the newest one directly, whatever versions came in between.
 
+## Unreleased
+
+- The changelog is sorted per released version, and `scripts/changelog-check.sh`
+  keeps it that way: the CI refuses a published version without its own
+  section, and checks that sections stay in descending order. Entries for
+  0.2.7 to 0.2.10 had piled up under one heading while those four versions
+  were already out.
+
 ## 0.2.10
 
 - **Reaching the NOC of a network on the path**: each traceroute hop with an
