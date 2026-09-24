@@ -511,11 +511,33 @@ the following release.
 | Health check | `curl -s http://127.0.0.1:8080/healthz` → `ok` |
 | A target appears several times on the home page | It is faulty *and* critical *and* in a category. The **Unique targets** box at the top of the faults section keeps it in one place — hover its blue marker for the details; the choice is remembered in the visitor's browser |
 | The back-office on a phone | The menu slides over the page and closes when a screen is chosen; the target list shows one card per target, with its host and category under the name |
+| Too much loss on one target | Rate limiting, a rotating name or a real path problem: the wiki page [Configuring targets](https://github.com/nkglfr/smokestack/wiki/Configuring-targets) tells the three apart and gives the settings to use |
 | Nobody can reach you | The *About* page shows the contact form, not your address. Check it is enabled in *Publisher page*, and look in *Messages* |
 | Interface unreachable from a browser | By default it listens on `127.0.0.1` only: set `SMOKESTACK_LISTEN_IP=0.0.0.0` in `/etc/smokestack/smokestack.env` and restart, or use a reverse proxy. Check the firewall too. |
 | `listen address: ... invalid` in the log | Fix the value named in the message in `/etc/smokestack/smokestack.env` |
 | `curl: (22) ... 404` when downloading `install.sh` | No release has been published yet: install from source (section 2) or publish one (section 6) |
 | `sudo: command not found` | You are root already: run the command without `sudo` |
+
+### Being warned about your own targets
+
+*Federation → My targets alerting* sends an alert when one of your targets
+stays in incident longer than you choose (5 minutes by default). A traceroute
+is taken the moment the incident opens, and its path — compared with the last
+healthy one — travels in the message, so the person reading it at 3 a.m. knows
+where it breaks without opening anything.
+
+| Setting | Effect |
+|---|---|
+| After how long | Sustained incident before anyone is woken up; a blip alerts nobody |
+| Silence between two alerts | Per target, 6 hours by default: a flapping link does not alert every hour |
+| Recipients | Email addresses, never published |
+| Webhook | Optional, works without SMTP |
+| Tell me when it is over | A recovery notice, on by default |
+
+Emails use the SMTP settings of *NOC alerting*, which warns a **peer's** NOC
+about **their** network. The two are separate: one is about the others,
+this one is about you. Incidents are recorded either way, alerting off
+included, and listed on the same screen.
 
 ### A single target never answers
 

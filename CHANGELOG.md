@@ -5,6 +5,15 @@ install the newest one directly, whatever versions came in between.
 
 ## 0.2.6
 
+- **Alerting on your own targets**: an alert when a target stays in incident
+  longer than you choose, with the traceroute taken when the incident opened
+  and compared with the last healthy path. Silence window per target,
+  optional recovery notice, email or webhook. Until now only the federation
+  could alert, and only a peer's NOC about their network.
+- A wiki page on **sizing and adjusting targets**: how to tell ICMP rate
+  limiting, a rotating name and a real path problem apart, with the settings
+  to use. Linked from the back-office.
+
 - The changelog is checked when a version is published: the release workflow
   reads the section of the version being tagged and uses it as the release
   notes, and refuses to publish without it. Versions 0.2.4 and 0.2.5 had been

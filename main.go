@@ -356,6 +356,9 @@ func main() {
 	mux.Handle("GET /", withAssetCache(http.FileServer(http.FS(sub)), 300))
 	mux.HandleFunc("GET /api/v1/admin/probe/status", api.need(RoleViewer, api.probeStatus))
 	go ovCache.Loop(stop)
+	alerter := NewAlerter(store)
+	api.alerter = alerter
+	go alerter.Loop(stop, api.probeID)
 
 	// Compression et limite de debit devant toutes les routes.
 	handler := withRateLimit(newRateLimiter(20, 80), withGzip(mux))

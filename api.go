@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/mail"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,6 +22,7 @@ type API struct {
 	probeID   int64
 	limiter   *attemptLimiter
 	i18n      *I18n
+	alerter   *Alerter
 	asn       *ASNService
 	upd       *Updater
 	writer    *Writer
@@ -55,6 +57,8 @@ func (a *API) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/v1/admin/targets/{id}", a.auth(a.targetsPatch))
 	mux.HandleFunc("DELETE /api/v1/admin/targets/{id}", a.auth(a.targetsDelete))
 	mux.HandleFunc("POST /api/v1/admin/targets/{id}/check", a.auth(a.targetsCheck))
+	mux.HandleFunc("GET /api/v1/admin/alerts", a.need(RoleAdmin, a.alertsGet))
+	mux.HandleFunc("PUT /api/v1/admin/alerts", a.need(RoleAdmin, a.alertsPut))
 	mux.HandleFunc("POST /api/v1/admin/categories", a.auth(a.categoriesPost))
 	mux.HandleFunc("PATCH /api/v1/admin/categories/{id}", a.auth(a.categoriesPatch))
 	mux.HandleFunc("DELETE /api/v1/admin/categories/{id}", a.auth(a.categoriesDelete))
@@ -730,4 +734,49 @@ func (a *API) categoriesDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	go ovCache.build()
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// alertsGet returns the local alerting settings and the recent incidents.
+func (a *API) alertsGet(w http.ResponseWriter, r *http.Request, u *User) {
+	out := map[string]any{"config": a.store.AlertConfig()}
+	if a.alerter != nil {
+		if inc, err := a.alerter.Incidents(30); err == nil {
+			out["incidents"] = inc
+		}
+	}
+	n := loadNotifyConfig(a.store)
+	out["smtp_ready"] = n.SMTPHost != "" && n.From != ""
+	writeJSON(w, out)
+}
+
+func (a *API) alertsPut(w http.ResponseWriter, r *http.Request, u *User) {
+	var c AlertConfig
+	if err := json.NewDecoder(r.Body).Decode(&c); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	if c.AfterMinutes < 1 || c.AfterMinutes > 1440 {
+		writeErr(w, 400, "after_minutes must be between 1 and 1440")
+		return
+	}
+	if c.RepeatHours < 1 || c.RepeatHours > 168 {
+		writeErr(w, 400, "repeat_hours must be between 1 and 168")
+		return
+	}
+	if c.Enabled && strings.TrimSpace(c.Recipients) == "" && strings.TrimSpace(c.WebhookURL) == "" {
+		writeErr(w, 400, "give at least one recipient address or a webhook")
+		return
+	}
+	for _, addr := range splitList(c.Recipients) {
+		if _, err := mail.ParseAddress(addr); err != nil {
+			writeErr(w, 400, fmt.Sprintf("%q is not a valid email address", addr))
+			return
+		}
+	}
+	if err := a.store.SetAlertConfig(c); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	a.store.Audit(u, clientIP(r), "alerts_settings", "alerts", "")
+	writeJSON(w, map[string]any{"ok": true})
 }

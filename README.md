@@ -164,6 +164,7 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 - A catalogue of ready-made targets to enable in one click, plus per-country
   suggestions in the [wiki](https://github.com/nkglfr/smokestack/wiki)
 - A contact form on the public pages, so your address stays off spam lists
+- Alerts on your own targets after a sustained incident, traceroute included
 - Indexable public pages: titles, descriptions, readable addresses per target,
   sitemap and a summary that works without JavaScript
 - Public or **private** targets: private ones are measured and visible in the back-office only

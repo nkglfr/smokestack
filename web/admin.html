@@ -220,7 +220,8 @@ const NAV=[
   {id:"messages",label:"Messages", min:3, mbadge:true},
   {grp:"Federation"},
   {id:"fed",    label:"Peers and pairing", min:3, badge:true},
-  {id:"notify", label:"NOC alerting", min:3},
+  {id:"notify", label:"NOC alerting (federation)", min:3},
+  {id:"alerts", label:"My targets alerting", min:3},
   {grp:"Instance"},
   {id:"storage",label:"Storage", min:3},
   {id:"site",   label:"Publisher page", min:3},
@@ -284,7 +285,7 @@ async function changePassword(){
 
 function render(){
   const m=$("#main");
-  const views={dash:viewDash,targets:viewTargets,traces:viewTraces,messages:viewMessages,fed:viewFed,notify:viewNotify,
+  const views={dash:viewDash,targets:viewTargets,traces:viewTraces,messages:viewMessages,alerts:viewAlerts,fed:viewFed,notify:viewNotify,
     storage:viewStorage,site:viewSite,net:viewNet,langs:viewLangs,update:viewUpdate,users:viewUsers,audit:viewAudit};
   return (views[VIEW]||viewDash)(m);
 }
@@ -412,7 +413,9 @@ async function viewTargets(m){
         their category is created if needed, and they are measured right away.<br>
         Looking for targets in a given country or region? The
         <a href="https://github.com/nkglfr/smokestack/wiki" target="_blank" rel="noreferrer">project wiki</a>
-        keeps pages of suggested targets per country, kept up to date by users.</p>
+        keeps pages of suggested targets per country, kept up to date by users, and a page on
+        <a href="https://github.com/nkglfr/smokestack/wiki/Configuring-targets" target="_blank" rel="noreferrer">sizing
+        and adjusting targets</a> (rate limiting, rotating names, suggested settings).</p>
       <div id="sug">Loading…</div></div></div>
     <div class="card"><h3>Targets</h3><div class="body" id="tlist">Loading…</div></div>`;
 
@@ -1147,6 +1150,55 @@ async function waitRestart(ver){
 }
 
 /* ------------------------------------------------------------- users */
+async function viewAlerts(m){
+  m.innerHTML=`<h2>Alerts on your own targets</h2>
+    <p class="lead">Warns you when one of <em>your</em> targets stays in incident. Different from the
+      federation alerting above, which warns a peer's NOC about their network.
+      A traceroute is taken the moment the incident opens, and its path — compared with the last
+      healthy one — travels in the message, so you know where it breaks before opening anything.</p>
+    <div class="card"><div class="body" id="al">Loading…</div></div>
+    <div class="card"><h3>Recent incidents</h3><div class="body" id="alinc">Loading…</div></div>`;
+  try{
+    const d=await api("GET","/api/v1/admin/alerts"); const c=d.config||{};
+    $("#al").innerHTML=`
+      <label class="chk"><input type="checkbox" id="al_en" ${c.enabled?"checked":""}>
+        <span>Alert me when a target stays in incident<small>Off by default.</small></span></label>
+      <div class="row2">
+        <div class="field"><label>After how long (minutes)</label>
+          <input id="al_min" type="number" min="1" max="1440" value="${c.after_minutes||5}"></div>
+        <div class="field"><label>Silence between two alerts for one target (hours)</label>
+          <input id="al_rep" type="number" min="1" max="168" value="${c.repeat_hours||6}"></div>
+        <div class="field"><label>Recipients (never public)</label>
+          <input id="al_to" value="${esc(c.recipients||"")}" placeholder="noc@example.net, astreinte@example.net"></div>
+        <div class="field"><label>Webhook (optional)</label>
+          <input id="al_hook" value="${esc(c.webhook_url||"")}" placeholder="https://hooks.example.net/…"></div>
+      </div>
+      <label class="chk"><input type="checkbox" id="al_rec" ${c.recovery!==false?"checked":""}>
+        <span>Also tell me when it is over</span></label>
+      ${d.smtp_ready?"":`<div class="note">No SMTP server is configured in <a href="#" data-goto="notify">NOC alerting</a>:
+        emails cannot be sent yet. A webhook works without it.</div>`}
+      <button class="btn p" id="al_save">Save</button>`;
+    document.querySelectorAll("[data-goto]").forEach(a=>a.onclick=e=>{e.preventDefault();go(a.dataset.goto);});
+    $("#al_save").onclick=async()=>{
+      try{await api("PUT","/api/v1/admin/alerts",{enabled:$("#al_en").checked,
+        after_minutes:parseInt($("#al_min").value,10),repeat_hours:parseInt($("#al_rep").value,10),
+        recipients:$("#al_to").value,webhook_url:$("#al_hook").value,recovery:$("#al_rec").checked});
+        toast("Saved");}catch(e){toast(e.message,true);}
+    };
+    const L=d.incidents||[];
+    $("#alinc").innerHTML=L.length?`<table><thead><tr><th>Target</th><th>Opened</th><th>Lasted</th>
+      <th>Alerted</th><th>State</th></tr></thead><tbody>`+L.map(i=>{
+      const end=i.closed_at||Math.floor(Date.now()/1000);
+      const mins=Math.max(0,Math.round((end-i.opened_at)/60));
+      return `<tr><td>${esc(i.title||("#"+i.target_id))}<div class="mono" style="font-size:11.5px;color:var(--ink2)">${esc(i.host||"")}</div></td>
+        <td>${new Date(i.opened_at*1000).toLocaleString()}</td>
+        <td>${mins} min</td>
+        <td>${i.notified_at?'<span class="badge b-warn">sent</span>':'<span class="badge b-n">no</span>'}</td>
+        <td>${i.closed_at?'<span class="badge b-ok">closed</span>':'<span class="badge b-crit">open</span>'}</td></tr>`;
+    }).join("")+`</tbody></table>`:`<div class="empty">No incident recorded yet.</div>`;
+  }catch(e){$("#al").innerHTML=`<div class="note">${esc(e.message)}</div>`;}
+}
+
 async function viewMessages(m){
   m.innerHTML=`<h2>Messages</h2>
     <p class="lead">Messages sent from the contact form of the public “About” page. Your address is
