@@ -28,6 +28,8 @@ install the newest one directly, whatever versions came in between.
   year-long navigator is now labelled *drag to choose a period*, with the
   explanation next to it rather than lost under the figures.
 
+## 0.2.11
+
 - The changelog is sorted per released version, and `scripts/changelog-check.sh`
   keeps it that way: the CI refuses a published version without its own
   section, and checks that sections stay in descending order. Entries for

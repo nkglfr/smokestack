@@ -28,6 +28,13 @@ for tag in $tags; do
 	case "$version" in *-*) continue ;; esac   # pre-releases are exempt
 	if ! echo "$sections" | grep -qx "$version"; then
 		echo "CHANGELOG.md has no '## $version' section for tag $tag" >&2
+		if echo "$sections" | grep -qx "Unreleased"; then
+			echo "  the version was published while its entries were still under" >&2
+			echo "  '## Unreleased': rename that heading to '## $version', and start a" >&2
+			echo "  new '## Unreleased' above it for the work done since." >&2
+		else
+			echo "  add a '## $version' section describing what that version contains." >&2
+		fi
 		fail=1
 	fi
 done
