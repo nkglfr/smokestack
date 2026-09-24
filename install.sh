@@ -2,7 +2,7 @@
 # smokestack installer — Debian, Ubuntu, RHEL/Alma/Rocky, any systemd Linux.
 #
 #   sudo ./install.sh                                   # latest published release
-#   sudo ./install.sh --package smokestack-1.2.0-linux-amd64.zip
+#   sudo ./install.sh --package smokestack-0.2.1-linux-amd64.zip
 #   sudo ./install.sh --package ./smokestack           # a binary you built yourself
 #   sudo ./install.sh --admin-email noc@example.net --ip 0.0.0.0 --port 8080
 #   sudo ./install.sh --embedded          # probe inside the web service (small servers)

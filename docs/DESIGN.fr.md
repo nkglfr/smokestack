@@ -20,7 +20,7 @@ mises à jour, publication des versions, sauvegardes, dépannage).
 En une commande, depuis un paquet publié :
 
 ```bash
-sudo sh install.sh --package smokestack-1.2.0-linux-amd64.zip --admin-email noc@exemple.fr
+sudo sh install.sh --package smokestack-0.2.1-linux-amd64.zip --admin-email noc@exemple.fr
 ```
 
 Le script vérifie le paquet, crée l'utilisateur système, installe le service
@@ -138,7 +138,7 @@ comme pre-releases GitHub et ne sont jamais proposées automatiquement.
 | `.github/dependabot.yml` | mises à jour hebdomadaires des dépendances et des actions |
 | `release.pub` | clés publiques de confiance, compilées dans le binaire |
 
-Publier une version : `git tag v1.3.0 && git push origin v1.3.0`. Les
+Publier une version : `git tag v0.2.2 && git push origin v0.2.2`. Les
 instances en mise à jour automatique l'installent dans les heures qui suivent.
 
 Les adresses du site officiel et du dépôt sont compilées dans le binaire

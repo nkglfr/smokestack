@@ -522,10 +522,10 @@ platform, SHA-256) and an Ed25519 signature of the manifest. Signing the
 manifest signs the binary through its checksum. Installed side by side:
 
 ```
-/opt/smokestack/releases/1.2.0/smokestack
-/opt/smokestack/releases/1.3.0/smokestack
-/opt/smokestack/current  -> releases/1.3.0
-/opt/smokestack/previous -> releases/1.2.0
+/opt/smokestack/releases/0.2.1/smokestack
+/opt/smokestack/releases/0.2.2/smokestack
+/opt/smokestack/current  -> releases/0.2.2
+/opt/smokestack/previous -> releases/0.2.1
 ```
 
 Whether from the back-office, the command line or automatically:

@@ -65,7 +65,7 @@ latency.example.net {
 Then open `https://latency.example.net/admin`, set your AS number and add
 your targets.
 
-📘 Full guide: **[DEPLOY.md](DEPLOY.md)** (HTTPS, updates, backups, troubleshooting).
+📘 Full guide: **[DEPLOY.md](DEPLOY.md)** · What's new: **[CHANGELOG.md](CHANGELOG.md)** (HTTPS, updates, backups, troubleshooting).
 
 ---
 
@@ -183,7 +183,7 @@ Every release is a signed `.zip`. From the back-office (*Instance → Updates*),
 the command line, or automatically:
 
 ```sh
-sudo smokestack update smokestack-1.3.0-linux-amd64.zip
+sudo smokestack update smokestack-0.2.2-linux-amd64.zip
 sudo smokestack rollback
 ```
 
@@ -309,7 +309,7 @@ sudo sh install.sh --package dist/smokestack --admin-email noc@example.net
 
 ```sh
 make release-key                        # once: signing key pair (see DEPLOY.md § 6)
-git tag v1.3.0 && git push origin v1.3.0
+git tag v0.2.2 && git push origin v0.2.2
 ```
 
 Pushing the tag is all it takes: GitHub Actions runs the tests, builds

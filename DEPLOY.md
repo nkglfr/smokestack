@@ -46,7 +46,7 @@ sudo sh install.sh --admin-email noc@example.net
 Or with a package you already downloaded:
 
 ```sh
-sudo sh install.sh --package smokestack-1.2.0-linux-amd64.zip --admin-email noc@example.net
+sudo sh install.sh --package smokestack-0.2.1-linux-amd64.zip --admin-email noc@example.net
 ```
 
 Already logged in as root, as on a fresh Debian or Ubuntu server? Run the
@@ -120,9 +120,9 @@ and keeps the configuration and the data.
 ### File layout
 
 ```
-/opt/smokestack/releases/1.2.0/smokestack    binaries, one folder per version
-/opt/smokestack/current -> releases/1.2.0    active version
-/opt/smokestack/previous -> releases/1.1.0   rollback target
+/opt/smokestack/releases/0.2.1/smokestack    binaries, one folder per version
+/opt/smokestack/current -> releases/0.2.1    active version
+/opt/smokestack/previous -> releases/0.2.0   rollback target
 /etc/smokestack/config.json                  configuration (root:smokestack 0640)
 /etc/smokestack/smokestack.env               listen IP and port of the web interface
 /etc/smokestack/release-keys.pub             extra trusted release keys
@@ -283,7 +283,7 @@ A **Revert to X** button returns to the previous version at any time.
 ### From the command line
 
 ```sh
-sudo smokestack update smokestack-1.3.0-linux-amd64.zip
+sudo smokestack update smokestack-0.2.2-linux-amd64.zip
 sudo smokestack rollback
 ```
 
@@ -382,6 +382,9 @@ After editing the file, restart the service: `systemctl restart smokestack`.
 
 ### Notes on versions
 
+What each version brings is listed in [CHANGELOG.md](CHANGELOG.md). Two points
+matter when rolling back:
+
 - **0.1.2** introduces `/etc/smokestack/smokestack.env` for the listen address.
   Versions 0.1.1 and earlier do not read it: after a rollback to one of them,
   the service would listen on the address in `config.json` (`listen`), or on
@@ -412,7 +415,7 @@ make release-key                 # creates release.key (secret) and prints the p
 **Each release:**
 
 ```sh
-git tag v1.3.0 && git push origin v1.3.0
+git tag v0.2.2 && git push origin v0.2.2
 ```
 
 A tag with a hyphen (`v0.2.0-rc1`) is published as a **pre-release**: it can
