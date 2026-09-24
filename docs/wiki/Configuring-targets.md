@@ -144,8 +144,11 @@ with the last healthy one, travels in the message. There is a silence window
 per target so a flapping link does not wake anybody every hour, and an
 optional notice when it recovers.
 
-It uses the SMTP settings already configured for the federation NOC alerting,
-or a webhook.
+Alerts leave through the channels of *Notification channels*: email with your
+own SMTP settings or the local sendmail, a webhook, Slack, Teams, Telegram,
+Twilio (SMS and WhatsApp), OVHcloud SMS, GatewayAPI. Chat and SMS get a
+shortened message; email carries the traceroute. Test each channel with the
+button next to it.
 
 Alerting has two switches: the global one on that screen, and one per target
 (*Alerts* in the target list). A target left out is still measured and its

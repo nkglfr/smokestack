@@ -304,6 +304,16 @@ therefore keeps the send time per sequence number on its own side and uses
 the echoed one only when it is present and plausible; otherwise those
 answered probes were counted as lost.
 
+**Channels.** Delivery is a set of small adapters: a subject and a body go
+in, an SMTP session or one provider HTTP call comes out. Adding a provider
+means one case in `notify.go`, not touching the alerting logic. SMTP is
+spoken directly rather than through `smtp.SendMail`, so implicit TLS,
+STARTTLS and no encryption are all reachable, and the local `sendmail` is an
+option for hosts that already relay mail. One failing channel never stops the
+others, and what the provider answered is reported rather than swallowed.
+Chat and SMS receive a shortened message: the traceroute belongs in the
+email.
+
 **Alerting, two switches.** A target stays measured whatever the alerting
 setting: incidents are recorded either way, only the message is withheld. The
 per-target setting is stored as an exception (`alerts_off`) rather than as a

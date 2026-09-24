@@ -277,6 +277,12 @@ func (a *Alerter) body(t *Target, inc *LocalIncident, detail string, now int64) 
 // sendAlert delivers to the webhook and to the addresses, reusing the SMTP
 // settings already configured for the federation NOC alerts.
 func sendAlert(cfg AlertConfig, subject, body string) error {
+	// Channels first: SMTP with its own settings, chat rooms, SMS. The
+	// legacy recipients/webhook of the alert settings still work beside
+	// them, so an instance configured before channels existed keeps going.
+	if err := SendAll(alertChannels, subject, body); err != nil {
+		log.Printf("alert channels: %v", err)
+	}
 	var firstErr error
 	if cfg.WebhookURL != "" {
 		payload, _ := json.Marshal(map[string]any{"subject": subject, "body": body})
@@ -311,7 +317,10 @@ func sendAlert(cfg AlertConfig, subject, body string) error {
 
 // alertSMTP is filled at start from the NOC alerting settings, so both kinds
 // of alert share one mail configuration.
-var alertSMTP NotifyConfig
+var (
+	alertSMTP     NotifyConfig
+	alertChannels ChannelSet
+)
 
 func splitList(s string) []string {
 	var out []string
@@ -336,6 +345,7 @@ func (a *Alerter) Loop(stop <-chan struct{}, probeID int64) {
 			return
 		case <-tick.C:
 			alertSMTP = loadNotifyConfig(a.store)
+			alertChannels = a.store.Channels()
 			ov, err := a.store.Overview(probeID, a.now(), false)
 			if err != nil {
 				continue

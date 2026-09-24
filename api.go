@@ -57,6 +57,9 @@ func (a *API) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/v1/admin/targets/{id}", a.auth(a.targetsPatch))
 	mux.HandleFunc("DELETE /api/v1/admin/targets/{id}", a.auth(a.targetsDelete))
 	mux.HandleFunc("POST /api/v1/admin/targets/{id}/check", a.auth(a.targetsCheck))
+	mux.HandleFunc("GET /api/v1/admin/channels", a.need(RoleAdmin, a.channelsGet))
+	mux.HandleFunc("PUT /api/v1/admin/channels", a.need(RoleAdmin, a.channelsPut))
+	mux.HandleFunc("POST /api/v1/admin/channels/test", a.need(RoleAdmin, a.channelsTest))
 	mux.HandleFunc("GET /api/v1/admin/alerts", a.need(RoleAdmin, a.alertsGet))
 	mux.HandleFunc("PUT /api/v1/admin/alerts", a.need(RoleAdmin, a.alertsPut))
 	mux.HandleFunc("POST /api/v1/admin/categories", a.auth(a.categoriesPost))
@@ -783,4 +786,91 @@ func (a *API) alertsPut(w http.ResponseWriter, r *http.Request, u *User) {
 	}
 	a.store.Audit(u, clientIP(r), "alerts_settings", "alerts", "")
 	writeJSON(w, map[string]any{"ok": true})
+}
+
+// channelsGet returns the configured channels, with secrets blanked: they
+// are stored, never shown again.
+func (a *API) channelsGet(w http.ResponseWriter, r *http.Request, u *User) {
+	set := a.store.Channels()
+	for i := range set.Channels {
+		c := &set.Channels[i]
+		for _, secret := range []*string{&c.Pass, &c.AuthToken, &c.AppSecret, &c.Token} {
+			if *secret != "" {
+				*secret = "********"
+			}
+		}
+	}
+	writeJSON(w, set)
+}
+
+func (a *API) channelsPut(w http.ResponseWriter, r *http.Request, u *User) {
+	var in ChannelSet
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	old := map[string]Channel{}
+	for _, c := range a.store.Channels().Channels {
+		old[c.ID] = c
+	}
+	for i := range in.Channels {
+		c := &in.Channels[i]
+		if c.ID == "" {
+			c.ID = fmt.Sprintf("%d-%d", time.Now().Unix(), i)
+		}
+		// A blanked secret means "keep the stored one".
+		if prev, ok := old[c.ID]; ok {
+			keep := func(v *string, was string) {
+				if *v == "********" {
+					*v = was
+				}
+			}
+			keep(&c.Pass, prev.Pass)
+			keep(&c.AuthToken, prev.AuthToken)
+			keep(&c.AppSecret, prev.AppSecret)
+			keep(&c.Token, prev.Token)
+		}
+		if err := checkChannel(c); err != nil {
+			writeErr(w, 400, fmt.Sprintf("%s: %v", c.Name, err))
+			return
+		}
+	}
+	if err := a.store.SetChannels(in); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	alertChannels = in
+	a.store.Audit(u, clientIP(r), "channels_settings", "channels", "")
+	writeJSON(w, map[string]any{"ok": true})
+}
+
+// channelsTest sends a real message through one channel and reports what
+// the provider answered: a channel that is never tested is a channel that
+// fails the night it matters.
+func (a *API) channelsTest(w http.ResponseWriter, r *http.Request, u *User) {
+	var in struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	site := a.store.Site()
+	for _, c := range a.store.Channels().Channels {
+		if c.ID != in.ID {
+			continue
+		}
+		subject := "[smokestack] Test message"
+		body := fmt.Sprintf("This is a test sent from the back-office of %s by %s.\n\n"+
+			"If you are reading it, alerts will reach you through %q.\n",
+			site.Title, u.Email, c.Name)
+		if err := c.Send(subject, body); err != nil {
+			writeErr(w, 502, err.Error())
+			return
+		}
+		a.store.Audit(u, clientIP(r), "channel_test", "channel", c.Name)
+		writeJSON(w, map[string]any{"ok": true})
+		return
+	}
+	writeErr(w, 404, "channel not found")
 }

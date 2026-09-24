@@ -518,6 +518,36 @@ the following release.
 | `curl: (22) ... 404` when downloading `install.sh` | No release has been published yet: install from source (section 2) or publish one (section 6) |
 | `sudo: command not found` | You are root already: run the command without `sudo` |
 
+### Where alerts go: notification channels
+
+*Instance → Notification channels* holds everything that delivers an alert.
+Several channels can run side by side, and every channel receives both the
+alerts about your own targets and the federation NOC alerts.
+
+| Channel | What it needs |
+|---|---|
+| **Email (SMTP server)** | server, port, security (`starttls`, `tls` or `none`), username and password if needed, sender, recipients |
+| **Email (local sendmail)** | the binary (`/usr/sbin/sendmail` by default), sender, recipients — for a server that already relays mail, with no credentials to store |
+| **Webhook (JSON)** | a URL; receives `{"subject": …, "body": …}` |
+| **Slack** | an incoming webhook URL |
+| **Microsoft Teams** | a webhook URL (connector or Workflows) |
+| **Telegram** | a bot token and a chat id |
+| **Twilio** | account SID, auth token, sender and recipients. A `whatsapp:+…` sender sends over WhatsApp |
+| **OVHcloud SMS** | application key, application secret, consumer key, SMS service name, recipients. Requests are signed as the OVH API expects |
+| **GatewayAPI** | an API token and recipients |
+
+Two things worth knowing:
+
+- **Chat and SMS get a shortened message**: the subject and the first useful
+  lines, without the traceroute — unreadable on a phone. Email and webhook
+  carry the whole thing, traceroute included.
+- **Test every channel** with the button next to it. It sends a real message
+  and reports what the provider answered. A channel that has never been
+  tested is a channel that fails the night it matters.
+
+Secrets are stored but never shown again: they come back as `********`, and
+leaving that in place keeps the stored value.
+
 ### Being warned about your own targets
 
 *Federation → My targets alerting* sends an alert when one of your targets
@@ -540,7 +570,9 @@ watch on the graphs but never want to be woken up for. A new target is
 alerted on by default. A target left out is still measured, and its incidents
 are still recorded and listed — only the message is not sent.
 
-Emails use the SMTP settings of *NOC alerting*, which warns a **peer's** NOC
+Emails leave through the channels above. The older *NOC alerting* settings
+(SMTP and webhook) still work beside them, so an instance configured before
+channels existed keeps alerting. *NOC alerting* warns a **peer's** NOC
 about **their** network. The two are separate: one is about the others,
 this one is about you. Incidents are recorded either way, alerting off
 included, and listed on the same screen.

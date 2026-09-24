@@ -7,6 +7,13 @@ install the newest one directly, whatever versions came in between.
 
 - Alerting can be switched off **per target** as well as globally: a target
   left out is still measured and its incidents still recorded.
+- **Notification channels**: alerts now leave through channels you configure
+  — email with your own SMTP settings (server, port, STARTTLS or implicit
+  TLS, credentials, sender), the local `sendmail`, a JSON webhook, Slack,
+  Microsoft Teams, Telegram, Twilio for SMS and WhatsApp, OVHcloud SMS
+  (signed as their API expects) and GatewayAPI. Several at once, each with a
+  **Send a test message** button reporting what the provider answered. Chat
+  and SMS receive a shortened message, email and webhook the full one.
 - **Alerting on your own targets**: an alert when a target stays in incident
   longer than you choose, with the traceroute taken when the incident opened
   and compared with the last healthy path. Silence window per target,
