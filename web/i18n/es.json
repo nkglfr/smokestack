@@ -95,7 +95,11 @@
     "route_changed": "ruta cambiada",
     "ev_hint": "Una marca discontinua señala un cambio de ruta en el camino de ida, desde esta sonda hasta este destino: el traceroute atravesó redes distintas a las anteriores. Solo afecta a este destino, no a la instancia, y no dice nada del camino de vuelta, invisible desde aquí. No se genera alerta: nada está roto, el camino simplemente ya no es el mismo. Los destinos cuyo camino nunca cambió no llevan marca.",
     "aspath": "Ruta hacia este destino",
-    "aspath_hint": "Los sistemas autónomos que atravesaron los paquetes a la ida, según el último traceroute. El camino de vuelta puede ser distinto."
+    "aspath_hint": "De la red de esta instancia hasta la red que anuncia la dirección del destino, según el último traceroute. El camino de vuelta puede diferir.",
+    "as_here": "desde aquí",
+    "as_target": "destino",
+    "as_gap": "desconocido",
+    "as_gap_hint": "El traceroute no reveló esta parte del camino: esos routers no respondieron, o no se alcanzó el destino."
   },
   "fed": {
     "title": "Federación",

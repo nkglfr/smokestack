@@ -95,7 +95,11 @@
     "route_changed": "route gewijzigd",
     "ev_hint": "Een streepjesmarkering toont een routewijziging op het heenpad, van deze sonde naar dit doel: de traceroute liep via andere netwerken dan eerder. Het betreft alleen dit doel, niet de instantie, en zegt niets over het terugpad, dat van hieruit onzichtbaar is. Er komt geen alarm: er is niets stuk, het pad is alleen niet meer hetzelfde. Doelen waarvan het pad nooit wijzigde krijgen geen markering.",
     "aspath": "Route naar dit doel",
-    "aspath_hint": "De autonome systemen die de pakketten op de heenweg passeerden, volgens de laatste traceroute. Het terugpad kan afwijken."
+    "aspath_hint": "Van het netwerk van deze instantie naar het netwerk dat het adres van het doel aankondigt, volgens de laatste traceroute. Het terugpad kan afwijken.",
+    "as_here": "vanaf hier",
+    "as_target": "doel",
+    "as_gap": "onbekend",
+    "as_gap_hint": "De traceroute toonde dit deel van het pad niet: die routers antwoordden niets, of het doel werd niet bereikt."
   },
   "fed": {
     "title": "Federatie",

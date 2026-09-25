@@ -95,7 +95,11 @@
     "route_changed": "route changée",
     "ev_hint": "Un repère pointillé signale un changement de route sur le chemin aller, de cette sonde vers cette cible : le traceroute a traversé d'autres réseaux qu'auparavant. Cela ne concerne que cette cible, pas l'instance, et ne dit rien du chemin retour, invisible depuis ici. Aucune alerte n'est déclenchée : rien n'est cassé, le chemin n'est simplement plus le même. Les cibles dont le chemin n'a jamais changé ne portent aucun repère.",
     "aspath": "Route vers cette cible",
-    "aspath_hint": "Les systèmes autonomes traversés par les paquets à l'aller, d'après le dernier traceroute. Le chemin retour peut être différent."
+    "aspath_hint": "Du réseau de cette instance jusqu'au réseau qui annonce l'adresse de la cible, d'après le dernier traceroute. Le chemin retour peut être différent.",
+    "as_here": "depuis ici",
+    "as_target": "cible",
+    "as_gap": "inconnu",
+    "as_gap_hint": "Le traceroute n'a pas révélé cette portion du chemin : ces routeurs n'ont rien répondu, ou la destination n'a pas été atteinte."
   },
   "fed": {
     "title": "Fédération",

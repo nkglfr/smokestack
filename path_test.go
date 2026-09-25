@@ -161,50 +161,45 @@ func TestPeeringDBContactOrder(t *testing.T) {
 	}
 }
 
-// The AS-level route follows the visibility of the traceroutes it comes
-// from, and collapses consecutive hops of one network.
-func TestLastASPath(t *testing.T) {
-	store, err := OpenStore(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
+// The middle of the route comes from the traceroute, with the two ends left
+// out — they are our AS and the destination's, added by the handler — and a
+// gap reported when the path went silent before arriving.
+func TestASRouteFrom(t *testing.T) {
+	full := &Traceroute{Reached: true, Hops: []Hop{
+		hopAS("192.0.2.1", "AS64500"), hopAS("192.0.2.2", "AS64500"),
+		hopAS("198.51.100.1", "AS174"), hopAS("198.51.100.9", "AS174"),
+		hopAS("203.0.113.5", "AS29222")}}
+	mid, gap := asRouteFrom(full, "AS64500", "AS29222")
+	if len(mid) != 1 || mid[0].ASN != "AS174" || mid[0].Hops != 2 {
+		t.Errorf("only the transit belongs in the middle: %+v", mid)
 	}
-	defer store.Close()
-	cat, _ := store.CreateCategory("c", "C", "C", true)
-	id, err := store.CreateTarget(&Target{CategoryID: cat, Slug: "t", Title: "T", Host: "192.0.2.9",
-		Proto: "icmp", IntervalS: 60, Packets: 10, SpacingMs: 100, TimeoutMs: 1000,
-		Public: true, Enabled: true})
-	if err != nil {
-		t.Fatal(err)
+	if gap {
+		t.Error("a traceroute reaching the destination has no gap")
 	}
-	if _, ok := store.LastASPath(id); ok {
-		t.Error("no traceroute yet, so no route")
+	// Silent last hops: the segment before the destination is unknown.
+	silent := &Traceroute{Reached: false, Hops: []Hop{
+		hopAS("192.0.2.1", "AS64500"), hopAS("198.51.100.1", "AS174"),
+		hopAS("*", ""), hopAS("*", "")}}
+	mid, gap = asRouteFrom(silent, "AS64500", "AS29222")
+	if len(mid) != 1 || mid[0].ASN != "AS174" {
+		t.Errorf("middle: %+v", mid)
 	}
-	now := time.Now().Unix()
-	if err := store.SaveTraceroute(&Traceroute{TargetID: id, ProbeID: 1, TS: now - 600,
-		Kind: "reference", Family: 4, Dest: "192.0.2.9", Reached: true, Hops: []Hop{
-			hopAS("192.0.2.1", "AS64500"), hopAS("192.0.2.2", "AS64500"),
-			hopAS("198.51.100.1", "AS174"), hopAS("198.51.100.9", "AS174"),
-			hopAS("203.0.113.5", "AS15169")}}); err != nil {
-		t.Fatal(err)
+	if !gap {
+		t.Error("silent hops before the destination must be reported as a gap")
 	}
-	v, ok := store.LastASPath(id)
-	if !ok || len(v.Path) != 3 {
-		t.Fatalf("three networks expected, got %+v", v)
+	// A first hop in private space carries no AS: our own AS must not
+	// depend on it, which is why the handler adds it.
+	priv := &Traceroute{Reached: true, Hops: []Hop{
+		hopAS("10.0.0.1", ""), hopAS("198.51.100.1", "AS3356"), hopAS("203.0.113.5", "AS29222")}}
+	mid, gap = asRouteFrom(priv, "AS64500", "AS29222")
+	if len(mid) != 1 || mid[0].ASN != "AS3356" || gap {
+		t.Errorf("private first hop mishandled: %+v gap=%v", mid, gap)
 	}
-	if v.Path[0].ASN != "AS64500" || v.Path[0].Hops != 2 {
-		t.Errorf("consecutive hops of one network must collapse: %+v", v.Path[0])
-	}
-	if v.Path[2].ASN != "AS15169" || !v.Reached {
-		t.Errorf("the destination network must end the route: %+v", v)
-	}
-	// A silent hop breaks nothing.
-	if err := store.SaveTraceroute(&Traceroute{TargetID: id, ProbeID: 1, TS: now - 60,
-		Kind: "reference", Family: 4, Dest: "192.0.2.9", Reached: false, Hops: []Hop{
-			hopAS("192.0.2.1", "AS64500"), hopAS("*", ""), hopAS("198.51.100.1", "AS3356")}}); err != nil {
-		t.Fatal(err)
-	}
-	v, _ = store.LastASPath(id)
-	if len(v.Path) != 2 || v.Path[1].ASN != "AS3356" || v.Reached {
-		t.Errorf("the newest reference should win: %+v", v)
+	// A traceroute whose hops carry no AS at all leaves the middle empty
+	// and the link unknown, rather than pretending the two ends touch.
+	blind := &Traceroute{Reached: false, Hops: []Hop{hopAS("*", ""), hopAS("*", "")}}
+	mid, gap = asRouteFrom(blind, "AS64500", "AS29222")
+	if len(mid) != 0 || !gap {
+		t.Errorf("a blind traceroute must give an explicit gap: %+v gap=%v", mid, gap)
 	}
 }

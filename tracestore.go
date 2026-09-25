@@ -292,40 +292,60 @@ type ASPathView struct {
 	Path    []ASPathHop `json:"path"`
 }
 
-// LastASPath returns the autonomous systems the last healthy traceroute
-// crossed: the route from this probe to that target, as measured.
-func (s *Store) LastASPath(targetID int64) (*ASPathView, bool) {
-	trs, err := s.Traceroutes(targetID, []string{"reference"}, 1)
-	if err != nil || len(trs) == 0 {
-		// No healthy reference yet: the most recent traceroute still says
-		// which networks the packets crossed.
-		trs, err = s.Traceroutes(targetID, nil, 1)
-		if err != nil || len(trs) == 0 {
-			return nil, false
-		}
-	}
-	tr := trs[0]
-	v := &ASPathView{TS: tr.TS, Reached: tr.Reached, Kind: tr.Kind}
-	for _, h := range tr.Hops {
+// ASRoute is the route as the page shows it: our own network first, the
+// destination's network last, and what the traceroute saw in between. The
+// two ends never come from the traceroute — a first hop in private space or
+// a silent last hop would otherwise drop them, which made the chain look
+// wrong for exactly the targets people care about.
+type ASRoute struct {
+	TS      int64       `json:"ts,omitempty"`
+	Kind    string      `json:"kind,omitempty"`
+	Reached bool        `json:"reached"`
+	Origin  *ASPathHop  `json:"origin,omitempty"`
+	Path    []ASPathHop `json:"path"`
+	Dest    *ASPathHop  `json:"dest,omitempty"`
+	DestIP  string      `json:"dest_ip,omitempty"`
+	Gap     bool        `json:"gap"`     // silent hops before the destination
+	Pending bool        `json:"pending"` // the destination AS is being looked up
+}
+
+// asRouteFrom builds the middle of the route from a traceroute, leaving out
+// the ends, and reports whether the path went silent before arriving.
+func asRouteFrom(tr *Traceroute, originASN, destASN string) ([]ASPathHop, bool) {
+	var mid []ASPathHop
+	lastKnown := -1
+	for i, h := range tr.Hops {
 		as := strings.TrimSpace(h.ASN)
 		if as == "" {
 			continue
 		}
-		if n := len(v.Path); n > 0 && v.Path[n-1].ASN == as {
-			v.Path[n-1].Hops++
+		lastKnown = i
+		if as == originASN || as == destASN {
 			continue
 		}
-		v.Path = append(v.Path, ASPathHop{ASN: as, Hops: 1})
+		if n := len(mid); n > 0 && mid[n-1].ASN == as {
+			mid[n-1].Hops++
+			continue
+		}
+		mid = append(mid, ASPathHop{ASN: as, Hops: 1})
 	}
-	if len(v.Path) == 0 {
-		return nil, false
+	// A gap when the traceroute never reached the destination, or when its
+	// last hops answered nothing: the segment before the destination is
+	// unknown, and saying so is better than implying a direct link.
+	gap := !tr.Reached
+	if lastKnown >= 0 && lastKnown < len(tr.Hops)-1 {
+		gap = true
 	}
-	return v, true
+	if destASN != "" && lastKnown >= 0 {
+		if as := strings.TrimSpace(tr.Hops[lastKnown].ASN); as == destASN {
+			gap = !tr.Reached
+		}
+	}
+	return mid, gap
 }
 
-// asPathView serves the AS-level route of a target, under the same rules as
-// the traceroutes it comes from: never for a private target, never for one
-// hiding its address, and publicly only if the operator publishes traces.
+// asPathView serves the route from this instance's network to the target's,
+// under the same rules as the traceroutes it comes from.
 func (a *API) asPathView(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.URL.Query().Get("target"), 10, 64)
 	if err != nil {
@@ -341,30 +361,86 @@ func (a *API) asPathView(w http.ResponseWriter, r *http.Request) {
 	if shared, ok := a.shareGrant(r); ok && shared == id {
 		authed = true
 	}
-	if !authed {
-		if !t.Public || t.HideHost || !a.store.Site().PublicTraceroutes {
-			writeJSON(w, map[string]any{"path": []any{}})
-			return
-		}
-	}
-	v, ok := a.store.LastASPath(id)
-	if !ok {
-		writeJSON(w, map[string]any{"path": []any{}})
+	hideAddr := t.HideHost
+	if !authed && (!t.Public || t.HideHost || !a.store.Site().PublicTraceroutes) {
+		writeJSON(w, ASRoute{Path: []ASPathHop{}})
 		return
 	}
-	// The name of each AS, from what is already cached: no lookup while a
-	// visitor waits.
-	for i := range v.Path {
-		if info, _ := a.asn.Cached(strings.TrimPrefix(v.Path[i].ASN, "AS")); info != nil {
+
+	site := a.store.Site()
+	out := ASRoute{Path: []ASPathHop{}}
+
+	// One end is us, always, whatever the traceroute shows.
+	originASN := ""
+	if n, err := normalizeASN(site.ASN); err == nil {
+		originASN = "AS" + strings.TrimPrefix(n, "AS")
+		name := site.Org
+		if name == "" {
+			name = site.Title
+		}
+		out.Origin = &ASPathHop{ASN: originASN, Name: name}
+	}
+
+	// The other end is the AS announcing the address actually probed: the
+	// pinned one, or the last one a measurement used.
+	destIP := t.PinIP
+	if destIP == "" {
+		if addrs := a.store.TargetAddresses(time.Now().Unix() - 30*86400)[id]; len(addrs) > 0 {
+			destIP = addrs[0]
+		}
+	}
+	destASN := ""
+	if destIP != "" {
+		if !hideAddr {
+			out.DestIP = destIP
+		}
+		if as, known := a.asn.ASNOfIP(destIP); known {
+			destASN = as
+		} else {
+			go a.asn.RefreshIPASN(destIP)
+			out.Pending = true
+		}
+	}
+	if destASN != "" {
+		hop := ASPathHop{ASN: destASN, Name: t.Title}
+		if info, _ := a.asn.Cached(strings.TrimPrefix(destASN, "AS")); info != nil {
 			if info.PeeringDB != nil && info.PeeringDB.Name != "" {
-				v.Path[i].Name = info.PeeringDB.Name
+				hop.Name = info.PeeringDB.Name
+			} else if info.Holder != "" {
+				hop.Name = info.Holder
+			}
+		} else {
+			go a.asn.Refresh(strings.TrimPrefix(destASN, "AS"))
+		}
+		out.Dest = &hop
+	}
+
+	// The middle comes from the last healthy traceroute, or the last one of
+	// any kind if none is healthy yet.
+	trs, err := a.store.Traceroutes(id, []string{"reference"}, 1)
+	if err != nil || len(trs) == 0 {
+		trs, _ = a.store.Traceroutes(id, nil, 1)
+	}
+	if len(trs) > 0 {
+		tr := trs[0]
+		out.TS, out.Kind, out.Reached = tr.TS, tr.Kind, tr.Reached
+		out.Path, out.Gap = asRouteFrom(tr, originASN, destASN)
+	} else {
+		// No traceroute at all: the two ends are still worth showing, with
+		// the middle explicitly unknown.
+		out.Gap = true
+	}
+	for i := range out.Path {
+		if info, _ := a.asn.Cached(strings.TrimPrefix(out.Path[i].ASN, "AS")); info != nil {
+			if info.PeeringDB != nil && info.PeeringDB.Name != "" {
+				out.Path[i].Name = info.PeeringDB.Name
 			} else {
-				v.Path[i].Name = info.Holder
+				out.Path[i].Name = info.Holder
 			}
 		}
 	}
 	w.Header().Set("Cache-Control", "public, max-age=300")
-	writeJSON(w, v)
+	writeJSON(w, out)
 }
 
 func (a *API) TracerouteRoutes(mux *http.ServeMux) {

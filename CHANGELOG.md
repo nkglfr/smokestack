@@ -5,6 +5,16 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- **Fixed: the route under a graph did not start at your network or end at
+  the target's.** It was built only from the autonomous systems seen in the
+  traceroute, so a first hop in private space dropped your own AS and silent
+  last hops dropped the destination's — exactly the targets where the chain
+  mattered. The two ends are now added explicitly: your AS from the instance
+  settings, and the AS announcing the address actually probed, resolved from
+  that address and cached. An unknown segment in between is shown as such
+  instead of letting the ends appear to touch, and the address and the time
+  of the traceroute are stated under the chain.
+
 - CI and release workflows move to `actions/checkout@v5` and
   `actions/setup-go@v6`, which run on Node 24: GitHub was already forcing the
   older ones onto it and is removing the Node 20 runtime. The runner is

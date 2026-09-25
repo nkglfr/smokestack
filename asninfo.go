@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -612,6 +614,43 @@ func (a *API) asnRefresh(w http.ResponseWriter, r *http.Request, u *User) {
 // asnContact returns how to reach the NOC of an AS seen in a traceroute,
 // from what that network itself declares in PeeringDB. Answered from cache,
 // refreshed in the background.
+// ASNOfIP returns the AS announcing an address, from the cache. A miss
+// starts a background lookup: resolving Team Cymru while a visitor waits is
+// how a page ends up taking a second.
+func (s *ASNService) ASNOfIP(ip string) (string, bool) {
+	if ip == "" {
+		return "", false
+	}
+	if v := s.store.Setting("ipasn:"+ip, ""); v != "" {
+		if v == "-" { // looked up, no AS announces it (private space)
+			return "", true
+		}
+		return v, true
+	}
+	return "", false
+}
+
+func (s *ASNService) RefreshIPASN(ip string) {
+	addr := net.ParseIP(ip)
+	if addr == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	as := ""
+	if txts, err := net.DefaultResolver.LookupTXT(ctx, cymruName(addr)); err == nil && len(txts) > 0 {
+		as = parseCymru(txts[0])
+	}
+	if as == "" {
+		s.store.SetSetting("ipasn:"+ip, "-")
+		return
+	}
+	if !strings.HasPrefix(as, "AS") {
+		as = "AS" + as
+	}
+	s.store.SetSetting("ipasn:"+ip, as)
+}
+
 func (a *API) asnContact(w http.ResponseWriter, r *http.Request, u *User) {
 	asn, err := normalizeASN(r.URL.Query().Get("asn"))
 	if err != nil {

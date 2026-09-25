@@ -329,12 +329,29 @@ async function renderASPath(tg) {
     v = await fetch(`/api/v1/aspath?target=${tg.id}` + (SHARE ? "&share=" + encodeURIComponent(SHARE) : ""))
       .then(r => r.ok ? r.json() : null);
   } catch (e) { /* the graph matters more than this */ }
-  if (!v || !(v.path || []).length) { box.hidden = true; return; }
+  if (!v || (!v.origin && !v.dest && !(v.path || []).length)) { box.hidden = true; return; }
   box.hidden = false;
-  chain.innerHTML = v.path.map((h, i) => `${i ? `<span class="asarrow">→</span>` : ""}
-    <span class="asnode${i === 0 ? " self" : ""}" title="${esc(h.name || h.asn)}${h.hops > 1 ? ` · ${h.hops} hops` : ""}">
-      <span class="asn">${esc(h.asn)}</span>${h.name ? `<span class="asname">${esc(h.name)}</span>` : ""}</span>`).join("")
-    + (v.reached ? "" : `<span class="asarrow">→</span><span class="asnode unreached">?</span>`);
+  const node = (h, cls, sub) => `<span class="asnode ${cls || ""}" title="${esc(h.name || h.asn)}${h.hops > 1 ? ` · ${h.hops} hops` : ""}">
+    <span class="asn">${esc(h.asn)}</span>${h.name ? `<span class="asname">${esc(h.name)}</span>` : ""}
+    ${sub ? `<span class="asrole">${esc(sub)}</span>` : ""}</span>`;
+  const arrow = `<span class="asarrow">→</span>`;
+  const parts = [];
+  if (v.origin) parts.push(node(v.origin, "self", t("detail.as_here")));
+  for (const h of (v.path || [])) parts.push(node(h, "", ""));
+  // An unknown segment is said, not hidden: the ends do not touch.
+  if (v.gap) parts.push(`<span class="asnode unknown" title="${esc(t("detail.as_gap_hint"))}">
+    <span class="asn">?</span><span class="asname">${esc(t("detail.as_gap"))}</span></span>`);
+  if (v.dest) parts.push(node(v.dest, "dest", t("detail.as_target")));
+  else if (v.pending) parts.push(`<span class="asnode unknown"><span class="asn">…</span>
+    <span class="asname">${esc(t("common.loading"))}</span></span>`);
+  chain.innerHTML = parts.join(arrow);
+  const meta = document.getElementById("asmeta");
+  if (meta) {
+    const bits = [];
+    if (v.dest_ip) bits.push(v.dest_ip);
+    if (v.ts) bits.push(new Date(v.ts * 1000).toLocaleString());
+    meta.textContent = bits.join(" · ");
+  }
 }
 
 function renderEvents() {
@@ -460,6 +477,7 @@ function renderDetail() {
     <div class="card" id="asbox" hidden style="margin-top:10px"><div class="card-b" style="padding-block:12px">
       <div class="lbl" style="margin-bottom:7px">${esc(t("detail.aspath"))}</div>
       <div class="aschain" id="aschain"></div>
+      <div class="mono faint" id="asmeta" style="font-size:11px;margin-top:6px"></div>
       <p class="strip-hint">${esc(t("detail.aspath_hint"))}</p></div></div>
     <div class="card" id="evbox" hidden style="margin-top:10px"><div class="card-b" style="padding-block:12px">
       <div class="lbl" style="margin-bottom:6px">${esc(t("detail.events"))}</div>

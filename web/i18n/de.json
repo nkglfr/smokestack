@@ -95,7 +95,11 @@
     "route_changed": "Route geändert",
     "ev_hint": "Eine gestrichelte Marke zeigt einen Routenwechsel auf dem Hinweg von dieser Sonde zu diesem Ziel: Der Traceroute durchquerte andere Netze als zuvor. Das betrifft nur dieses Ziel, nicht die Instanz, und sagt nichts über den Rückweg, der von hier unsichtbar ist. Es wird kein Alarm ausgelöst: nichts ist defekt, der Pfad ist nur nicht mehr derselbe. Ziele ohne Pfadwechsel tragen keine Marke.",
     "aspath": "Route zu diesem Ziel",
-    "aspath_hint": "Die autonomen Systeme, die die Pakete auf dem Hinweg durchquert haben, laut letztem Traceroute. Der Rückweg kann abweichen."
+    "aspath_hint": "Vom Netz dieser Instanz bis zum Netz, das die Zieladresse ankündigt, laut letztem Traceroute. Der Rückweg kann abweichen.",
+    "as_here": "von hier",
+    "as_target": "Ziel",
+    "as_gap": "unbekannt",
+    "as_gap_hint": "Der Traceroute hat diesen Abschnitt nicht gezeigt: Diese Router antworteten nicht, oder das Ziel wurde nicht erreicht."
   },
   "fed": {
     "title": "Föderation",

@@ -95,7 +95,11 @@
     "route_changed": "rutt ändrad",
     "ev_hint": "En streckad markering visar en ruttändring på vägen dit, från denna sond till detta mål: traceroute gick genom andra nät än förut. Det gäller bara detta mål, inte instansen, och säger inget om vägen tillbaka, som är osynlig härifrån. Inget larm utlöses: inget är trasigt, vägen är bara inte densamma. Mål vars väg aldrig ändrats har inga markeringar.",
     "aspath": "Väg till detta mål",
-    "aspath_hint": "De autonoma system paketen passerade på vägen dit, enligt senaste traceroute. Vägen tillbaka kan skilja sig."
+    "aspath_hint": "Från denna instans nät till nätet som annonserar målets adress, enligt senaste traceroute. Vägen tillbaka kan skilja sig.",
+    "as_here": "härifrån",
+    "as_target": "mål",
+    "as_gap": "okänt",
+    "as_gap_hint": "Traceroute visade inte denna del av vägen: de routrarna svarade inte, eller målet nåddes inte."
   },
   "fed": {
     "title": "Federation",

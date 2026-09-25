@@ -95,7 +95,11 @@
     "route_changed": "route changed",
     "ev_hint": "A dashed mark shows a route change on the forward path from this probe to this target: the traceroute crossed different networks than before. It concerns this target only, not the instance, and says nothing about the return path, which is invisible from here. No alert is raised: nothing is broken, the path is simply not the same. Targets whose path never changed carry no mark.",
     "aspath": "Route to this target",
-    "aspath_hint": "The autonomous systems the packets crossed on their way there, from the last traceroute. The return path may differ."
+    "aspath_hint": "From this instance's network to the network announcing the target's address, as the last traceroute measured it. The return path may differ.",
+    "as_here": "from here",
+    "as_target": "target",
+    "as_gap": "unknown",
+    "as_gap_hint": "The traceroute did not reveal this part of the path: those routers answered nothing, or the destination was not reached."
   },
   "fed": {
     "title": "Federation",

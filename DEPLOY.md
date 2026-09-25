@@ -739,8 +739,16 @@ after. Writing the path across the plot, as earlier versions did, made the
 graph unreadable and told a visitor nothing.
 
 Under the graph, **Route to this target** shows the autonomous systems the
-packets crossed on their way there, one box per network, from yours to the
-destination's. It comes from the last traceroute, so it follows the same
+packets crossed on their way there, one box per network. The two ends are
+never taken from the traceroute: the first box is **your** AS, from the
+instance settings, and the last is the AS announcing the **address actually
+probed** — the pinned address, or the last one a measurement used — resolved
+from that address. A first hop in private space or a silent last hop would
+otherwise drop one of the ends, which is what made the chain look wrong.
+
+When the traceroute did not reveal a part of the path, a dashed **unknown**
+box says so rather than letting the two ends appear to touch. The address and
+the time of the traceroute the route comes from are stated underneath. It comes from the last traceroute, so it follows the same
 rules: nothing for a private target, nothing for a target hiding its address,
 and publicly only if you publish traceroutes. A share link carries it, which
 is what makes the link useful in a ticket — the other side sees the route

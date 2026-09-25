@@ -95,7 +95,11 @@
     "route_changed": "rotta cambiata",
     "ev_hint": "Un segno tratteggiato indica un cambio di rotta sul percorso di andata, da questa sonda verso questa destinazione: il traceroute ha attraversato reti diverse da prima. Riguarda solo questa destinazione, non l'istanza, e non dice nulla del percorso di ritorno, invisibile da qui. Nessun allarme: nulla è rotto, il percorso semplicemente non è più lo stesso. Le destinazioni il cui percorso non è mai cambiato non hanno segni.",
     "aspath": "Rotta verso questa destinazione",
-    "aspath_hint": "I sistemi autonomi attraversati dai pacchetti all'andata, secondo l'ultimo traceroute. Il percorso di ritorno può differire."
+    "aspath_hint": "Dalla rete di questa istanza fino alla rete che annuncia l'indirizzo della destinazione, secondo l'ultimo traceroute. Il ritorno può differire.",
+    "as_here": "da qui",
+    "as_target": "destinazione",
+    "as_gap": "sconosciuto",
+    "as_gap_hint": "Il traceroute non ha rivelato questa parte del percorso: quei router non hanno risposto, o la destinazione non è stata raggiunta."
   },
   "fed": {
     "title": "Federazione",

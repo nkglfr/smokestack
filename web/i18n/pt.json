@@ -95,7 +95,11 @@
     "route_changed": "rota alterada",
     "ev_hint": "Uma marca tracejada assinala uma mudança de rota no caminho de ida, desta sonda para este destino: o traceroute atravessou redes diferentes das anteriores. Diz respeito apenas a este destino, não à instância, e nada diz do caminho de volta, invisível daqui. Nenhum alerta é gerado: nada está avariado, o caminho apenas já não é o mesmo. Destinos cujo caminho nunca mudou não têm marcas.",
     "aspath": "Rota até este destino",
-    "aspath_hint": "Os sistemas autónomos atravessados pelos pacotes na ida, segundo o último traceroute. O caminho de volta pode ser diferente."
+    "aspath_hint": "Da rede desta instância até à rede que anuncia o endereço do destino, segundo o último traceroute. O caminho de volta pode diferir.",
+    "as_here": "daqui",
+    "as_target": "destino",
+    "as_gap": "desconhecido",
+    "as_gap_hint": "O traceroute não revelou esta parte do caminho: esses routers não responderam, ou o destino não foi alcançado."
   },
   "fed": {
     "title": "Federação",
