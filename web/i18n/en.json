@@ -99,7 +99,8 @@
     "as_here": "from here",
     "as_target": "target",
     "as_gap": "unknown",
-    "as_gap_hint": "The traceroute did not reveal this part of the path: those routers answered nothing, or the destination was not reached."
+    "as_gap_hint": "The traceroute did not reveal this part of the path: those routers answered nothing, or the destination was not reached.",
+    "as_map_note": "{n} traceroutes · solid: current path, dashed: seen earlier"
   },
   "fed": {
     "title": "Federation",

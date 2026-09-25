@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -307,6 +308,7 @@ type ASRoute struct {
 	DestIP  string      `json:"dest_ip,omitempty"`
 	Gap     bool        `json:"gap"`     // silent hops before the destination
 	Pending bool        `json:"pending"` // the destination AS is being looked up
+	Graph   *ASGraph    `json:"graph,omitempty"`
 }
 
 // asRouteFrom builds the middle of the route from a traceroute, leaving out
@@ -415,6 +417,38 @@ func (a *API) asPathView(w http.ResponseWriter, r *http.Request) {
 		out.Dest = &hop
 	}
 
+	// The graph of the recent traceroutes, for the map drawn on the page.
+	if g := a.store.BuildASGraph(id, originASN, destASN, 25); g != nil {
+		g.DestIP = out.DestIP
+		g.Pending = out.Pending
+		for i := range g.Nodes {
+			if g.Nodes[i].Name != "" || g.Nodes[i].Unknown {
+				continue
+			}
+			switch g.Nodes[i].ASN {
+			case originASN:
+				if out.Origin != nil {
+					g.Nodes[i].Name = out.Origin.Name
+				}
+			case destASN:
+				if out.Dest != nil {
+					g.Nodes[i].Name = out.Dest.Name
+				}
+			default:
+				if info, _ := a.asn.Cached(strings.TrimPrefix(g.Nodes[i].ASN, "AS")); info != nil {
+					if info.PeeringDB != nil && info.PeeringDB.Name != "" {
+						g.Nodes[i].Name = info.PeeringDB.Name
+					} else {
+						g.Nodes[i].Name = info.Holder
+					}
+				} else {
+					go a.asn.Refresh(strings.TrimPrefix(g.Nodes[i].ASN, "AS"))
+				}
+			}
+		}
+		out.Graph = g
+	}
+
 	// The middle comes from the last healthy traceroute, or the last one of
 	// any kind if none is healthy yet.
 	trs, err := a.store.Traceroutes(id, []string{"reference"}, 1)
@@ -520,4 +554,170 @@ func (a *API) traceroutesRequest(w http.ResponseWriter, r *http.Request, u *User
 	traceRequests.Push(in.TargetID)
 	a.store.Audit(u, clientIP(r), "traceroute_request", "target", strconv.FormatInt(in.TargetID, 10))
 	writeJSON(w, map[string]any{"queued": true, "at": time.Now().Unix()})
+}
+
+// ---------------------------------------------------------------- AS graph
+//
+// A route drawn as a chain hides what matters when a path is not stable: the
+// same target is often reached through two transits, and a traceroute taken
+// during an anomaly may follow a different one. So the page draws a graph:
+// nodes are autonomous systems, edges are adjacencies actually observed, and
+// the current path is highlighted among the others.
+
+type ASGraphNode struct {
+	ASN     string  `json:"asn"`
+	Name    string  `json:"name,omitempty"`
+	Layer   int     `json:"layer"` // distance from us, in AS crossed
+	Origin  bool    `json:"origin,omitempty"`
+	Dest    bool    `json:"dest,omitempty"`
+	Unknown bool    `json:"unknown,omitempty"`
+	RTTms   float64 `json:"rtt_ms,omitempty"` // median on entering this AS
+	Seen    int     `json:"seen"`             // traceroutes crossing it
+}
+
+type ASGraphEdge struct {
+	From    string `json:"from"`
+	To      string `json:"to"`
+	Seen    int    `json:"seen"`
+	Current bool   `json:"current,omitempty"`
+}
+
+type ASGraph struct {
+	Nodes      []ASGraphNode `json:"nodes"`
+	Edges      []ASGraphEdge `json:"edges"`
+	Traces     int           `json:"traces"`
+	Since      int64         `json:"since,omitempty"`
+	CurrentTS  int64         `json:"current_ts,omitempty"`
+	DestIP     string        `json:"dest_ip,omitempty"`
+	Reached    bool          `json:"reached"`
+	Pending    bool          `json:"pending,omitempty"`
+	Incomplete bool          `json:"incomplete,omitempty"`
+}
+
+// asSeq turns one traceroute into the sequence of AS it crossed, with the
+// median RTT on entering each, our own AS first and the destination's last.
+// An unmeasured stretch becomes the pseudo-AS "?", so the drawing shows a
+// break instead of implying adjacency.
+func asSeq(tr *Traceroute, originASN, destASN string) ([]string, map[string]float64) {
+	seq := []string{}
+	rtt := map[string]float64{}
+	if originASN != "" {
+		seq = append(seq, originASN)
+	}
+	gapPending := false
+	for _, h := range tr.Hops {
+		as := strings.TrimSpace(h.ASN)
+		if as == "" {
+			if len(h.RTTms) == 0 {
+				gapPending = true // a hop that answered nothing
+			}
+			continue
+		}
+		if gapPending && len(seq) > 0 && seq[len(seq)-1] != "?" {
+			seq = append(seq, "?")
+		}
+		gapPending = false
+		if len(seq) > 0 && seq[len(seq)-1] == as {
+			continue
+		}
+		seq = append(seq, as)
+		if _, ok := rtt[as]; !ok && len(h.RTTms) > 0 {
+			rtt[as] = medianOf(h.RTTms)
+		}
+	}
+	if destASN != "" {
+		if !tr.Reached || gapPending {
+			if len(seq) > 0 && seq[len(seq)-1] != "?" {
+				seq = append(seq, "?")
+			}
+		}
+		if len(seq) == 0 || seq[len(seq)-1] != destASN {
+			seq = append(seq, destASN)
+		}
+	}
+	return seq, rtt
+}
+
+func medianOf(v []float64) float64 {
+	if len(v) == 0 {
+		return 0
+	}
+	s := append([]float64(nil), v...)
+	sort.Float64s(s)
+	return s[len(s)/2]
+}
+
+// BuildASGraph assembles the graph from the recent traceroutes of a target.
+func (s *Store) BuildASGraph(targetID int64, originASN, destASN string, limit int) *ASGraph {
+	trs, err := s.Traceroutes(targetID, nil, limit)
+	if err != nil {
+		return nil
+	}
+	g := &ASGraph{Nodes: []ASGraphNode{}, Edges: []ASGraphEdge{}}
+	nodes := map[string]*ASGraphNode{}
+	edges := map[string]*ASGraphEdge{}
+	current := map[string]bool{}
+
+	for i, tr := range trs {
+		seq, rtt := asSeq(tr, originASN, destASN)
+		if len(seq) == 0 {
+			continue
+		}
+		g.Traces++
+		if g.Since == 0 || tr.TS < g.Since {
+			g.Since = tr.TS
+		}
+		if i == 0 {
+			g.CurrentTS, g.Reached = tr.TS, tr.Reached
+		}
+		for j, as := range seq {
+			n := nodes[as]
+			if n == nil {
+				n = &ASGraphNode{ASN: as, Layer: j, Unknown: as == "?"}
+				nodes[as] = n
+			}
+			if j > n.Layer {
+				n.Layer = j // keep it to the right of everything it follows
+			}
+			n.Seen++
+			if v, ok := rtt[as]; ok && (n.RTTms == 0 || i == 0) {
+				n.RTTms = v
+			}
+			if j > 0 {
+				key := seq[j-1] + ">" + as
+				e := edges[key]
+				if e == nil {
+					e = &ASGraphEdge{From: seq[j-1], To: as}
+					edges[key] = e
+				}
+				e.Seen++
+				if i == 0 {
+					e.Current = true
+					current[key] = true
+				}
+			}
+		}
+	}
+	if len(nodes) == 0 {
+		return nil
+	}
+	for _, n := range nodes {
+		n.Origin = n.ASN == originASN
+		n.Dest = n.ASN == destASN
+		if n.Unknown {
+			g.Incomplete = true
+		}
+		g.Nodes = append(g.Nodes, *n)
+	}
+	sort.Slice(g.Nodes, func(i, j int) bool {
+		if g.Nodes[i].Layer != g.Nodes[j].Layer {
+			return g.Nodes[i].Layer < g.Nodes[j].Layer
+		}
+		return g.Nodes[i].Seen > g.Nodes[j].Seen
+	})
+	for _, e := range edges {
+		g.Edges = append(g.Edges, *e)
+	}
+	sort.Slice(g.Edges, func(i, j int) bool { return g.Edges[i].Seen > g.Edges[j].Seen })
+	return g
 }

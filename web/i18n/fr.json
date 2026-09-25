@@ -99,7 +99,8 @@
     "as_here": "depuis ici",
     "as_target": "cible",
     "as_gap": "inconnu",
-    "as_gap_hint": "Le traceroute n'a pas révélé cette portion du chemin : ces routeurs n'ont rien répondu, ou la destination n'a pas été atteinte."
+    "as_gap_hint": "Le traceroute n'a pas révélé cette portion du chemin : ces routeurs n'ont rien répondu, ou la destination n'a pas été atteinte.",
+    "as_map_note": "{n} traceroutes · trait plein : chemin actuel, pointillés : vus précédemment"
   },
   "fed": {
     "title": "Fédération",

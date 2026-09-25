@@ -232,3 +232,12 @@ table.t td { padding: 10px; border-top: 1px solid var(--line-2); vertical-align:
 .asnode .asname { font-size: 10.5px; color: var(--ink3); max-width: 160px; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; }
 .asarrow { color: var(--ink3); font-size: 12px; }
+
+/* --- carte des AS traversés --- */
+.asmap .gnode rect { fill: var(--bg-soft); stroke: var(--line); }
+.asmap .gself rect { stroke: var(--accent); stroke-width: 1.5; }
+.asmap .gdest rect { stroke: var(--ok); stroke-width: 1.5; }
+.asmap .gunknown rect { stroke: var(--ink3); stroke-dasharray: 4 3; fill: none; }
+.asmap .gasn { font: 600 12px ui-monospace, SFMono-Regular, Menlo, monospace; fill: var(--ink); }
+.asmap .gname { font: 10.5px system-ui, sans-serif; fill: var(--ink3); }
+.asmap .grtt { font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; fill: var(--ink2); text-anchor: end; }

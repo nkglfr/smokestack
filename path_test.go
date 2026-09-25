@@ -203,3 +203,82 @@ func TestASRouteFrom(t *testing.T) {
 		t.Errorf("a blind traceroute must give an explicit gap: %+v gap=%v", mid, gap)
 	}
 }
+
+// The graph is built from several traceroutes: it must show both transits
+// when the target was reached through each, mark the current path, and keep
+// an unmeasured stretch as an explicit break.
+func TestBuildASGraph(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	cat, _ := store.CreateCategory("c", "C", "C", true)
+	id, err := store.CreateTarget(&Target{CategoryID: cat, Slug: "t", Title: "T", Host: "192.0.2.9",
+		Proto: "icmp", IntervalS: 60, Packets: 10, SpacingMs: 100, TimeoutMs: 1000,
+		Public: true, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Unix()
+	save := func(ts int64, reached bool, hops ...Hop) {
+		if err := store.SaveTraceroute(&Traceroute{TargetID: id, ProbeID: 1, TS: ts,
+			Kind: "reference", Family: 4, Dest: "192.0.2.9", Reached: reached, Hops: hops}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Older: through AS174. Newer: through AS3356, and it is the current one.
+	save(now-7200, true, hopAS("198.51.100.1", "AS174"), hopAS("203.0.113.5", "AS29222"))
+	save(now-3600, true, hopAS("198.51.100.1", "AS174"), hopAS("203.0.113.5", "AS29222"))
+	save(now-60, true, hopAS("198.51.100.9", "AS3356"), hopAS("203.0.113.5", "AS29222"))
+
+	g := store.BuildASGraph(id, "AS64500", "AS29222", 25)
+	if g == nil {
+		t.Fatal("a graph was expected")
+	}
+	if g.Traces != 3 {
+		t.Errorf("3 traceroutes expected, got %d", g.Traces)
+	}
+	byASN := map[string]ASGraphNode{}
+	for _, n := range g.Nodes {
+		byASN[n.ASN] = n
+	}
+	for _, want := range []string{"AS64500", "AS174", "AS3356", "AS29222"} {
+		if _, ok := byASN[want]; !ok {
+			t.Errorf("%s missing from the graph", want)
+		}
+	}
+	if !byASN["AS64500"].Origin || !byASN["AS29222"].Dest {
+		t.Error("the two ends must be marked as such")
+	}
+	if byASN["AS64500"].Layer != 0 {
+		t.Errorf("our AS starts the graph: layer %d", byASN["AS64500"].Layer)
+	}
+	if byASN["AS174"].Seen != 2 || byASN["AS3356"].Seen != 1 {
+		t.Errorf("how often each transit was seen: %d and %d", byASN["AS174"].Seen, byASN["AS3356"].Seen)
+	}
+	var currentTransit string
+	for _, e := range g.Edges {
+		if e.Current && e.From == "AS64500" {
+			currentTransit = e.To
+		}
+	}
+	if currentTransit != "AS3356" {
+		t.Errorf("the current path should go through AS3356, got %q", currentTransit)
+	}
+	// A traceroute that stops answering keeps an explicit break.
+	save(now-30, false, hopAS("198.51.100.9", "AS3356"), Hop{Addr: "*", Sent: 3})
+	g = store.BuildASGraph(id, "AS64500", "AS29222", 25)
+	if !g.Incomplete {
+		t.Error("an unmeasured stretch must be reported")
+	}
+	found := false
+	for _, n := range g.Nodes {
+		if n.Unknown {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the break must appear as a node in the graph")
+	}
+}

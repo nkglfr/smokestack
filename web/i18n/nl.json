@@ -99,7 +99,8 @@
     "as_here": "vanaf hier",
     "as_target": "doel",
     "as_gap": "onbekend",
-    "as_gap_hint": "De traceroute toonde dit deel van het pad niet: die routers antwoordden niets, of het doel werd niet bereikt."
+    "as_gap_hint": "De traceroute toonde dit deel van het pad niet: die routers antwoordden niets, of het doel werd niet bereikt.",
+    "as_map_note": "{n} traceroutes · doorlopend: huidig pad, streepjes: eerder gezien"
   },
   "fed": {
     "title": "Federatie",

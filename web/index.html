@@ -321,6 +321,49 @@ function draw(cv, s, o) {
 // The route as measured: one box per autonomous system crossed, from this
 // network to the destination. Derived from the traceroutes, so it follows
 // their visibility rules.
+// The map, drawn like a looking-glass bgpmap: one box per autonomous system,
+// left to right from us to the target, arrows for the adjacencies actually
+// observed. The current path is solid, the ones seen earlier are dashed, so a
+// target reached through two transits shows both.
+function asGraphSVG(g) {
+  const layers = [];
+  for (const n of g.nodes) (layers[n.layer] = layers[n.layer] || []).push(n);
+  const BW = 150, BH = 44, GX = 54, GY = 16, P = 10;
+  const rows = Math.max(...layers.map(l => l.length));
+  const W = layers.length * BW + (layers.length - 1) * GX + P * 2;
+  const H = rows * BH + (rows - 1) * GY + P * 2 + 14;
+  const pos = {};
+  layers.forEach((l, li) => l.forEach((n, ni) => {
+    const colH = l.length * BH + (l.length - 1) * GY;
+    pos[n.asn] = { x: P + li * (BW + GX), y: P + 14 + (H - 14 - P * 2 - colH) / 2 + ni * (BH + GY) };
+  }));
+  const edges = (g.edges || []).map(e => {
+    const a = pos[e.from], b = pos[e.to];
+    if (!a || !b) return "";
+    const x1 = a.x + BW, y1 = a.y + BH / 2, x2 = b.x, y2 = b.y + BH / 2, mx = (x1 + x2) / 2;
+    return `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}"
+      fill="none" stroke="${e.current ? "var(--accent)" : "var(--line-2, #cbd5e1)"}"
+      stroke-width="${e.current ? 2 : 1.2}" ${e.current ? "" : 'stroke-dasharray="4 4"'}
+      marker-end="url(#asarrow)"><title>${esc(e.from)} → ${esc(e.to)} · ${e.seen}×</title></path>`;
+  }).join("");
+  const boxes = g.nodes.map(n => {
+    const p = pos[n.asn];
+    const cls = n.unknown ? "gnode gunknown" : n.origin ? "gnode gself" : n.dest ? "gnode gdest" : "gnode";
+    const name = n.unknown ? t("detail.as_gap") : (n.name || "");
+    const rtt = n.rtt_ms ? `${n2(n.rtt_ms)} ms` : "";
+    return `<g class="${cls}" transform="translate(${p.x},${p.y})">
+      <rect width="${BW}" height="${BH}" rx="9"></rect>
+      <text x="9" y="17" class="gasn">${esc(n.unknown ? "?" : n.asn)}</text>
+      <text x="9" y="31" class="gname">${esc(name.length > 22 ? name.slice(0, 21) + "…" : name)}</text>
+      ${rtt ? `<text x="${BW - 9}" y="17" class="grtt">${esc(rtt)}</text>` : ""}
+      <title>${esc(n.name || n.asn)}${n.seen ? ` · ${n.seen}/${g.traces} traceroutes` : ""}</title></g>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" class="asmap" style="width:100%;max-width:${W}px;height:auto">
+    <defs><marker id="asarrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6"
+      orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="var(--ink3)"></path></marker></defs>
+    ${edges}${boxes}</svg>`;
+}
+
 async function renderASPath(tg) {
   const box = document.getElementById("asbox"), chain = document.getElementById("aschain");
   if (!box || !chain) return;
@@ -344,12 +387,17 @@ async function renderASPath(tg) {
   if (v.dest) parts.push(node(v.dest, "dest", t("detail.as_target")));
   else if (v.pending) parts.push(`<span class="asnode unknown"><span class="asn">…</span>
     <span class="asname">${esc(t("common.loading"))}</span></span>`);
-  chain.innerHTML = parts.join(arrow);
+  // One observed path: the chain reads better. Several: the map shows the
+  // divergence, which the chain cannot.
+  const g = v.graph;
+  const branching = g && (g.edges || []).length > Math.max(0, (g.nodes || []).length - 1);
+  chain.innerHTML = (branching ? asGraphSVG(g) : parts.join(arrow));
   const meta = document.getElementById("asmeta");
   if (meta) {
     const bits = [];
     if (v.dest_ip) bits.push(v.dest_ip);
     if (v.ts) bits.push(new Date(v.ts * 1000).toLocaleString());
+    if (branching) bits.push(t("detail.as_map_note", { n: g.traces }));
     meta.textContent = bits.join(" · ");
   }
 }

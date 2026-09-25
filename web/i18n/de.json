@@ -99,7 +99,8 @@
     "as_here": "von hier",
     "as_target": "Ziel",
     "as_gap": "unbekannt",
-    "as_gap_hint": "Der Traceroute hat diesen Abschnitt nicht gezeigt: Diese Router antworteten nicht, oder das Ziel wurde nicht erreicht."
+    "as_gap_hint": "Der Traceroute hat diesen Abschnitt nicht gezeigt: Diese Router antworteten nicht, oder das Ziel wurde nicht erreicht.",
+    "as_map_note": "{n} Traceroutes · durchgezogen: aktueller Pfad, gestrichelt: früher gesehen"
   },
   "fed": {
     "title": "Föderation",

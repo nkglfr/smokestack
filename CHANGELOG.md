@@ -5,6 +5,14 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- **A map of the route**, in the spirit of a looking-glass bgpmap: one box per
+  autonomous system, left to right from your network to the target's, arrows
+  for the adjacencies actually observed over the last 25 traceroutes, the
+  median latency on entering each network, and the current path solid against
+  the earlier ones dashed. A target reached through two transits now shows
+  both, which a single chain could not. Targets with one stable path keep the
+  chain, and an unmeasured stretch stays an explicit break.
+
 - **Fixed: the route under a graph did not start at your network or end at
   the target's.** It was built only from the autonomous systems seen in the
   traceroute, so a first hop in private space dropped your own AS and silent

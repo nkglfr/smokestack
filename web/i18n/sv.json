@@ -99,7 +99,8 @@
     "as_here": "härifrån",
     "as_target": "mål",
     "as_gap": "okänt",
-    "as_gap_hint": "Traceroute visade inte denna del av vägen: de routrarna svarade inte, eller målet nåddes inte."
+    "as_gap_hint": "Traceroute visade inte denna del av vägen: de routrarna svarade inte, eller målet nåddes inte.",
+    "as_map_note": "{n} traceroutes · heldragen: nuvarande väg, streckad: tidigare sedda"
   },
   "fed": {
     "title": "Federation",

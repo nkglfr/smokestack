@@ -746,6 +746,13 @@ probed** — the pinned address, or the last one a measurement used — resolved
 from that address. A first hop in private space or a silent last hop would
 otherwise drop one of the ends, which is what made the chain look wrong.
 
+When several paths have been observed, the same block becomes a **map**: one
+box per autonomous system, arrows for the adjacencies seen over the last 25
+traceroutes, the median latency on entering each network, the current path
+solid and the earlier ones dashed. It is the view a looking glass gives with
+its bgpmap, except every line here was measured from your own probe. A target
+whose path never moved keeps the simpler chain.
+
 When the traceroute did not reveal a part of the path, a dashed **unknown**
 box says so rather than letting the two ends appear to touch. The address and
 the time of the traceroute the route comes from are stated underneath. It comes from the last traceroute, so it follows the same

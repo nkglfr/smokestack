@@ -99,7 +99,8 @@
     "as_here": "da qui",
     "as_target": "destinazione",
     "as_gap": "sconosciuto",
-    "as_gap_hint": "Il traceroute non ha rivelato questa parte del percorso: quei router non hanno risposto, o la destinazione non è stata raggiunta."
+    "as_gap_hint": "Il traceroute non ha rivelato questa parte del percorso: quei router non hanno risposto, o la destinazione non è stata raggiunta.",
+    "as_map_note": "{n} traceroute · continuo: percorso attuale, tratteggiato: visti prima"
   },
   "fed": {
     "title": "Federazione",
