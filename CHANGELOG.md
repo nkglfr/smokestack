@@ -5,6 +5,12 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- The entries of 0.2.12 and 0.2.13 are filed under their own versions: both
+  were published while they still sat under *Unreleased*, which the release
+  notes on GitHub reflected.
+
+## 0.2.13
+
 - **The global routing view, from RIPE RIS**, under the measured map: which
   prefix covers the target's address, which AS announces it, how many
   collector peers see it, and the networks the collectors see in front of it.
@@ -12,7 +18,6 @@ install the newest one directly, whatever versions came in between.
   internet reaches the target, the map above describes how this probe does.
   Fetched in the background, cached for a week, and used to fill in the
   destination AS when no traceroute exists yet.
-
 - **A map of the route**, in the spirit of a looking-glass bgpmap: one box per
   autonomous system, left to right from your network to the target's, arrows
   for the adjacencies actually observed over the last 25 traceroutes, the
@@ -20,7 +25,6 @@ install the newest one directly, whatever versions came in between.
   the earlier ones dashed. A target reached through two transits now shows
   both, which a single chain could not. Targets with one stable path keep the
   chain, and an unmeasured stretch stays an explicit break.
-
 - **Fixed: the route under a graph did not start at your network or end at
   the target's.** It was built only from the autonomous systems seen in the
   traceroute, so a first hop in private space dropped your own AS and silent
@@ -31,12 +35,13 @@ install the newest one directly, whatever versions came in between.
   instead of letting the ends appear to touch, and the address and the time
   of the traceroute are stated under the chain.
 
+## 0.2.12
+
 - CI and release workflows move to `actions/checkout@v5` and
   `actions/setup-go@v6`, which run on Node 24: GitHub was already forcing the
   older ones onto it and is removing the Node 20 runtime. The runner is
   pinned to `ubuntu-24.04` instead of `ubuntu-latest`, so the switch to
   Ubuntu 26 on 19 October cannot land in the middle of a release.
-
 - The notices on a target page (load-balanced name, pinned address, shared
   graph) now span the full width of the page instead of stopping short of the
   graph above them.
