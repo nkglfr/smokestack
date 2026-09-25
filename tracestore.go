@@ -309,6 +309,7 @@ type ASRoute struct {
 	Gap     bool        `json:"gap"`     // silent hops before the destination
 	Pending bool        `json:"pending"` // the destination AS is being looked up
 	Graph   *ASGraph    `json:"graph,omitempty"`
+	RIS     *RISView    `json:"ris,omitempty"`
 }
 
 // asRouteFrom builds the middle of the route from a traceroute, leaving out
@@ -417,6 +418,20 @@ func (a *API) asPathView(w http.ResponseWriter, r *http.Request) {
 		out.Dest = &hop
 	}
 
+	// What the RIS collectors see for that address: the prefix, who
+	// announces it, and its upstreams as the world sees them. A different
+	// question from ours, kept in its own block on the page.
+	if destIP != "" {
+		if v, ok := a.asn.RISFor(destIP); ok {
+			out.RIS = v
+			if time.Now().Unix()-v.FetchedAt > 7*86400 {
+				go a.asn.RefreshRIS(destIP)
+			}
+		} else {
+			go a.asn.RefreshRIS(destIP)
+		}
+	}
+
 	// The graph of the recent traceroutes, for the map drawn on the page.
 	if g := a.store.BuildASGraph(id, originASN, destASN, 25); g != nil {
 		g.DestIP = out.DestIP
@@ -461,8 +476,13 @@ func (a *API) asPathView(w http.ResponseWriter, r *http.Request) {
 		out.Path, out.Gap = asRouteFrom(tr, originASN, destASN)
 	} else {
 		// No traceroute at all: the two ends are still worth showing, with
-		// the middle explicitly unknown.
+		// the middle explicitly unknown. RIS can even supply the
+		// destination AS when the address lookup has not answered yet.
 		out.Gap = true
+		if out.Dest == nil && out.RIS != nil && out.RIS.OriginASN != "" {
+			out.Dest = &ASPathHop{ASN: out.RIS.OriginASN, Name: t.Title}
+			out.Pending = false
+		}
 	}
 	for i := range out.Path {
 		if info, _ := a.asn.Cached(strings.TrimPrefix(out.Path[i].ASN, "AS")); info != nil {

@@ -100,7 +100,11 @@
     "as_target": "doel",
     "as_gap": "onbekend",
     "as_gap_hint": "De traceroute toonde dit deel van het pad niet: die routers antwoordden niets, of het doel werd niet bereikt.",
-    "as_map_note": "{n} traceroutes · doorlopend: huidig pad, streepjes: eerder gezien"
+    "as_map_note": "{n} traceroutes · doorlopend: huidig pad, streepjes: eerder gezien",
+    "ris": "In globale routering (RIPE RIS)",
+    "ris_line": "{prefix} wordt aangekondigd door {origin} en gezien door {peers} collector-peers.",
+    "ris_up": "Netwerken die ervoor gezien worden",
+    "ris_hint": "Zo bereiken de RIS-collectors het doel, niet deze sonde: een pad gezien vanuit Amsterdam is niet het jouwe. Nuttig om te weten of het doel meerdere transits heeft, en welke."
   },
   "fed": {
     "title": "Federatie",

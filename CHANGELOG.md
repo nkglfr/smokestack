@@ -5,6 +5,14 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- **The global routing view, from RIPE RIS**, under the measured map: which
+  prefix covers the target's address, which AS announces it, how many
+  collector peers see it, and the networks the collectors see in front of it.
+  It is kept in its own block and says so: RIS describes how the rest of the
+  internet reaches the target, the map above describes how this probe does.
+  Fetched in the background, cached for a week, and used to fill in the
+  destination AS when no traceroute exists yet.
+
 - **A map of the route**, in the spirit of a looking-glass bgpmap: one box per
   autonomous system, left to right from your network to the target's, arrows
   for the adjacencies actually observed over the last 25 traceroutes, the

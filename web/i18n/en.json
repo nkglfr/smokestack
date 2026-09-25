@@ -100,7 +100,11 @@
     "as_target": "target",
     "as_gap": "unknown",
     "as_gap_hint": "The traceroute did not reveal this part of the path: those routers answered nothing, or the destination was not reached.",
-    "as_map_note": "{n} traceroutes · solid: current path, dashed: seen earlier"
+    "as_map_note": "{n} traceroutes · solid: current path, dashed: seen earlier",
+    "ris": "In global routing (RIPE RIS)",
+    "ris_line": "{prefix} is announced by {origin} and seen by {peers} collector peers.",
+    "ris_up": "Networks seen in front of it",
+    "ris_hint": "This is how the RIS collectors reach the target, not how this probe does: a path seen from Amsterdam is not yours. Useful to know whether the target is multi-homed, and through whom."
   },
   "fed": {
     "title": "Federation",

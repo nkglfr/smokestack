@@ -754,7 +754,16 @@ its bgpmap, except every line here was measured from your own probe. A target
 whose path never moved keeps the simpler chain.
 
 When the traceroute did not reveal a part of the path, a dashed **unknown**
-box says so rather than letting the two ends appear to touch. The address and
+box says so rather than letting the two ends appear to touch.
+
+Under it, **In global routing (RIPE RIS)** answers a different question: the
+prefix covering the target's address, the AS announcing it, how many RIS
+collector peers see it, and the networks the collectors see in front of it —
+which tells you whether the target is multi-homed, and through whom. The two
+blocks are deliberately separate: **a path seen from a collector in Amsterdam
+is not your path**, and merging them into one drawing would suggest otherwise.
+The RIS view is fetched in the background and cached for a week; it also
+supplies the destination AS on a target that has no traceroute yet. The address and
 the time of the traceroute the route comes from are stated underneath. It comes from the last traceroute, so it follows the same
 rules: nothing for a private target, nothing for a target hiding its address,
 and publicly only if you publish traceroutes. A share link carries it, which

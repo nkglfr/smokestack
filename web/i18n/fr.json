@@ -100,7 +100,11 @@
     "as_target": "cible",
     "as_gap": "inconnu",
     "as_gap_hint": "Le traceroute n'a pas révélé cette portion du chemin : ces routeurs n'ont rien répondu, ou la destination n'a pas été atteinte.",
-    "as_map_note": "{n} traceroutes · trait plein : chemin actuel, pointillés : vus précédemment"
+    "as_map_note": "{n} traceroutes · trait plein : chemin actuel, pointillés : vus précédemment",
+    "ris": "Dans le routage global (RIPE RIS)",
+    "ris_line": "{prefix} est annoncé par {origin} et vu par {peers} pairs de collecteurs.",
+    "ris_up": "Réseaux vus devant lui",
+    "ris_hint": "Il s'agit de la façon dont les collecteurs RIS joignent la cible, pas de celle de cette sonde : un chemin vu depuis Amsterdam n'est pas le tien. Utile pour savoir si la cible est multi-hébergée, et par qui."
   },
   "fed": {
     "title": "Fédération",

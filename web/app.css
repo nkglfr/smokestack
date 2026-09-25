@@ -227,6 +227,7 @@ table.t td { padding: 10px; border-top: 1px solid var(--line-2); vertical-align:
 .asnode.self { border-color: var(--accent); }
 .asnode.dest { border-color: var(--ok); }
 .asnode.unknown { color: var(--ink3); border-style: dashed; }
+.asnode.ris { padding: 3px 8px; background: transparent; }
 .asnode .asrole { font-size: 9.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--ink3); }
 .asnode .asn { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-weight: 600; }
 .asnode .asname { font-size: 10.5px; color: var(--ink3); max-width: 160px; overflow: hidden;

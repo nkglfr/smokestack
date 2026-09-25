@@ -282,3 +282,52 @@ func TestBuildASGraph(t *testing.T) {
 		t.Error("the break must appear as a node in the graph")
 	}
 }
+
+// The RIS view is parsed from what RIPEstat returns: the prefix, its origin,
+// and the upstreams the collectors see in front of it — ranked by how many
+// peers saw each, with prepended AS ignored.
+func TestRefreshRIS(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.Contains(r.URL.Path, "network-info"):
+			w.Write([]byte(`{"data":{"prefix":"185.31.40.0/22","asns":[{"asn":29222}]}}`))
+		case strings.Contains(r.URL.Path, "looking-glass"):
+			w.Write([]byte(`{"data":{"rrcs":[
+			  {"peers":[{"as_path":"1299 3356 29222"},{"as_path":"6939 174 29222"},
+			            {"as_path":"20932 3356 29222"},{"as_path":"3333 29222 29222"}]}]}}`))
+		default:
+			w.Write([]byte(`{"data":{}}`))
+		}
+	}))
+	defer srv.Close()
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	svc := NewASNService(store, nil, "")
+	oldBase := ripestatBaseForTests
+	ripestatBaseForTests = srv.URL + "/"
+	defer func() { ripestatBaseForTests = oldBase }()
+
+	svc.RefreshRIS("185.31.40.1")
+	v, ok := svc.RISFor("185.31.40.1")
+	if !ok {
+		t.Fatal("the view should have been cached")
+	}
+	if v.Prefix != "185.31.40.0/22" || v.OriginASN != "AS29222" {
+		t.Errorf("prefix and origin: %+v", v)
+	}
+	if !v.Announced || v.Peers != 4 {
+		t.Errorf("four collector peers expected: %+v", v)
+	}
+	if len(v.Upstreams) == 0 || v.Upstreams[0] != "AS3356" {
+		t.Errorf("the most seen upstream should come first: %v", v.Upstreams)
+	}
+	// A path ending "29222 29222" is prepending, not an upstream.
+	for _, up := range v.Upstreams {
+		if up == "AS29222" {
+			t.Error("the origin must not be listed as its own upstream")
+		}
+	}
+}

@@ -100,7 +100,11 @@
     "as_target": "mål",
     "as_gap": "ukjent",
     "as_gap_hint": "Traceroute viste ikke denne delen av veien: de ruterne svarte ikke, eller målet ble ikke nådd.",
-    "as_map_note": "{n} traceroutes · heltrukken: nåværende vei, stiplet: sett tidligere"
+    "as_map_note": "{n} traceroutes · heltrukken: nåværende vei, stiplet: sett tidligere",
+    "ris": "I global ruting (RIPE RIS)",
+    "ris_line": "{prefix} annonseres av {origin} og ses av {peers} collector-peers.",
+    "ris_up": "Nett som ses foran",
+    "ris_hint": "Slik når RIS-collectorene målet, ikke denne sonden: en vei sett fra Amsterdam er ikke din. Nyttig for å vite om målet har flere transitt, og hvilke."
   },
   "fed": {
     "title": "Føderasjon",

@@ -100,7 +100,11 @@
     "as_target": "Ziel",
     "as_gap": "unbekannt",
     "as_gap_hint": "Der Traceroute hat diesen Abschnitt nicht gezeigt: Diese Router antworteten nicht, oder das Ziel wurde nicht erreicht.",
-    "as_map_note": "{n} Traceroutes · durchgezogen: aktueller Pfad, gestrichelt: früher gesehen"
+    "as_map_note": "{n} Traceroutes · durchgezogen: aktueller Pfad, gestrichelt: früher gesehen",
+    "ris": "Im globalen Routing (RIPE RIS)",
+    "ris_line": "{prefix} wird von {origin} angekündigt und von {peers} Collector-Peers gesehen.",
+    "ris_up": "Davor gesehene Netze",
+    "ris_hint": "So erreichen die RIS-Collectors das Ziel, nicht diese Sonde: ein aus Amsterdam gesehener Pfad ist nicht Ihrer. Nützlich, um zu wissen, ob das Ziel mehrfach angebunden ist, und über wen."
   },
   "fed": {
     "title": "Föderation",

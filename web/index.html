@@ -392,6 +392,20 @@ async function renderASPath(tg) {
   const g = v.graph;
   const branching = g && (g.edges || []).length > Math.max(0, (g.nodes || []).length - 1);
   chain.innerHTML = (branching ? asGraphSVG(g) : parts.join(arrow));
+  // The global view, in its own block: it answers a different question.
+  const rb = document.getElementById("risbox");
+  if (rb) {
+    const ris = v.ris;
+    rb.hidden = !(ris && ris.prefix);
+    if (!rb.hidden) {
+      document.getElementById("risline").textContent = t("detail.ris_line",
+        { prefix: ris.prefix, origin: ris.origin_asn || "?", peers: ris.peers || 0 });
+      document.getElementById("risup").innerHTML = (ris.upstreams || []).length
+        ? `<span class="faint" style="font-size:11.5px;margin-right:4px">${esc(t("detail.ris_up"))} :</span>`
+          + ris.upstreams.map(a => `<span class="asnode ris"><span class="asn">${esc(a)}</span></span>`).join("")
+        : "";
+    }
+  }
   const meta = document.getElementById("asmeta");
   if (meta) {
     const bits = [];
@@ -526,7 +540,12 @@ function renderDetail() {
       <div class="lbl" style="margin-bottom:7px">${esc(t("detail.aspath"))}</div>
       <div class="aschain" id="aschain"></div>
       <div class="mono faint" id="asmeta" style="font-size:11px;margin-top:6px"></div>
-      <p class="strip-hint">${esc(t("detail.aspath_hint"))}</p></div></div>
+      <p class="strip-hint">${esc(t("detail.aspath_hint"))}</p>
+      <div id="risbox" hidden style="margin-top:12px;padding-top:11px;border-top:1px solid var(--line)">
+        <div class="lbl" style="margin-bottom:5px">${esc(t("detail.ris"))}</div>
+        <div id="risline" style="font-size:12.5px"></div>
+        <div class="aschain" id="risup" style="margin-top:7px"></div>
+        <p class="strip-hint">${esc(t("detail.ris_hint"))}</p></div></div></div>
     <div class="card" id="evbox" hidden style="margin-top:10px"><div class="card-b" style="padding-block:12px">
       <div class="lbl" style="margin-bottom:6px">${esc(t("detail.events"))}</div>
       <ol class="evlist" id="evlist"></ol>

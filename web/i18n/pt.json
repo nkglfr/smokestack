@@ -100,7 +100,11 @@
     "as_target": "destino",
     "as_gap": "desconhecido",
     "as_gap_hint": "O traceroute não revelou esta parte do caminho: esses routers não responderam, ou o destino não foi alcançado.",
-    "as_map_note": "{n} traceroutes · contínuo: caminho atual, tracejado: vistos antes"
+    "as_map_note": "{n} traceroutes · contínuo: caminho atual, tracejado: vistos antes",
+    "ris": "No encaminhamento global (RIPE RIS)",
+    "ris_line": "{prefix} é anunciado por {origin} e visto por {peers} pares de coletores.",
+    "ris_up": "Redes vistas à frente",
+    "ris_hint": "É como os coletores RIS chegam ao destino, não esta sonda: um caminho visto de Amesterdão não é o seu. Útil para saber se o destino tem vários trânsitos, e quais."
   },
   "fed": {
     "title": "Federação",

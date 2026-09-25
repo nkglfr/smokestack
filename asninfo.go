@@ -165,8 +165,11 @@ func (s *ASNService) getJSON(url string, pdb bool, out any) error {
 	return json.NewDecoder(io.LimitReader(resp.Body, 8<<20)).Decode(out)
 }
 
+// ripestatBaseForTests lets the tests point at a fake RIPEstat.
+var ripestatBaseForTests = ripestatBase
+
 func ripestat(endpoint, resource string) string {
-	return ripestatBase + endpoint + "/data.json?resource=" + resource +
+	return ripestatBaseForTests + endpoint + "/data.json?resource=" + resource +
 		"&sourceapp=smokestack"
 }
 
@@ -679,4 +682,114 @@ func (a *API) asnContact(w http.ResponseWriter, r *http.Request, u *User) {
 		out["peeringdb_url"] = "https://www.peeringdb.com/asn/" + strings.TrimPrefix(asn, "AS")
 	}
 	writeJSON(w, out)
+}
+
+// ------------------------------------------------- global routing (RIPE RIS)
+//
+// The traceroute says how this probe reaches a target. RIS says how the rest
+// of the internet reaches it: which prefix covers the address, which AS
+// announces it, and which networks the collectors see in front of that AS.
+// The two answer different questions and the page keeps them apart — a path
+// from a collector in Amsterdam is not our path.
+
+type RISView struct {
+	Prefix    string   `json:"prefix,omitempty"`
+	OriginASN string   `json:"origin_asn,omitempty"`
+	Upstreams []string `json:"upstreams,omitempty"` // AS seen just before the origin
+	Peers     int      `json:"peers,omitempty"`     // collector peers that saw it
+	FetchedAt int64    `json:"fetched_at,omitempty"`
+	Announced bool     `json:"announced"`
+}
+
+// RISFor returns the cached global view of an address, if any.
+func (s *ASNService) RISFor(ip string) (*RISView, bool) {
+	raw := s.store.Setting("ris:"+ip, "")
+	if raw == "" {
+		return nil, false
+	}
+	var v RISView
+	if json.Unmarshal([]byte(raw), &v) != nil {
+		return nil, false
+	}
+	return &v, true
+}
+
+// RefreshRIS asks RIPEstat what the RIS collectors see for an address. Run
+// in the background only: this is two HTTP calls to a third party.
+func (s *ASNService) RefreshRIS(ip string) {
+	if net.ParseIP(ip) == nil {
+		return
+	}
+	v := &RISView{FetchedAt: time.Now().Unix()}
+
+	// Which prefix covers the address, and who announces it.
+	var pfx struct {
+		Data struct {
+			Prefix string `json:"prefix"`
+			ASNs   []struct {
+				ASN int `json:"asn"`
+			} `json:"asns"`
+		} `json:"data"`
+	}
+	if err := s.getJSON(ripestat("network-info", ip), false, &pfx); err == nil {
+		v.Prefix = pfx.Data.Prefix
+		if len(pfx.Data.ASNs) > 0 {
+			v.OriginASN = fmt.Sprintf("AS%d", pfx.Data.ASNs[0].ASN)
+		}
+	}
+	// The AS paths the collectors hold for that prefix. The hop before the
+	// origin is one of its upstreams as the world sees it.
+	if v.Prefix != "" {
+		var lg struct {
+			Data struct {
+				RRCs []struct {
+					Peers []struct {
+						ASPath string `json:"as_path"`
+					} `json:"peers"`
+				} `json:"rrcs"`
+			} `json:"data"`
+		}
+		if err := s.getJSON(ripestat("looking-glass", v.Prefix), false, &lg); err == nil {
+			seen := map[string]int{}
+			for _, rrc := range lg.Data.RRCs {
+				for _, p := range rrc.Peers {
+					v.Peers++
+					v.Announced = true
+					parts := strings.Fields(p.ASPath)
+					if len(parts) < 2 {
+						continue
+					}
+					// The last element is the origin; the one before it is
+					// an upstream. Prepended AS (same as origin) are skipped.
+					origin := parts[len(parts)-1]
+					for i := len(parts) - 2; i >= 0; i-- {
+						if parts[i] == origin {
+							continue
+						}
+						seen["AS"+parts[i]]++
+						break
+					}
+				}
+			}
+			type kv struct {
+				as string
+				n  int
+			}
+			var list []kv
+			for as, n := range seen {
+				list = append(list, kv{as, n})
+			}
+			sort.Slice(list, func(i, j int) bool { return list[i].n > list[j].n })
+			for i, e := range list {
+				if i == 8 {
+					break // the long tail says nothing useful
+				}
+				v.Upstreams = append(v.Upstreams, e.as)
+			}
+		}
+	}
+	b, err := json.Marshal(v)
+	if err == nil {
+		s.store.SetSetting("ris:"+ip, string(b))
+	}
 }
