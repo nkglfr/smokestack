@@ -5,6 +5,11 @@ install the newest one directly, whatever versions came in between.
 
 ## Unreleased
 
+- The changelog check is a **warning** on `main` and a **failure only when
+  publishing**: a documentation lag is not a broken build, and a red main
+  teaches people to ignore red. A version still cannot be released without
+  its section or an Unreleased one.
+
 - The entries of 0.2.12 and 0.2.13 are filed under their own versions: both
   were published while they still sat under *Unreleased*, which the release
   notes on GitHub reflected.

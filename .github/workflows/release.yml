@@ -31,6 +31,10 @@ jobs:
                     REPO_URL="https://github.com/${{ github.repository }}"
       # A published version must be described in the changelog. Catching it
       # here is what keeps the two from drifting apart.
+      # Blocking here, on purpose: this is the moment a missing section
+      # becomes a release page describing the wrong thing. The section of the
+      # version, or the Unreleased one, is required — not both, since a
+      # version is often tagged while its entries still sit under Unreleased.
       - name: The changelog must describe this version
         run: |
           V="${GITHUB_REF_NAME#v}"

@@ -42,10 +42,16 @@ jobs:
           done
       # The changelog and the published versions drifted twice: entries piled
       # up under one heading while three versions were already out.
+      # A warning, not a failure: a documentation lag on main is not a broken
+      # build, and a red main trains people to ignore red. The release
+      # workflow refuses to publish a version without its section, which is
+      # where the check actually protects something.
       - name: Check the changelog against the tags
         run: |
           git fetch --tags --quiet || true
-          sh scripts/changelog-check.sh
+          if ! sh scripts/changelog-check.sh; then
+            echo "::warning title=Changelog drift::a published version has no section in CHANGELOG.md; see the log above"
+          fi
 
       - name: Check the installer
         run: sh -n install.sh
