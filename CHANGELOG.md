@@ -3,7 +3,16 @@
 Versions are published as signed releases; servers with automatic updates
 install the newest one directly, whatever versions came in between.
 
-## Unreleased
+## 0.3.0
+
+**Upgrade note — federation.** The format of the signature carried by
+inter-instance requests changes: the recipient's AS number is now part of
+what is signed, so a request cannot be replayed from one instance to
+another. Both sides of a pairing must run 0.3.0 or later. Until a peer is
+updated, its requests are refused with `request not addressed to this
+instance` and it shows a `last_error` in *Peers and pairing*. Nothing else
+in the release requires attention: measurements, targets and history are
+untouched.
 
 ### Federation hardening
 
