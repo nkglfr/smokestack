@@ -807,7 +807,10 @@ Four consequences worth stating, because they are what people get wrong:
 - **no mark simply means no change was seen**. A target whose path is stable,
   one whose traceroutes are disabled, or one too recent to have two healthy
   references, carries none. Absence of a mark is not proof of a stable path,
-  only of nothing observed.
+  only of nothing observed;
+- **a name answering from several machines raises nothing.** On a pool, or on a name resolved differently at each pass, two reference traceroutes did not go to the same place: the AS path differs because the destination differs, not because anything was rerouted. That is a different server, not a different route, and it is not recorded as one. For the same reason the route map keeps a single address — the one in use, or the pinned one — and says how many traceroutes towards the name's other addresses it left out. Press **Pin** if you want one machine measured and one path drawn.
+
+The event itself says from where to where: this instance's AS, the AS announcing the address actually measured, that address, then the AS path before and after. It is stored against that one target, so it is served only on its page — `/api/v1/events` without a `target` parameter returns instance-wide announcements and no route event at all.
 
 
 Under the graph, two strips:

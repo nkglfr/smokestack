@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"math"
 	"net"
 	"path/filepath"
@@ -222,6 +223,7 @@ func OpenStore(dir string) (*Store, error) {
 	addColumn(cfg, "targets", "hide_host INTEGER NOT NULL DEFAULT 0")
 	addColumn(cfg, "targets", "keep_days INTEGER NOT NULL DEFAULT 0")
 	migrateTCPPorts(cfg)
+	migratePathEventScope(cfg)
 
 	// Deux pools sur metrics.db : l'ecriture des mesures dispose de sa
 	// propre connexion et ne fait jamais la queue derriere des lectures de
@@ -448,6 +450,15 @@ func (s *Store) TargetByID(id int64) (*Target, error) {
 	return ts[0], nil
 }
 
+// TargetBySlug finds a target by the slug its public page uses.
+func (s *Store) TargetBySlug(slug string) (*Target, error) {
+	var id int64
+	if err := s.cfg.QueryRow(`SELECT id FROM targets WHERE slug=?`, slug).Scan(&id); err != nil {
+		return nil, err
+	}
+	return s.TargetByID(id)
+}
+
 // MoveCategory changes the order the categories appear in, by swapping this
 // one with its neighbour. Positions are rewritten from scratch each time, so
 // they stay contiguous whatever was there before.
@@ -548,6 +559,37 @@ func (s *Store) CreateCategory(slug, fr, en string, public bool) (int64, error) 
 
 // migrateTCPPorts moves the port of older TCP targets ("host:443") into
 // its own column, so that host and port can be edited separately.
+// migratePathEventScope attaches the route events recorded before they were
+// scoped to the target they describe. They were written global, with the
+// target's name in front of the title, which is why every target's page used
+// to show every other target's route changes. The name is what identifies
+// them now; one that no longer matches a target is scoped to nothing rather
+// than kept on display everywhere, because an event whose path we cannot
+// name is not an event anybody can act on.
+func migratePathEventScope(db *sql.DB) {
+	var pending int
+	db.QueryRow(`SELECT COUNT(*) FROM events WHERE kind='path' AND scope='global'`).
+		Scan(&pending)
+	if pending == 0 {
+		return
+	}
+	res, err := db.Exec(
+		`UPDATE events SET scope='target', title='Route changed',
+		        scope_id=(SELECT t.id FROM targets t
+		                   WHERE events.title = t.title || ': route changed')
+		  WHERE kind='path' AND scope='global'`)
+	if err != nil {
+		log.Printf("migration of route events: %v", err)
+		return
+	}
+	n, _ := res.RowsAffected()
+	var orphans int
+	db.QueryRow(`SELECT COUNT(*) FROM events
+	              WHERE kind='path' AND scope='target' AND scope_id IS NULL`).Scan(&orphans)
+	log.Printf("route events attached to their target: %d (%d without a match)",
+		n-int64(orphans), orphans)
+}
+
 func migrateTCPPorts(db *sql.DB) {
 	rows, err := db.Query(`SELECT id,host FROM targets WHERE proto='tcp' AND port=0`)
 	if err != nil {

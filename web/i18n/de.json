@@ -101,6 +101,7 @@
     "as_gap": "unbekannt",
     "as_gap_hint": "Der Traceroute hat diesen Abschnitt nicht gezeigt: Diese Router antworteten nicht, oder das Ziel wurde nicht erreicht.",
     "as_map_note": "{n} Traceroutes · durchgezogen: aktueller Pfad, gestrichelt: früher gesehen",
+    "as_one_addr": "nur diese Adresse · {n} Traceroutes zu anderen Adressen dieses Namens ausgelassen",
     "ris": "Im globalen Routing (RIPE RIS)",
     "ris_line": "{prefix} wird von {origin} angekündigt und von {peers} Collector-Peers gesehen.",
     "ris_up": "Davor gesehene Netze",

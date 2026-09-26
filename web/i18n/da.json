@@ -101,6 +101,7 @@
     "as_gap": "ukendt",
     "as_gap_hint": "Traceroute viste ikke denne del af vejen: de routere svarede ikke, eller målet blev ikke nået.",
     "as_map_note": "{n} traceroutes · fuld linje: nuværende vej, stiplet: set tidligere",
+    "as_one_addr": "kun denne adresse · {n} traceroutes til navnets andre adresser udeladt",
     "ris": "I global routing (RIPE RIS)",
     "ris_line": "{prefix} annonceres af {origin} og ses af {peers} collector-peers.",
     "ris_up": "Net set foran",

@@ -412,6 +412,9 @@ async function renderASPath(tg) {
     if (v.dest_ip) bits.push(v.dest_ip);
     if (v.ts) bits.push(new Date(v.ts * 1000).toLocaleString());
     if (branching) bits.push(t("detail.as_map_note", { n: g.traces }));
+    // A name answering from several machines was traced to several places.
+    // Saying which address this route belongs to is the whole point.
+    if (g && g.other_addrs) bits.push(t("detail.as_one_addr", { n: g.other_addrs }));
     meta.textContent = bits.join(" · ");
   }
 }
@@ -565,7 +568,7 @@ async function paint() {
   const q = `/api/v1/series?target=${tg.id}&from=${S.from}&to=${S.to}&points=1500`;
   const [cur, ev, nav, traces] = await Promise.all([
     fetch(q + (SHARE ? "&share=" + encodeURIComponent(SHARE) : "")).then(r => r.json()),
-    fetch(`/api/v1/events?from=${S.from}&to=${S.to}`).then(r => r.ok ? r.json() : []).catch(() => []),
+    fetch(`/api/v1/events?target=${tg.id}&from=${S.from}&to=${S.to}`).then(r => r.ok ? r.json() : []).catch(() => []),
     S.nav ? Promise.resolve(S.nav) : fetch(`/api/v1/series?target=${tg.id}&from=${now - 365 * 86400}&to=${now}&points=600` + (SHARE ? "&share=" + encodeURIComponent(SHARE) : "")).then(r => r.json()),
     fetch(`/api/v1/traceroutes?target=${tg.id}&limit=40` + (SHARE ? "&share=" + encodeURIComponent(SHARE) : "")).then(r => r.ok ? r.json() : []).catch(() => [])
   ]);

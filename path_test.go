@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -73,18 +75,31 @@ func TestPathChangeRecorded(t *testing.T) {
 	if !ok || !strings.Contains(detail, "AS174") || !strings.Contains(detail, "AS3356") {
 		t.Fatalf("the change should be recorded with both paths: %q", detail)
 	}
-	// The title drawn on the graph stays short; the paths live in the body.
-	var title, body string
-	store.cfg.QueryRow(`SELECT title,COALESCE(body,'') FROM events WHERE kind='path'
-	                    ORDER BY ts_start DESC LIMIT 1`).Scan(&title, &body)
-	if len(title) > 60 || !strings.Contains(title, "route changed") {
+	// The title drawn on the graph stays short; the body names both ends of
+	// the path, because a route is only meaningful between two networks.
+	var title, body, scope string
+	var scopeID *int64
+	store.cfg.QueryRow(`SELECT title,COALESCE(body,''),scope,scope_id FROM events
+	                    WHERE kind='path' ORDER BY ts_start DESC LIMIT 1`).
+		Scan(&title, &body, &scope, &scopeID)
+	if len(title) > 60 || !strings.Contains(strings.ToLower(title), "route changed") {
 		t.Errorf("the event title must stay short and readable: %q", title)
+	}
+	// The event belongs to this target and to nothing else.
+	if scope != "target" || scopeID == nil || *scopeID != id {
+		t.Errorf("the event must be scoped to its target: scope=%q id=%v", scope, scopeID)
 	}
 	if !strings.Contains(body, "AS174") || !strings.Contains(body, "AS3356") {
 		t.Errorf("the paths must be in the body: %q", body)
 	}
+	if !strings.Contains(body, "AS15169") || !strings.Contains(body, "Transit Paris") {
+		t.Errorf("the body must name the far end of the path: %q", body)
+	}
+	if !strings.Contains(body, "192.0.2.9") {
+		t.Errorf("the body must name the address actually measured: %q", body)
+	}
 	if !strings.Contains(detail, "Transit Paris") {
-		t.Errorf("the event should name the target: %q", detail)
+		t.Errorf("the context given to alerting should name the target: %q", detail)
 	}
 	// Out of the window, it is not offered as context any more.
 	if _, ok := store.RecentPathChange(id, now-60); ok {
@@ -328,6 +343,135 @@ func TestRefreshRIS(t *testing.T) {
 	for _, up := range v.Upstreams {
 		if up == "AS29222" {
 			t.Error("the origin must not be listed as its own upstream")
+		}
+	}
+}
+
+// A route event belongs to one target. It must appear on that target's page
+// and on no other, which is what the scoped events endpoint decides.
+func TestRouteEventsAreServedPerTarget(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	cat, _ := store.CreateCategory("c", "C", "C", true)
+	mk := func(slug, title string) int64 {
+		id, err := store.CreateTarget(&Target{CategoryID: cat, Slug: slug, Title: title,
+			Host: "192.0.2.9", Proto: "icmp", IntervalS: 60, Packets: 10, SpacingMs: 100,
+			TimeoutMs: 1000, Public: true, Enabled: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	netflix, tv := mk("netflix", "Netflix"), mk("france-tv", "France TV")
+	now := time.Now().Unix()
+	store.cfg.Exec(`INSERT INTO events(ts_start,kind,title,body,scope,scope_id,public)
+	                VALUES(?,'path','Route changed','to Netflix','target',?,1)`, now-60, netflix)
+	store.cfg.Exec(`INSERT INTO events(ts_start,kind,title,body,scope,scope_id,public)
+	                VALUES(?,'path','Route changed','to France TV','target',?,1)`, now-60, tv)
+	store.cfg.Exec(`INSERT INTO events(ts_start,kind,title,scope,public)
+	                VALUES(?,'maintenance','Instance maintenance','global',1)`, now-60)
+
+	api := &API{store: store}
+	get := func(q string) []Event {
+		w := httptest.NewRecorder()
+		api.events(w, httptest.NewRequest("GET", "/api/v1/events?"+q, nil))
+		if w.Code != 200 {
+			t.Fatalf("HTTP %d for %q: %s", w.Code, q, w.Body)
+		}
+		var out []Event
+		if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+			t.Fatal(err)
+		}
+		return out
+	}
+	bodies := func(evs []Event) string {
+		var b []string
+		for _, e := range evs {
+			b = append(b, e.Title+"/"+e.Body)
+		}
+		return strings.Join(b, "|")
+	}
+
+	// Netflix's page: its own route change, plus what concerns the instance.
+	got := bodies(get("target=netflix"))
+	if !strings.Contains(got, "to Netflix") {
+		t.Errorf("the target's own route change is missing: %q", got)
+	}
+	if strings.Contains(got, "to France TV") {
+		t.Errorf("another target's route change must not appear here: %q", got)
+	}
+	if !strings.Contains(got, "Instance maintenance") {
+		t.Errorf("an instance-wide event still belongs on every page: %q", got)
+	}
+	// By numeric identifier too, which is what the page actually sends.
+	if g := bodies(get(fmt.Sprintf("target=%d", tv))); !strings.Contains(g, "to France TV") ||
+		strings.Contains(g, "to Netflix") {
+		t.Errorf("lookup by id: %q", g)
+	}
+	// Without a target — the home page — no route event at all.
+	if g := bodies(get("")); strings.Contains(g, "Route changed") {
+		t.Errorf("a route event concerns one path, not the instance: %q", g)
+	}
+	// An unknown target is an error, not an empty list that could be mistaken
+	// for "this target has no events".
+	w := httptest.NewRecorder()
+	api.events(w, httptest.NewRequest("GET", "/api/v1/events?target=nope", nil))
+	if w.Code != 404 {
+		t.Errorf("an unknown target should answer 404, got %d", w.Code)
+	}
+}
+
+// A rotating name answers from a different machine at each pass. The two
+// reference traceroutes then went to different places, so the AS path differs
+// without anything having been rerouted: that is not a route change, and the
+// route map must not mix the paths either.
+func TestRotatingTargetIsNotARouteChange(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	cat, _ := store.CreateCategory("c", "C", "C", true)
+	id, err := store.CreateTarget(&Target{CategoryID: cat, Slug: "pool", Title: "NTP pool",
+		Host: "fr.pool.ntp.org", Proto: "icmp", IntervalS: 60, Packets: 10, SpacingMs: 100,
+		TimeoutMs: 1000, Public: true, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Unix()
+	save := func(ts int64, dest, transit, last string) {
+		if err := store.SaveTraceroute(&Traceroute{TargetID: id, ProbeID: 1, TS: ts,
+			Kind: "reference", Family: 4, Dest: dest, Reached: true,
+			Hops: []Hop{hopAS("192.0.2.1", "AS64500"), hopAS("198.51.100.1", transit),
+				hopAS(dest, last)}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Two references, two different servers of the pool, two different paths.
+	save(now-7200, "203.0.113.10", "AS174", "AS2200")
+	save(now-3600, "203.0.113.77", "AS3356", "AS1234")
+	if detail, ok := store.RecentPathChange(id, now-86400); ok {
+		t.Errorf("a different server is not a route change: %q", detail)
+	}
+	// The same server, a real transit change: that one is recorded.
+	save(now-1800, "203.0.113.77", "AS174", "AS1234")
+	if _, ok := store.RecentPathChange(id, now-86400); !ok {
+		t.Error("a genuine change on the same address must still be seen")
+	}
+	// The map keeps one address and says how many traceroutes it left out.
+	g := store.BuildASGraph(id, "AS64500", "AS1234", 25)
+	if g == nil {
+		t.Fatal("a graph was expected")
+	}
+	if g.OtherAddrs != 1 {
+		t.Errorf("one traceroute went to another address: OtherAddrs=%d", g.OtherAddrs)
+	}
+	for _, n := range g.Nodes {
+		if n.ASN == "AS2200" {
+			t.Error("the path to another server must not appear in this map")
 		}
 	}
 }
