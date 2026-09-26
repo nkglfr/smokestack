@@ -158,6 +158,16 @@ type Federation struct {
 	mu     sync.Mutex
 	nonces map[string]int64
 	client *http.Client
+	asnSvc *ASNService
+}
+
+// UseASNService donne a la federation de quoi verifier, quand
+// l'information est en cache, qu'une ancre appartient bien a l'AS qui la
+// declare.
+func (f *Federation) UseASNService(s *ASNService) {
+	if f != nil {
+		f.asnSvc = s
+	}
 }
 
 // ------------------------------------------------------------- identite
@@ -171,7 +181,7 @@ func NewFederation(store *Store, dataDir string, cfg FedConfig) (*Federation, er
 		asn: cfg.ASN, org: cfg.Org, baseURL: strings.TrimSuffix(cfg.BaseURL, "/"),
 		anchors: cfg.Anchors,
 		nonces:  map[string]int64{},
-		client:  &http.Client{Timeout: 20 * time.Second},
+		client:  fedClient(20 * time.Second),
 	}
 	if err := f.loadKey(); err != nil {
 		return nil, err
@@ -245,21 +255,29 @@ func (f *Federation) Profile() FedProfile {
 
 // -------------------------------------------------------- signatures
 
-func canonical(method, path string, ts int64, nonce string, body []byte) []byte {
+// canonical inclut l'audience — le numero d'AS du destinataire — pour
+// qu'une requete signee a l'intention d'une instance ne puisse pas etre
+// rejouee telle quelle vers une autre.
+func canonical(method, audience, path string, ts int64, nonce string, body []byte) []byte {
 	sum := sha256.Sum256(body)
 	return []byte(strings.Join([]string{
-		method, path, strconv.FormatInt(ts, 10), nonce,
+		fedSigVersion, method, audience, path, strconv.FormatInt(ts, 10), nonce,
 		hex.EncodeToString(sum[:]),
 	}, "\n"))
 }
 
-func (f *Federation) sign(req *http.Request, path string, body []byte) {
+// fedSigVersion est dans la chaine signee : un changement de format ne
+// peut pas etre confondu avec l'ancien.
+const fedSigVersion = "smokestack-fed-1"
+
+func (f *Federation) sign(req *http.Request, audience, path string, body []byte) {
 	ts := time.Now().Unix()
 	nb := make([]byte, 12)
 	rand.Read(nb)
 	nonce := hex.EncodeToString(nb)
-	sig := ed25519.Sign(f.priv, canonical(req.Method, path, ts, nonce, body))
+	sig := ed25519.Sign(f.priv, canonical(req.Method, audience, path, ts, nonce, body))
 	req.Header.Set("X-Fed-ASN", f.Profile().ASN)
+	req.Header.Set("X-Fed-Audience", audience)
 	req.Header.Set("X-Fed-Timestamp", strconv.FormatInt(ts, 10))
 	req.Header.Set("X-Fed-Nonce", nonce)
 	req.Header.Set("X-Fed-Signature", base64.StdEncoding.EncodeToString(sig))
@@ -267,10 +285,11 @@ func (f *Federation) sign(req *http.Request, path string, body []byte) {
 }
 
 type sigHeaders struct {
-	asn   string
-	ts    int64
-	nonce string
-	sig   []byte
+	asn      string
+	audience string
+	ts       int64
+	nonce    string
+	sig      []byte
 }
 
 // readSigned extrait le corps et les en-tetes de signature sans encore
@@ -283,11 +302,25 @@ func (f *Federation) readSigned(r *http.Request) (sigHeaders, []byte, error) {
 		return h, nil, err
 	}
 	h.asn = r.Header.Get("X-Fed-ASN")
+	h.audience = r.Header.Get("X-Fed-Audience")
 	h.ts, _ = strconv.ParseInt(r.Header.Get("X-Fed-Timestamp"), 10, 64)
 	h.nonce = r.Header.Get("X-Fed-Nonce")
 	sigB64 := r.Header.Get("X-Fed-Signature")
 	if h.asn == "" || h.nonce == "" || sigB64 == "" {
 		return h, body, fmt.Errorf("missing signature headers")
+	}
+	if len(h.nonce) > 64 {
+		return h, body, fmt.Errorf("oversized nonce")
+	}
+	// L'audience doit etre nous. Sans cela, une requete signee vers une
+	// instance est acceptee par toutes les autres.
+	me, err := normASN(f.Profile().ASN)
+	if err != nil {
+		return h, body, fmt.Errorf("this instance has no AS number set")
+	}
+	aud, err := normASN(h.audience)
+	if err != nil || aud != me {
+		return h, body, fmt.Errorf("request not addressed to this instance")
 	}
 	now := time.Now().Unix()
 	if h.ts < now-fedClockSkew || h.ts > now+fedClockSkew {
@@ -298,18 +331,6 @@ func (f *Federation) readSigned(r *http.Request) (sigHeaders, []byte, error) {
 		return h, body, err
 	}
 	h.sig = sig
-
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for k, v := range f.nonces {
-		if v < now-fedClockSkew*2 {
-			delete(f.nonces, k)
-		}
-	}
-	if _, seen := f.nonces[h.nonce]; seen {
-		return h, body, fmt.Errorf("nonce already seen")
-	}
-	f.nonces[h.nonce] = now
 	return h, body, nil
 }
 
@@ -318,9 +339,39 @@ func (f *Federation) checkSig(pub ed25519.PublicKey, r *http.Request,
 	if len(pub) != ed25519.PublicKeySize {
 		return fmt.Errorf("missing public key")
 	}
-	if !ed25519.Verify(pub, canonical(r.Method, r.URL.Path, h.ts, h.nonce, body), h.sig) {
+	if !ed25519.Verify(pub, canonical(r.Method, h.audience, r.URL.Path,
+		h.ts, h.nonce, body), h.sig) {
 		return fmt.Errorf("invalid signature")
 	}
+	// Le nonce n'est retenu qu'une fois la signature verifiee : sinon
+	// n'importe qui remplit le cache avec des requetes non signees, et
+	// peut meme « bruler » a l'avance le nonce d'un pair.
+	return f.useNonce(h.asn, h.nonce, h.ts)
+}
+
+// useNonce refuse un rejeu et borne le cache. La cle inclut l'AS pour que
+// deux pairs ne puissent pas s'invalider mutuellement.
+func (f *Federation) useNonce(asn, nonce string, ts int64) error {
+	now := time.Now().Unix()
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for k, v := range f.nonces {
+		if v < now-fedClockSkew*2 {
+			delete(f.nonces, k)
+		}
+	}
+	if len(f.nonces) >= maxNonceCache {
+		// Plein malgre le nettoyage : on repart a vide plutot que de
+		// grossir sans fin. La fenetre de rejeu reste bornee par
+		// l'horodatage, deja verifie.
+		f.nonces = map[string]int64{}
+		log.Printf("federation: nonce cache full, cleared")
+	}
+	key := asn + "/" + nonce
+	if _, seen := f.nonces[key]; seen {
+		return fmt.Errorf("nonce already seen")
+	}
+	f.nonces[key] = ts
 	return nil
 }
 
@@ -418,10 +469,10 @@ func (f *Federation) trustedPeers() []*Peer {
 // AddPeer va chercher le profil d'une instance distante et l'enregistre
 // en attente. L'operateur compare ensuite l'empreinte retournee avec
 // celle que son homologue lui a communiquee, puis approuve.
-func (f *Federation) AddPeer(url string) (*Peer, error) {
-	url = strings.TrimSuffix(strings.TrimSpace(url), "/")
-	if !strings.HasPrefix(url, "https://") && !strings.HasPrefix(url, "http://") {
-		return nil, fmt.Errorf("the URL must start with https://")
+func (f *Federation) AddPeer(rawURL string) (*Peer, error) {
+	url, err := safeFedURL(rawURL)
+	if err != nil {
+		return nil, err
 	}
 	resp, err := f.client.Get(url + "/api/v1/fed/profile")
 	if err != nil {
@@ -438,10 +489,21 @@ func (f *Federation) AddPeer(url string) (*Peer, error) {
 	if prof.ASN == "" || prof.PubKey == "" {
 		return nil, fmt.Errorf("incomplete remote profile (missing AS or key)")
 	}
+	asn, err := normASN(prof.ASN)
+	if err != nil {
+		return nil, err
+	}
+	prof.ASN = asn
 	raw, err := base64.StdEncoding.DecodeString(prof.PubKey)
 	if err != nil || len(raw) != ed25519.PublicKeySize {
 		return nil, fmt.Errorf("invalid remote public key")
 	}
+	if err := f.refuseKeyChange(url, prof.ASN, prof.PubKey); err != nil {
+		return nil, err
+	}
+	prof.Anchors, _ = cleanAnchors(prof.Anchors)
+	prof.Org = oneLine(prof.Org, 120)
+	prof.NOCEmail = oneLine(prof.NOCEmail, 200)
 	sum := sha256.Sum256(raw)
 	h := hex.EncodeToString(sum[:8])
 	var parts []string
@@ -466,6 +528,82 @@ func (f *Federation) AddPeer(url string) (*Peer, error) {
 	}
 	row := f.store.cfg.QueryRow(`SELECT `+peerCols+` FROM fed_peers WHERE url=?`, url)
 	return scanPeer(row.Scan)
+}
+
+// refuseKeyChange interdit qu'une demande entrante — ou une relecture de
+// profil — remplace la cle d'un pair deja approuve. Sans ce garde-fou,
+// accepter une fausse « nouvelle demande » d'un pair connu donne sa place
+// a l'attaquant, en conservant l'etat trusted. Le changement de cle reste
+// possible, mais par une action explicite ou l'operateur saisit la
+// nouvelle empreinte.
+func (f *Federation) refuseKeyChange(url, asn, pubkey string) error {
+	rows, err := f.store.cfg.Query(
+		`SELECT url,asn,pubkey,fingerprint,state FROM fed_peers
+		  WHERE url=? OR asn=?`, url, asn)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var u, a, pk, fp, st string
+		if rows.Scan(&u, &a, &pk, &fp, &st) != nil {
+			continue
+		}
+		if st != "trusted" || pk == pubkey {
+			continue
+		}
+		return fmt.Errorf("%s is already paired with a different key "+
+			"(fingerprint %s): if that instance really rotated its key, "+
+			"rotate it here explicitly", a, fp)
+	}
+	return rows.Err()
+}
+
+// RotatePeerKey remplace la cle d'un pair approuve, en exigeant que
+// l'operateur saisisse l'empreinte lue hors bande. C'est le seul chemin
+// vers un changement de cle.
+func (f *Federation) RotatePeerKey(id int64, confirm string) error {
+	row := f.store.cfg.QueryRow(`SELECT `+peerCols+` FROM fed_peers WHERE id=?`, id)
+	p, err := scanPeer(row.Scan)
+	if err != nil {
+		return fmt.Errorf("peer not found")
+	}
+	resp, err := f.client.Get(p.URL + "/api/v1/fed/profile")
+	if err != nil {
+		return fmt.Errorf("instance unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+	var prof FedProfile
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<18)).Decode(&prof); err != nil {
+		return err
+	}
+	raw, err := base64.StdEncoding.DecodeString(prof.PubKey)
+	if err != nil || len(raw) != ed25519.PublicKeySize {
+		return fmt.Errorf("invalid remote public key")
+	}
+	fp := fingerprintOf(raw)
+	if !sameFingerprint(confirm, fp) {
+		return fmt.Errorf("the fingerprint you entered does not match the one "+
+			"this instance now publishes (%s)", fp)
+	}
+	_, err = f.store.cfg.Exec(
+		`UPDATE fed_peers SET pubkey=?, fingerprint=? WHERE id=?`,
+		prof.PubKey, fp, id)
+	if err == nil {
+		log.Printf("federation: key of %s rotated to fingerprint %s", p.ASN, fp)
+	}
+	return err
+}
+
+// sameFingerprint compare deux empreintes sans se soucier des tirets ni
+// de la casse : l'operateur les recopie a la main.
+func sameFingerprint(a, b string) bool {
+	clean := func(s string) string {
+		return strings.ToLower(strings.NewReplacer("-", "", " ", "", ":", "").Replace(
+			strings.TrimSpace(s)))
+	}
+	ca, cb := clean(a), clean(b)
+	return ca != "" && ca == cb
 }
 
 // TrustPeer approuve un pair et cree les cibles de mesure vers ses
@@ -495,7 +633,19 @@ func (f *Federation) ensureAnchorTargets(p *Peer) error {
 			return err
 		}
 	}
-	for _, anchor := range p.Anchors {
+	// Une ancre est une adresse que toute la federation va pinguer : on
+	// n'accepte que des adresses publiques, en nombre borne, et on
+	// signale celles que le pair ne semble pas annoncer lui-meme.
+	anchors, rejected := cleanAnchors(p.Anchors)
+	for _, bad := range rejected {
+		log.Printf("federation: anchor %q announced by %s refused "+
+			"(not a public address, or too many)", bad, p.ASN)
+	}
+	for _, anchor := range anchors {
+		if own, known := anchorBelongsTo(f.asnSvc, anchor, p.ASN); known && !own {
+			log.Printf("federation: anchor %s announced by %s is not in that AS; "+
+				"measured anyway but worth checking", anchor, p.ASN)
+		}
 		t := &Target{
 			CategoryID: catID,
 			Slug:       "fed-" + strings.ToLower(p.ASN) + "-" + anchor,
@@ -587,7 +737,7 @@ func (f *Federation) postSigned(peer *Peer, path string, payload any) error {
 	if err != nil {
 		return err
 	}
-	f.sign(req, path, body)
+	f.sign(req, peer.ASN, path, body)
 	resp, err := f.client.Do(req)
 	if err != nil {
 		return err
@@ -619,6 +769,47 @@ func (f *Federation) pushReports() {
 			`UPDATE fed_peers SET last_seen_at=?, last_error=NULL WHERE id=?`,
 			time.Now().Unix(), p.ID)
 	}
+}
+
+// acceptReports filtre ce qu'un pair nous declare avant tout
+// enregistrement : il ne peut parler que de ses propres mesures, vers un
+// membre connu, sur une fenetre qui n'est pas dans le futur, avec des
+// valeurs plausibles.
+func (f *Federation) acceptReports(from string, in []anchorReport) []anchorReport {
+	now := time.Now().Unix()
+	known := map[string]bool{f.Profile().ASN: true}
+	for _, p := range f.trustedPeers() {
+		known[p.ASN] = true
+	}
+	var out []anchorReport
+	for i, r := range in {
+		if i >= maxReports {
+			break
+		}
+		fromASN, err := normASN(r.FromASN)
+		if err != nil || fromASN != from {
+			continue // un pair ne declare que ses propres mesures
+		}
+		toASN, err := normASN(r.ToASN)
+		if err != nil || !known[toASN] {
+			continue
+		}
+		anchor, err := checkAnchor(r.Anchor)
+		if err != nil {
+			continue
+		}
+		win, err := clampWindow(r.WinEnd, now)
+		if err != nil {
+			continue
+		}
+		out = append(out, anchorReport{
+			FromASN: fromASN, ToASN: toASN, Anchor: anchor, WinEnd: win,
+			MedMs:   clampFloat(r.MedMs, 0, 60000),
+			P95Ms:   clampFloat(r.P95Ms, 0, 60000),
+			LossPct: clampFloat(r.LossPct, 0, 100),
+		})
+	}
+	return out
 }
 
 func (f *Federation) storeReports(reports []anchorReport) {
@@ -748,7 +939,11 @@ func (f *Federation) Incidents(limit int) ([]Incident, error) {
 		`SELECT i.id,i.opened_at,i.closed_at,i.observer_asn,i.suspect_asn,
 		        i.target,i.severity,COALESCE(i.detail,''),i.notice_due_at,
 		        i.notified_at,i.ack_at,COALESCE(i.ack_by,''),
-		        (SELECT COUNT(*) FROM fed_corroborations c WHERE c.incident_id=i.id)
+		        (SELECT COUNT(*) FROM fed_corroborations c WHERE c.incident_id=i.id),
+		        COALESCE((SELECT c.med_ms FROM fed_corroborations c
+		                   WHERE c.incident_id=i.id AND c.observer_asn=i.observer_asn),0),
+		        COALESCE((SELECT c.loss_pct FROM fed_corroborations c
+		                   WHERE c.incident_id=i.id AND c.observer_asn=i.observer_asn),0)
 		   FROM fed_incidents i ORDER BY i.opened_at DESC LIMIT ?`, limit)
 	if err != nil {
 		return nil, err
@@ -759,7 +954,8 @@ func (f *Federation) Incidents(limit int) ([]Incident, error) {
 		var i Incident
 		if err := rows.Scan(&i.ID, &i.OpenedAt, &i.ClosedAt, &i.ObserverASN,
 			&i.SuspectASN, &i.Target, &i.Severity, &i.Detail, &i.NoticeDueAt,
-			&i.NotifiedAt, &i.AckAt, &i.AckBy, &i.Corroborated); err != nil {
+			&i.NotifiedAt, &i.AckAt, &i.AckBy, &i.Corroborated,
+			&i.MedMs, &i.LossPct); err != nil {
 			return nil, err
 		}
 		out = append(out, i)
@@ -788,6 +984,13 @@ func (f *Federation) notifyDue() {
 		if i.Corroborated < fedMinCorroborations {
 			continue
 		}
+		// Nous ne sollicitons jamais un NOC sur la seule parole d'autres
+		// instances : il faut que nos propres mesures corroborent. Sans
+		// cette condition, des pairs complices suffisent a faire partir un
+		// courriel depuis notre SMTP.
+		if !f.weCorroborate(i.ID) {
+			continue
+		}
 		// On ne notifie que les membres, qui ont consenti en rejoignant.
 		peer, err := f.PeerByASN(i.SuspectASN)
 		if err != nil || peer.State != "trusted" || peer.NOCEmail == "" {
@@ -800,6 +1003,15 @@ func (f *Federation) notifyDue() {
 		f.store.cfg.Exec(`UPDATE fed_incidents SET notified_at=? WHERE id=?`, now, i.ID)
 		log.Printf("NOC %s notified for incident %s", peer.ASN, i.ID)
 	}
+}
+
+// weCorroborate dit si cette instance a elle-meme observe l'incident.
+func (f *Federation) weCorroborate(id string) bool {
+	var n int
+	f.store.cfg.QueryRow(
+		`SELECT COUNT(*) FROM fed_corroborations
+		  WHERE incident_id=? AND observer_asn=?`, id, f.Profile().ASN).Scan(&n)
+	return n > 0
 }
 
 func (f *Federation) notifyConfig() NotifyConfig {
@@ -825,8 +1037,10 @@ func (f *Federation) sendNOC(peer *Peer, i Incident) error {
 			var asn string
 			var loss, med float64
 			if rows.Scan(&asn, &loss, &med) == nil {
-				obs = append(obs, fmt.Sprintf("  %-10s loss %5.1f%%  median %6.2f ms",
-					asn, loss, med))
+				if a, err := normASN(asn); err == nil {
+					obs = append(obs, fmt.Sprintf("  %-10s loss %5.1f%%  median %6.2f ms",
+						a, clampFloat(loss, 0, 100), clampFloat(med, 0, 60000)))
+				}
 			}
 		}
 		rows.Close()
@@ -854,13 +1068,16 @@ Sender           : %s (%s) - %s
 To acknowledge or report ongoing maintenance, your instance can answer on
 /api/v1/fed/ack, or simply reply to this message.
 `,
-		peer.ASN, peer.Org, i.Target,
+		oneLine(peer.ASN, 24), oneLine(peer.Org, 120), oneLine(i.Target, 120),
 		time.Unix(i.OpenedAt, 0).UTC().Format("2006-01-02 15:04"),
-		i.Corroborated, i.Detail, strings.Join(obs, "\n"),
-		me.URL, i.ID, me.Org, me.ASN, me.NOCEmail)
+		i.Corroborated, fedText(i.Detail), strings.Join(obs, "\n"),
+		me.URL, i.ID, oneLine(me.Org, 120), oneLine(me.ASN, 24),
+		oneLine(me.NOCEmail, 200))
 
-	subject := fmt.Sprintf("[smokestack] Degradation observed towards %s - %s",
-		peer.ASN, i.Target)
+	// Le sujet contient des valeurs venues d'un pair : un retour a la
+	// ligne y ajouterait des en-tetes.
+	subject := mailHeader(fmt.Sprintf("[smokestack] Degradation observed towards %s - %s",
+		peer.ASN, i.Target))
 
 	if cfg.WebhookURL != "" {
 		payload, _ := json.Marshal(map[string]any{
@@ -878,15 +1095,23 @@ To acknowledge or report ongoing maintenance, your instance can answer on
 	if cfg.SMTPHost == "" || cfg.From == "" {
 		return nil
 	}
+	from, err := mailAddress(cfg.From)
+	if err != nil {
+		return fmt.Errorf("sender address: %w", err)
+	}
+	to, err := mailAddress(peer.NOCEmail)
+	if err != nil {
+		return fmt.Errorf("NOC address of %s: %w", peer.ASN, err)
+	}
 	msg := []byte(fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\n"+
 		"MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s",
-		cfg.From, peer.NOCEmail, subject, body))
+		from, to, subject, body))
 	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
 	var auth smtp.Auth
 	if cfg.SMTPUser != "" {
 		auth = smtp.PlainAuth("", cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPHost)
 	}
-	return smtp.SendMail(addr, auth, cfg.From, []string{peer.NOCEmail}, msg)
+	return smtp.SendMail(addr, auth, from, []string{to}, msg)
 }
 
 // ------------------------------------------------------------- boucle

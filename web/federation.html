@@ -63,7 +63,7 @@ function render(site) {
         <div class="pill-list">${(p.anchors||[]).map(a=>`<span>${esc(a)}</span>`).join("")}</div></div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:12px">
         <span class="faint">${esc(t("fed.last_seen"))} : ${p.last_seen_at ? esc(I18N.ago(p.last_seen_at)) : "—"}</span>
-        <a href="${esc(p.url)}" rel="noopener">${esc(t("fed.visit"))} →</a>
+        ${App.escURL(p.url) ? `<a href="${App.escURL(p.url)}" rel="noopener noreferrer">${esc(t("fed.visit"))} →</a>` : ""}
       </div>
     </div></div>`).join("")
     : `<div class="note" data-i18n="fed.none">${esc(t("fed.none"))}</div>`;

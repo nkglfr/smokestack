@@ -159,6 +159,10 @@ async function api(method,path,body){
 }
 const esc=s=>String(s==null?"":s).replace(/[&<>"']/g,
   c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+// Échapper ne protège pas un href : javascript:… reste cliquable. Toute
+// URL qui vient d'ailleurs (pair, PeeringDB) passe par ici.
+const escURL=s=>{const v=String(s==null?"":s).trim();
+  return /^https?:\/\/[^\s]+$/i.test(v)?esc(v):"";};
 const dt=ts=>ts?new Date(ts*1000).toLocaleString("en-GB",
   {day:"2-digit",month:"short",year:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
 const gb=b=>(b/1073741824).toFixed(2)+" GB";
@@ -958,7 +962,13 @@ async function viewFed(m){
       ${p.private_note?`<div class="quote priv"><span class="lbl">Private note for you</span>${esc(p.private_note)}</div>`:""}
       <div style="font-size:12px;color:var(--ink2)">Anchors: <span class="mono">${(p.anchors||[]).map(esc).join(", ")||"—"}</span>
         · Public listing: ${p.public_listing?'<span class="badge b-ok">accepted by the requester</span>':'<span class="badge b-n">declined by the requester</span>'}</div>
-      <div class="field" style="margin-top:11px"><label>Private reply to the requester (optional)</label>
+      <div class="field" style="margin-top:11px"><label>Fingerprint as the operator gave it to you
+        <span style="color:var(--crit)">*</span> — required to accept</label>
+        <input class="mono" id="fpc${p.id}" placeholder="0000-0000-0000-0000" autocomplete="off">
+        <small style="color:var(--ink2)">Type what you were told by phone, on a peering list or at an
+          exchange. A signature only proves the sender holds that key, not who they are: this comparison
+          is what ties the key to a real network.</small></div>
+      <div class="field"><label>Private reply to the requester (optional)</label>
         <textarea rows="2" id="rep${p.id}" placeholder="Welcome! Our anchors answer over IPv4 and IPv6."></textarea></div>
       <label class="chk"><input type="checkbox" id="pub${p.id}" ${p.public_listing?"checked":"disabled"}>
         <span>Show this pairing on our public page<small>${p.public_listing
@@ -1011,7 +1021,8 @@ async function viewFed(m){
           ${p.public?"checked":""} ${p.peer_consent?"":"disabled"}>
           <span style="font-size:12px">${p.peer_consent?(p.public?"listed":"hidden"):"no consent"}</span></label></td>
         <td style="font-size:12px">${dt(p.last_seen_at)}</td>
-        <td style="text-align:right"><button class="btn d s" data-pdel="${p.id}">Remove</button></td></tr>`+
+        <td style="text-align:right"><button class="btn s" data-prot="${p.id}">Rotate key</button>
+          <button class="btn d s" data-pdel="${p.id}">Remove</button></td></tr>`+
         (p.last_error?`<tr><td colspan="6" style="font-size:11px;color:var(--crit);border-top:none;padding-top:0">${esc(p.last_error)}</td></tr>`:"")
       ).join("")+`</tbody></table>`:`<div class="empty">No peer yet.</div>`;
     html+=`</div></div>`;
@@ -1031,9 +1042,10 @@ async function viewFed(m){
     };
     document.querySelectorAll("[data-acc]").forEach(b=>b.onclick=async()=>{
       const id=b.dataset.acc;
-      if(!confirm("Did you check the fingerprint out of band? Accepting approves this peer and starts measuring its anchors.")) return;
+      const fp=($("#fpc"+id).value||"").trim();
+      if(!fp){toast("Enter the fingerprint you received out of band",true);$("#fpc"+id).focus();return;}
       try{await api("POST","/api/v1/admin/fed/pairing/"+id+"/decide",
-        {accept:true,reply:$("#rep"+id).value,public_listing:$("#pub"+id).checked});
+        {accept:true,fingerprint:fp,reply:$("#rep"+id).value,public_listing:$("#pub"+id).checked});
         toast("Pairing accepted");render();}catch(e){toast(e.message,true);}
     });
     document.querySelectorAll("[data-rej]").forEach(b=>b.onclick=async()=>{
@@ -1046,6 +1058,12 @@ async function viewFed(m){
       try{await api("PATCH","/api/v1/admin/fed/peers/"+c.dataset.pubtog,{public:c.checked});
         toast(c.checked?"Peer listed publicly":"Peer hidden");render();}
       catch(e){toast(e.message,true);render();}
+    });
+    document.querySelectorAll("[data-prot]").forEach(b=>b.onclick=async()=>{
+      const fp=prompt("This peer's new fingerprint, as its operator gave it to you out of band:");
+      if(!fp) return;
+      try{await api("POST","/api/v1/admin/fed/peers/"+b.dataset.prot+"/rotate",{fingerprint:fp});
+        toast("Key rotated");render();}catch(e){toast(e.message,true);}
     });
     document.querySelectorAll("[data-pdel]").forEach(b=>b.onclick=async()=>{
       if(!confirm("Remove this peer? Measurements towards its anchors stay in the database.")) return;
@@ -1271,7 +1289,7 @@ async function viewNet(m){
         <tr><td>Announced prefixes</td><td>${i.prefixes_v4} IPv4 · ${i.prefixes_v6} IPv6</td></tr>
         <tr><td>Upstream / downstream neighbours</td><td>${i.nb_upstreams} / ${i.nb_downstreams}</td></tr>
         <tr><td>Main upstream neighbours</td><td>${(i.upstreams||[]).map(u=>`AS${u.asn} ${esc(u.name||"")}`).join("<br>")||"—"}</td></tr>
-        <tr><td>PeeringDB record</td><td>${p?`<a href="${esc(p.url)}" target="_blank">${esc(p.name)}</a> · ${esc(p.policy||"")}`:"none"}</td></tr>
+        <tr><td>PeeringDB record</td><td>${p?`${escURL(p.url)?`<a href="${escURL(p.url)}" target="_blank" rel="noopener noreferrer">${esc(p.name)}</a>`:esc(p.name)} · ${esc(p.policy||"")}`:"none"}</td></tr>
         <tr><td>Internet exchanges</td><td>${p?(p.ixs||[]).map(x=>esc(x.name)).join(", ")||"—":"—"}</td></tr>
         <tr><td>Facilities</td><td>${p?(p.facilities||[]).map(f=>esc(f.name)).join(", ")||"—":"—"}</td></tr>
         <tr><td>Fetched</td><td>${dt(i.fetched_at)}</td></tr>

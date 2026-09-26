@@ -194,6 +194,9 @@ type PairingInput struct {
 	PrivateNote   string `json:"private_note"`
 	ContactName   string `json:"contact_name"`
 	PublicListing bool   `json:"public_listing"`
+	// Fingerprint : si l'operateur connait deja l'empreinte de son
+	// homologue, elle est verifiee avant l'envoi de la demande.
+	Fingerprint string `json:"fingerprint"`
 }
 
 type pairingPayload struct {
@@ -211,9 +214,9 @@ type pairingPayload struct {
 }
 
 func (f *Federation) RequestPairing(in PairingInput) (*PairingRequest, error) {
-	base := baseOf(in.URL)
-	if !strings.HasPrefix(base, "https://") && !strings.HasPrefix(base, "http://") {
-		return nil, fmt.Errorf("the URL must start with https://")
+	base, err := safeFedURL(in.URL)
+	if err != nil {
+		return nil, err
 	}
 	just, err := checkJustification(in.Justification)
 	if err != nil {
@@ -249,9 +252,23 @@ func (f *Federation) RequestPairing(in PairingInput) (*PairingRequest, error) {
 	if err != nil || len(raw) != ed25519.PublicKeySize {
 		return nil, fmt.Errorf("invalid remote public key")
 	}
+	remoteASN, err := normASN(prof.ASN)
+	if err != nil {
+		return nil, fmt.Errorf("the remote instance announces no usable AS number")
+	}
+	prof.ASN = remoteASN
 	if prof.ASN == me.ASN {
 		return nil, fmt.Errorf("the remote instance announces the same AS as ours")
 	}
+	if in.Fingerprint != "" && !sameFingerprint(in.Fingerprint, fingerprintOf(raw)) {
+		return nil, fmt.Errorf("that instance publishes the fingerprint %s, "+
+			"not the one you entered", fingerprintOf(raw))
+	}
+	if err := f.refuseKeyChange(base, prof.ASN, prof.PubKey); err != nil {
+		return nil, err
+	}
+	prof.Anchors, _ = cleanAnchors(prof.Anchors)
+	prof.Org, prof.NOCEmail = oneLine(prof.Org, 120), oneLine(prof.NOCEmail, 200)
 
 	token := randomHex(16)
 	anchors, _ := json.Marshal(prof.Anchors)
@@ -274,7 +291,7 @@ func (f *Federation) RequestPairing(in PairingInput) (*PairingRequest, error) {
 		Justification: just, PrivateNote: note,
 		ContactName: in.ContactName, PublicListing: in.PublicListing,
 	}
-	if err := f.postUnsigned(base+"/api/v1/fed/pairing/request", payload); err != nil {
+	if err := f.postUnsigned(prof.ASN, base+"/api/v1/fed/pairing/request", payload); err != nil {
 		f.store.cfg.Exec(
 			`UPDATE fed_pairing SET state='failed', error=? WHERE id=?`,
 			err.Error(), id)
@@ -285,7 +302,7 @@ func (f *Federation) RequestPairing(in PairingInput) (*PairingRequest, error) {
 
 // postUnsigned signe avec notre cle sans supposer de relation etablie :
 // le destinataire verifie contre la cle annoncee dans le corps.
-func (f *Federation) postUnsigned(url string, payload any) error {
+func (f *Federation) postUnsigned(audience, url string, payload any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -298,7 +315,7 @@ func (f *Federation) postUnsigned(url string, payload any) error {
 	if idx < 0 {
 		return fmt.Errorf("invalid API URL")
 	}
-	f.sign(req, url[idx:], body)
+	f.sign(req, audience, url[idx:], body)
 	resp, err := f.client.Do(req)
 	if err != nil {
 		return err
@@ -333,9 +350,20 @@ func (f *Federation) HandlePairingRequest(r *http.Request) (*PairingRequest, err
 	if err != nil {
 		return nil, err
 	}
-	if h.asn != in.ASN {
+	asn, err := normASN(in.ASN)
+	if err != nil {
+		return nil, err
+	}
+	in.ASN = asn
+	sigASN, err := normASN(h.asn)
+	if err != nil || sigASN != in.ASN {
 		return nil, fmt.Errorf("the signing AS does not match the body")
 	}
+	base, err := safeFedURL(in.URL)
+	if err != nil {
+		return nil, fmt.Errorf("announced URL: %w", err)
+	}
+	in.URL = base
 	raw, err := base64.StdEncoding.DecodeString(in.PubKey)
 	if err != nil || len(raw) != ed25519.PublicKeySize {
 		return nil, fmt.Errorf("invalid public key")
@@ -346,6 +374,21 @@ func (f *Federation) HandlePairingRequest(r *http.Request) (*PairingRequest, err
 	if in.ASN == f.Profile().ASN {
 		return nil, fmt.Errorf("same AS as ours")
 	}
+	// La signature ne prouve que la possession de la cle transportee : a
+	// elle seule, elle laisse n'importe qui se presenter comme
+	// « AS3215 Orange ». On exige donc que l'instance situee a l'URL
+	// annoncee publie bien cette cle et cet AS. L'operateur garde la
+	// comparaison d'empreinte hors bande, rendue obligatoire a
+	// l'acceptation.
+	if err := f.confirmAnnouncedIdentity(in.URL, in.ASN, in.PubKey); err != nil {
+		return nil, err
+	}
+	if err := f.refuseKeyChange(in.URL, in.ASN, in.PubKey); err != nil {
+		return nil, err
+	}
+	in.Org, in.NOCEmail = oneLine(in.Org, 120), oneLine(in.NOCEmail, 200)
+	in.ContactName = oneLine(in.ContactName, 120)
+	in.Anchors, _ = cleanAnchors(in.Anchors)
 
 	anchors, _ := json.Marshal(in.Anchors)
 	_, err = f.store.cfg.Exec(
@@ -357,7 +400,7 @@ func (f *Federation) HandlePairingRequest(r *http.Request) (*PairingRequest, err
 		   created_at=excluded.created_at, justification=excluded.justification,
 		   private_note=excluded.private_note, anchors=excluded.anchors,
 		   public_listing=excluded.public_listing, state='pending'`,
-		in.Token, in.ASN, in.Org, baseOf(in.URL), in.PubKey, fingerprintOf(raw),
+		in.Token, in.ASN, in.Org, in.URL, in.PubKey, fingerprintOf(raw),
 		in.NOCEmail, string(anchors), just, note, in.ContactName,
 		b2i(in.PublicListing), time.Now().Unix())
 	if err != nil {
@@ -368,6 +411,41 @@ func (f *Federation) HandlePairingRequest(r *http.Request) (*PairingRequest, err
 	row := f.store.cfg.QueryRow(`SELECT `+pairCols+
 		` FROM fed_pairing WHERE direction='in' AND token=?`, in.Token)
 	return scanPairing(row.Scan)
+}
+
+// confirmAnnouncedIdentity verifie que l'instance situee a l'URL annoncee
+// publie bien la cle et l'AS de la demande. Un attaquant qui pretend
+// etre un autre AS doit donc au minimum controler une instance a l'URL
+// qu'il annonce ; il ne peut plus emprunter le nom d'un reseau connu en
+// pointant vers son propre serveur.
+func (f *Federation) confirmAnnouncedIdentity(base, asn, pubkey string) error {
+	resp, err := f.client.Get(base + "/api/v1/fed/profile")
+	if err != nil {
+		return fmt.Errorf("the announced instance (%s) is unreachable, "+
+			"so its identity cannot be confirmed: %w", base, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("the announced instance (%s) answers HTTP %d "+
+			"on its federation profile", base, resp.StatusCode)
+	}
+	var prof FedProfile
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<18)).Decode(&prof); err != nil {
+		return fmt.Errorf("unreadable profile at %s", base)
+	}
+	remote, err := normASN(prof.ASN)
+	if err != nil {
+		return fmt.Errorf("the instance at %s announces no usable AS number", base)
+	}
+	if remote != asn {
+		return fmt.Errorf("the instance at %s announces %s, but the request "+
+			"claims to come from %s", base, remote, asn)
+	}
+	if prof.PubKey != pubkey {
+		return fmt.Errorf("the instance at %s does not publish the key that "+
+			"signed this request", base)
+	}
+	return nil
 }
 
 type pairingDecision struct {
@@ -382,6 +460,10 @@ type DecisionInput struct {
 	Accept        bool   `json:"accept"`
 	Reply         string `json:"reply"`
 	PublicListing bool   `json:"public_listing"`
+	// Fingerprint : l'empreinte telle que l'operateur l'a recue hors
+	// bande. Obligatoire pour accepter — c'est la seule chose qui lie la
+	// cle a un interlocuteur reel, et rien ne l'imposait.
+	Fingerprint string `json:"fingerprint"`
 }
 
 func (f *Federation) DecidePairing(id int64, in DecisionInput, by string) error {
@@ -401,6 +483,11 @@ func (f *Federation) DecidePairing(id int64, in DecisionInput, by string) error 
 	}
 	now := time.Now().Unix()
 	if in.Accept {
+		if !sameFingerprint(in.Fingerprint, p.Fingerprint) {
+			return fmt.Errorf("to accept, confirm the fingerprint you received "+
+				"out of band from that operator — this request carries %s",
+				p.Fingerprint)
+		}
 		// Le demandeur a donne son accord (ou non) dans sa demande ;
 		// nous donnons le notre maintenant.
 		if err := f.upsertTrustedPeer(p, p.PublicListing, in.PublicListing); err != nil {
@@ -421,7 +508,7 @@ func (f *Federation) DecidePairing(id int64, in DecisionInput, by string) error 
 		PublicListing: in.PublicListing, Profile: f.Profile(),
 	}
 	payload.Profile.NOCPhone = ""
-	if err := f.postUnsigned(p.URL+"/api/v1/fed/pairing/response", payload); err != nil {
+	if err := f.postUnsigned(p.ASN, p.URL+"/api/v1/fed/pairing/response", payload); err != nil {
 		f.store.cfg.Exec(`UPDATE fed_pairing SET error=? WHERE id=?`, err.Error(), id)
 		log.Printf("pairing response to %s: %v", p.URL, err)
 	}
@@ -455,7 +542,7 @@ func (f *Federation) HandlePairingResponse(r *http.Request) (string, error) {
 	if err != nil || len(raw) != ed25519.PublicKeySize {
 		return "", fmt.Errorf("stored key is invalid")
 	}
-	if h.asn != p.ASN {
+	if sigASN, err := normASN(h.asn); err != nil || sigASN != p.ASN {
 		return "", fmt.Errorf("unexpected signing AS")
 	}
 	if err := f.checkSig(ed25519.PublicKey(raw), r, h, body); err != nil {
@@ -485,6 +572,11 @@ func (f *Federation) HandlePairingResponse(r *http.Request) (string, error) {
 // accepte d'etre affichee publiquement ; ourChoice : nous le souhaitons.
 // L'affichage public exige les deux.
 func (f *Federation) upsertTrustedPeer(p *PairingRequest, peerConsent, ourChoice bool) error {
+	// Dernier verrou avant d'ecrire une cle : un pair deja approuve ne
+	// change pas de cle par une nouvelle demande d'appairage.
+	if err := f.refuseKeyChange(p.URL, p.ASN, p.pubkey); err != nil {
+		return err
+	}
 	anchors, _ := json.Marshal(p.Anchors)
 	now := time.Now().Unix()
 	_, err := f.store.cfg.Exec(

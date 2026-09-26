@@ -3,7 +3,75 @@
 Versions are published as signed releases; servers with automatic updates
 install the newest one directly, whatever versions came in between.
 
-## Unreleased
+## 0.3.0
+
+**Upgrade note — federation.** The format of the signature carried by
+inter-instance requests changes: the recipient's AS number is now part of
+what is signed, so a request cannot be replayed from one instance to
+another. Both sides of a pairing must run 0.3.0 or later. Until a peer is
+updated, its requests are refused with `request not addressed to this
+instance` and it shows a `last_error` in *Peers and pairing*. Nothing else
+in the release requires attention: measurements, targets and history are
+untouched.
+
+### Federation hardening
+
+A tester audited the federation code. Eleven findings, all addressed, most of
+them by refusing to trust anything a peer says about itself.
+
+- **A pairing request no longer establishes an identity on its own.** It was
+  signed with the key it carried, with no check of the announced URL or AS,
+  so anyone could present themselves as a well-known network. The instance at
+  the announced URL must now publish the same key and the same AS number,
+  and **accepting requires the administrator to type the fingerprint** he
+  received out of band — the comparison that ties a key to a real operator
+  was only ever suggested by a confirmation dialog.
+- **A trusted peer's key can no longer be replaced** by a new pairing
+  request or a profile re-read: accepting a forged "new request" from a known
+  peer used to hand the attacker its place, `trusted` state included. Genuine
+  rotation goes through a new **Rotate key** action, which asks for the new
+  fingerprint.
+- **A signed request is bound to its recipient** (its AS number is part of
+  what is signed), so it cannot be replayed from one instance to another. The
+  **nonce is recorded only after the signature is verified**, keyed by AS and
+  bounded, so an unauthenticated flood can neither fill the cache nor burn a
+  peer's nonce in advance. *This changes the signed format: both sides of a
+  pairing must run this version or later.*
+- **An incident received from a peer is rebuilt locally.** Its identifier,
+  the AS it accuses, the target and the free text are validated — the accused
+  AS must be a member, the target a public address — and the opening date,
+  the notice delay, the severity, the acknowledgement and the closure are
+  decided here. A sender could previously pre-acknowledge the incident it
+  reported, and set dates in the future that stayed displayed indefinitely.
+- **A NOC is only emailed about something this instance measured itself.**
+  Three corroborating peers were enough to make somebody else's SMTP server
+  send the mail; the fourth condition is now our own measurement.
+- **Nothing a peer writes is republished under your name**: the public
+  incident feed carries this instance's own wording, and a sentence built
+  from the figures for anyone else's. Free text is flattened to one bounded
+  printable line everywhere, which also closes header injection in alert
+  mail subjects; recipient and sender addresses are validated before SMTP.
+- **Announced anchors are checked before being measured**: public unicast
+  addresses only, at most eight, and one that the peer's own AS does not
+  announce is flagged in the log. A peer could have the whole federation ping
+  a third party's address, or an RFC 1918 one.
+- **A peer URL is validated at ingest and again before becoming a link**, so
+  a `javascript:` URL can neither be stored nor clicked on the public page.
+- **All federation traffic refuses non-public addresses** after DNS
+  resolution, redirects included, closing the SSRF a peer-controlled URL
+  offered.
+- **The SMTP password is no longer returned** by the federation identity
+  endpoint; the interface is told only whether one is set.
+- **An operator can trust only his own release keys**: `exclusive` on the
+  first line of `trusted_keys_file` drops the keys embedded in the binary.
+- **The federation now has tests** — the audit noted it had none. Identity
+  binding, key replacement, audience and replay, nonce ordering, report and
+  incident filtering, anchor and URL validation, the notification gate,
+  the password masking and mail header safety: 23 new tests.
+
+`DEPLOY.md` gains a section *Federation: what protects what*, including what
+is still out of scope — an AS number is declared, not proved, and return
+paths stay invisible.
 
 - The changelog check is a **warning** on `main` and a **failure only when
   publishing**: a documentation lag is not a broken build, and a red main

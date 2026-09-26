@@ -19,6 +19,7 @@ probes a few hundred targets.
 10. [Probe isolation and performance](#10-probe-isolation-and-performance)
 11. [IPv6 and traceroutes](#11-ipv6-and-traceroutes)
 12. [Container image (tests)](#12-container-image-tests)
+13. [Federation: what protects what](#13-federation-what-protects-what)
 
 ---
 
@@ -516,6 +517,22 @@ modules and CI actions). CI runs the tests on each; merge, then tag.
 **Rotating the key:** generate a new pair, add the new public key to
 `release.pub` next to the old one, release once, then remove the old key in
 the following release.
+
+**Trusting only your own keys.** By default an instance trusts the keys
+embedded in its binary *plus* those of `trusted_keys_file`. An operator who
+builds his own packages, or who does not want to depend on any upstream key,
+puts the word `exclusive` on the first line of that file: the embedded keys
+are then dropped and only the ones listed there can sign an update.
+
+```
+# /etc/smokestack/release-keys.pub
+exclusive
+ed25519:AAAA...your own key...
+```
+
+The log says so at start (`trusting only the 1 key(s) of …`). A binary
+built from your own fork with your key in `release.pub` is the other way to
+get there.
 
 ## 7. Backups
 
@@ -1068,3 +1085,101 @@ in its log at start and as a banner on the back-office dashboard:
 
 So an operator who inherits an instance can tell how it is running without
 digging through the deployment.
+
+---
+
+## 13. Federation: what protects what
+
+Federation links instances run by different operators, so everything that
+crosses it is treated as hostile input. This section says what each rule
+actually buys, because an operator answering to his own security team needs
+more than "it is signed".
+
+### Pairing: who you are is not what you claim
+
+Signing a pairing request with the key it carries proves only that the
+sender holds that key. Two more things are required:
+
+- **the announced URL must back the claim.** smokestack fetches
+  `<announced URL>/api/v1/fed/profile` and refuses the request unless that
+  instance publishes the same key *and* the same AS number. Claiming to be
+  a well-known network while pointing at your own server no longer works;
+- **the fingerprint must be typed in.** Accepting a request requires the
+  administrator to enter the fingerprint as the other operator gave it to
+  him — by phone, on a peering list, at an exchange. Nothing is approved on
+  the strength of what arrived over the network alone.
+
+A peer that is already approved **cannot have its key replaced** by a new
+pairing request: that is how an attacker would take a known network's place
+while keeping the `trusted` state. A genuine key rotation goes through
+**Rotate key** next to the peer, which asks for the new fingerprint.
+
+### Signed requests
+
+Every inter-instance request carries the AS number, a timestamp, a nonce
+and an Ed25519 signature over `version | method | audience | path |
+timestamp | nonce | SHA-256(body)`.
+
+- the **audience** is the recipient's AS number, so a request signed for
+  one instance is refused by every other;
+- the **nonce** is recorded *after* the signature is verified, and keyed by
+  AS, so an unauthenticated flood cannot fill the cache nor burn a peer's
+  nonce in advance; the cache is bounded;
+- the timestamp window is five minutes either way.
+
+**This changes the signed format.** Both sides of a pairing must run this
+version or later; an older peer's requests are refused with
+`request not addressed to this instance`. Update both instances, then
+re-check the peer list.
+
+### Nothing a peer says is taken at face value
+
+| What arrives | What is done with it |
+|---|---|
+| Measurements (`/fed/report`) | Only the sender's own AS, only towards a member, window never in the future, values clamped, batch bounded |
+| Incidents (`/fed/incident`) | Identifier format checked; the accused AS must be a member; the target must be a public address; the opening date, the notice delay, the severity, the acknowledgement and the closure are all decided locally |
+| Free text | Flattened to one bounded printable line — no line break reaches a mail header, no unbounded string reaches a page |
+| Acknowledgements (`/fed/ack`) | Only the accused AS, only once, note bounded |
+| Anchors | Must be public unicast addresses, at most eight; one that the peer's own AS does not announce is measured but flagged in the log |
+| Peer URL | Scheme and host validated at ingest, and validated again before it becomes a link, so a `javascript:` URL can neither be stored nor clicked |
+
+On the **public** incident feed, only this instance's own wording is
+published. Another observer's text is replaced by a sentence built here
+from its figures, so nothing written elsewhere appears under your name.
+
+### Before a NOC is emailed
+
+Four conditions, all of them:
+
+1. the incident is still open and unacknowledged;
+2. the notice delay (5 min) has passed;
+3. at least three independent observers corroborate it;
+4. **this instance is one of them.**
+
+The fourth is what stops a group of colluding peers from making your SMTP
+server mail somebody's NOC. You never relay an accusation you have not
+measured yourself.
+
+Recipient and sender addresses are validated before the message is handed
+to SMTP, and the subject cannot carry extra headers.
+
+### Outbound requests
+
+All federation traffic goes through a client that refuses to connect to a
+non-public address — checked after DNS resolution, so a name that points at
+`127.0.0.1` or `169.254.169.254`, or one that changes between check and
+connect, is stopped. Redirects are not followed. That closes the SSRF that
+a peer-controlled URL would otherwise offer.
+
+### What is still out of scope
+
+- **AS ownership is not proved.** An instance declares its own AS number;
+  the fingerprint comparison and, optionally, the anchors being announced
+  by that AS are what tie it to a real network. Compare the fingerprint
+  with someone you already know.
+- **Return paths are invisible.** A federated observation says packets were
+  lost on the way there, nothing more. The alert mail says so.
+- **A peer you approved can still lie about its own measurements.** It
+  cannot speak for anyone else, cannot name a non-member, and cannot get a
+  NOC mailed without you measuring the same thing — but within its own
+  numbers, trust is what approving it meant.
