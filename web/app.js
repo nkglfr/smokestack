@@ -15,6 +15,13 @@
   const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g,
     c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  // Échapper ne suffit pas pour un href : javascript:… reste cliquable.
+  // Toute URL venant d'une autre instance passe par ici.
+  const escURL = s => {
+    const v = String(s == null ? "" : s).trim();
+    return /^https?:\/\/[^\s]+$/i.test(v) ? esc(v) : "";
+  };
+
   let SITE = {}, VERSION = null;
 
   // Pages the instance says are relevant: no Federation tab leading to an
@@ -123,5 +130,5 @@
     run();
   }
 
-  window.App = { boot, esc, get site() { return SITE; } };
+  window.App = { boot, esc, escURL, get site() { return SITE; } };
 })();

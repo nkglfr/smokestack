@@ -153,10 +153,18 @@ func keyID(pub ed25519.PublicKey) string {
 	return hex.EncodeToString(h[:4])
 }
 
-func parseKeyLines(text string, into map[string]ed25519.PublicKey) {
+// parseKeyLines lit un jeu de cles. La directive "exclusive" en debut de
+// fichier ecarte les cles embarquees dans le binaire : un operateur qui
+// construit lui-meme ses paquets, ou qui ne veut dependre d'aucune cle
+// amont, ne fait plus confiance qu'aux siennes.
+func parseKeyLines(text string, into map[string]ed25519.PublicKey) (exclusive bool) {
 	for _, line := range strings.Split(text, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if strings.EqualFold(line, "exclusive") {
+			exclusive = true
 			continue
 		}
 		line = strings.TrimPrefix(line, "ed25519:")
@@ -168,14 +176,28 @@ func parseKeyLines(text string, into map[string]ed25519.PublicKey) {
 		pub := ed25519.PublicKey(raw)
 		into[keyID(pub)] = pub
 	}
+	return exclusive
 }
 
 func (u *Updater) loadKeys() {
 	parseKeyLines(embeddedReleaseKeys, u.keys)
-	if u.cfg.TrustedKeys != "" {
-		if b, err := os.ReadFile(u.cfg.TrustedKeys); err == nil {
-			parseKeyLines(string(b), u.keys)
-		}
+	if u.cfg.TrustedKeys == "" {
+		return
+	}
+	b, err := os.ReadFile(u.cfg.TrustedKeys)
+	if err != nil {
+		return
+	}
+	local := map[string]ed25519.PublicKey{}
+	if parseKeyLines(string(b), local) {
+		// "exclusive" : on repart des seules cles de l'operateur.
+		u.keys = local
+		log.Printf("update: trusting only the %d key(s) of %s",
+			len(local), u.cfg.TrustedKeys)
+		return
+	}
+	for id, k := range local {
+		u.keys[id] = k
 	}
 }
 

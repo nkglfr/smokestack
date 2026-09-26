@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
@@ -27,6 +28,7 @@ func (a *API) FedRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/admin/fed/peers", a.auth(a.fedPeersAdmin))
 	mux.HandleFunc("POST /api/v1/admin/fed/peers", a.auth(a.fedPeerAdd))
 	mux.HandleFunc("POST /api/v1/admin/fed/peers/{id}/trust", a.auth(a.fedPeerTrust))
+	mux.HandleFunc("POST /api/v1/admin/fed/peers/{id}/rotate", a.auth(a.fedPeerRotate))
 	mux.HandleFunc("DELETE /api/v1/admin/fed/peers/{id}", a.auth(a.fedPeerDelete))
 	mux.HandleFunc("PUT /api/v1/admin/fed/notify", a.auth(a.fedNotifyPut))
 }
@@ -38,10 +40,16 @@ func (a *API) fedProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) fedIdentity(w http.ResponseWriter, r *http.Request) {
+	// Le mot de passe SMTP ne ressort jamais : l'interface a seulement
+	// besoin de savoir s'il est renseigne.
+	cfg := a.fed.notifyConfig()
+	set := cfg.SMTPPass != ""
+	cfg.SMTPPass = ""
 	writeJSON(w, map[string]any{
-		"profile":     a.fed.Profile(),
-		"fingerprint": a.fed.Fingerprint(),
-		"notify":      a.fed.notifyConfig(),
+		"profile":       a.fed.Profile(),
+		"fingerprint":   a.fed.Fingerprint(),
+		"notify":        cfg,
+		"smtp_pass_set": set,
 	})
 }
 
@@ -90,6 +98,16 @@ func (a *API) fedIncidents(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
+	}
+	// Page publique : on ne republie pas le texte libre d'un autre
+	// observateur sous notre nom. Le notre passe, celui des pairs est
+	// remplace par une phrase construite ici a partir des chiffres.
+	me := a.fed.Profile().ASN
+	for k := range incs {
+		if incs[k].ObserverASN != me {
+			incs[k].Detail = fmt.Sprintf("loss %.1f%%, median %.2f ms as measured by %s",
+				incs[k].LossPct, incs[k].MedMs, incs[k].ObserverASN)
+		}
 	}
 	writeJSON(w, incs)
 }
@@ -153,18 +171,17 @@ func (a *API) fedReport(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	var reports []anchorReport
+	var claimed []anchorReport
 	for _, r0 := range batch.Reports {
-		// Un pair ne peut declarer que ses propres mesures.
-		if r0.FromASN != peer.ASN {
-			continue
-		}
-		reports = append(reports, anchorReport{
+		claimed = append(claimed, anchorReport{
 			FromASN: r0.FromASN, ToASN: r0.ToASN, Anchor: r0.Anchor,
 			WinEnd: r0.WinEnd, MedMs: r0.MedMs, P95Ms: r0.P95Ms,
 			LossPct: r0.LossPct,
 		})
 	}
+	// Un pair ne declare que ses propres mesures, vers un membre connu,
+	// sur une fenetre passee et avec des valeurs plausibles.
+	reports := a.fed.acceptReports(peer.ASN, claimed)
 	a.fed.storeReports(reports)
 	a.store.cfg.Exec(`UPDATE fed_peers SET last_seen_at=?, last_error=NULL WHERE id=?`,
 		time.Now().Unix(), peer.ID)
@@ -182,17 +199,55 @@ func (a *API) fedIncident(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	if i.ID == "" || i.SuspectASN == "" {
-		writeErr(w, 400, "incomplete incident")
+	// Tout ce qui vient de l'emetteur est soit verifie, soit recalcule
+	// ici : l'identifiant, l'AS mis en cause, la cible, les dates, le
+	// preavis et le texte libre.
+	if err := checkIncidentID(i.ID); err != nil {
+		writeErr(w, 400, err.Error())
 		return
 	}
-	i.ObserverASN = peer.ASN
+	me := a.fed.Profile().ASN
+	suspect, err := normASN(i.SuspectASN)
+	if err != nil {
+		writeErr(w, 400, "invalid suspect AS")
+		return
+	}
+	known := suspect == me
+	for _, p := range a.fed.trustedPeers() {
+		if p.ASN == suspect {
+			known = true
+		}
+	}
+	if !known {
+		// Sans cela, un pair publie des mesures et des incidents visant
+		// n'importe quel AS, sur notre page publique et sous notre nom.
+		writeErr(w, 400, "this incident names an AS that is not a member here")
+		return
+	}
+	target, err := checkAnchor(i.Target)
+	if err != nil {
+		writeErr(w, 400, "invalid target")
+		return
+	}
+	now := time.Now().Unix()
+	i.SuspectASN, i.Target, i.ObserverASN = suspect, target, peer.ASN
+	i.Detail = fedText(i.Detail)
+	i.Severity = "warning"
+	if i.OpenedAt < now-3600 || i.OpenedAt > now {
+		i.OpenedAt = now
+	}
+	// Le preavis, l'acquittement et la cloture sont des decisions locales.
+	due := i.OpenedAt + int64(fedNoticeDelay.Seconds())
+	i.NoticeDueAt, i.NotifiedAt, i.AckAt, i.ClosedAt = &due, nil, nil, nil
+	i.AckBy = ""
+	i.MedMs = clampFloat(i.MedMs, 0, 60000)
+	i.LossPct = clampFloat(i.LossPct, 0, 100)
+
 	a.fed.saveIncident(i)
 	a.fed.addCorroboration(i.ID, peer.ASN, i.MedMs, i.LossPct, i.Detail)
 
 	// Si c'est nous qui sommes mis en cause, on corrobore ou on infirme
 	// depuis nos propres mesures avant la fin du preavis.
-	me := a.fed.Profile().ASN
 	if i.SuspectASN == me {
 		writeJSON(w, map[string]any{"received": true, "self": true,
 			"ack_endpoint": "/api/v1/fed/ack"})
@@ -215,11 +270,20 @@ func (a *API) fedAck(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	// Seul l'AS mis en cause peut acquitter.
+	if err := checkIncidentID(in.IncidentID); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	// Seul l'AS mis en cause peut acquitter, et sa note est ramenee a une
+	// ligne bornee avant de rejoindre un texte qui finit dans un courriel.
+	note := fedText(in.Note)
+	if note != "" {
+		note = " — ack: " + note
+	}
 	res, err := a.store.cfg.Exec(
 		`UPDATE fed_incidents SET ack_at=?, ack_by=?, detail=COALESCE(detail,'')||?
 		  WHERE id=? AND suspect_asn=? AND ack_at IS NULL`,
-		time.Now().Unix(), peer.ASN, " — ack: "+in.Note, in.IncidentID, peer.ASN)
+		time.Now().Unix(), peer.ASN, note, in.IncidentID, peer.ASN)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
@@ -272,6 +336,29 @@ func (a *API) fedPeerTrust(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, map[string]any{"trusted": id})
+}
+
+// fedPeerRotate est le seul chemin vers le changement de cle d'un pair
+// approuve : l'operateur doit saisir la nouvelle empreinte, lue hors
+// bande, exactement comme au premier appairage.
+func (a *API) fedPeerRotate(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, 400, "invalid identifier")
+		return
+	}
+	var in struct {
+		Fingerprint string `json:"fingerprint"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	if err := a.fed.RotatePeerKey(id, in.Fingerprint); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	writeJSON(w, map[string]any{"rotated": id})
 }
 
 func (a *API) fedPeerDelete(w http.ResponseWriter, r *http.Request) {

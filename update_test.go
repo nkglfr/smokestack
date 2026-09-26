@@ -137,3 +137,33 @@ func TestVersionSkipping(t *testing.T) {
 		t.Error("comparison of close versions")
 	}
 }
+
+// Un operateur doit pouvoir ne faire confiance qu'a ses propres cles de
+// signature, plutot que d'ajouter les siennes a celle du projet.
+func TestExclusiveReleaseKeys(t *testing.T) {
+	dir := t.TempDir()
+	pub, _, _ := ed25519.GenerateKey(nil)
+	path := filepath.Join(dir, "keys.pub")
+	os.WriteFile(path, []byte("exclusive\ned25519:"+
+		base64.StdEncoding.EncodeToString(pub)+"\n"), 0o600)
+
+	u := &Updater{cfg: UpdateConfig{TrustedKeys: path},
+		keys: map[string]ed25519.PublicKey{}}
+	u.loadKeys()
+	if len(u.keys) != 1 {
+		t.Fatalf("%d keys kept, expected only the operator's", len(u.keys))
+	}
+	if _, ok := u.keys[keyID(pub)]; !ok {
+		t.Error("the operator's key should be the one kept")
+	}
+
+	// Sans la directive, les cles s'ajoutent a celles du binaire.
+	os.WriteFile(path, []byte("ed25519:"+
+		base64.StdEncoding.EncodeToString(pub)+"\n"), 0o600)
+	u2 := &Updater{cfg: UpdateConfig{TrustedKeys: path},
+		keys: map[string]ed25519.PublicKey{}}
+	u2.loadKeys()
+	if len(u2.keys) < 2 {
+		t.Errorf("%d keys, the embedded one should still be there", len(u2.keys))
+	}
+}

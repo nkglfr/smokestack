@@ -258,6 +258,9 @@ func main() {
 	}
 
 	asnSvc := NewASNService(store, fed, cfg.PeeringDBKey)
+	// La federation s'en sert pour dire si une ancre annoncee appartient
+	// bien a l'AS qui la declare.
+	fed.UseASNService(asnSvc)
 	go asnSvc.Loop(stop)
 
 	upd := NewUpdater(cfg.Update, cfg.DataDir, store)
