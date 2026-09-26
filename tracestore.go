@@ -104,52 +104,86 @@ func (s *Store) SaveTraceroute(tr *Traceroute) error {
 // records an event when the AS path changed. A transit provider
 // decommissioning a peering degrades nothing measurable: latency moves by a
 // millisecond, and the change would otherwise go unnoticed.
+//
+// The event belongs to one target and to nothing else. It describes the
+// route between this instance and that one destination, so it is scoped to
+// the target and appears on its page alone: a route change towards Netflix
+// says nothing about the path to anywhere else.
 func (s *Store) notePathChange(tr *Traceroute) {
 	prev, err := s.Traceroutes(tr.TargetID, []string{"reference"}, 2)
 	if err != nil || len(prev) < 2 {
 		return
 	}
 	now, before := asPath(prev[0]), asPath(prev[1])
-	if len(now) == 0 || len(before) == 0 || samePath(now, before) {
+	if len(now) == 0 || len(before) == 0 {
 		return
 	}
-	title := ""
-	if t, err := s.TargetByID(tr.TargetID); err == nil {
-		title = t.Title
+	// A rotating name answers from a different machine at every pass, so the
+	// two reference traceroutes did not even go to the same place. The AS
+	// path differs because the destination differs, not because anything was
+	// rerouted — calling that a route change is what made pool targets noisy.
+	if a, b := prev[0].Dest, prev[1].Dest; a != "" && b != "" && a != b {
+		return
 	}
-	// The title is what gets drawn on the graph, so it stays short; the
-	// paths themselves go in the body, which the page lists underneath.
-	short := fmt.Sprintf("%s: route changed", title)
-	detail := fmt.Sprintf("AS path %s → %s", strings.Join(before, " "), strings.Join(now, " "))
-	s.cfg.Exec(`INSERT INTO events(ts_start,kind,title,body,public) VALUES(?,?,?,?,1)`,
-		tr.TS, "path", short, detail)
-	log.Printf("path change: %s — %s", short, detail)
+	if samePath(now, before) {
+		return
+	}
+	t, err := s.TargetByID(tr.TargetID)
+	if err != nil {
+		return
+	}
+	// The title is drawn on the graph, so it stays short; the page it appears
+	// on already says which target this is. Both ends of the path go in the
+	// body, because a path is only meaningful between two named networks.
+	detail := s.pathChangeBody(t, prev[0].Dest, before, now)
+	s.cfg.Exec(
+		`INSERT INTO events(ts_start,kind,title,body,scope,scope_id,public)
+		 VALUES(?,'path',?,?,'target',?,1)`,
+		tr.TS, "Route changed", detail, t.ID)
+	log.Printf("path change towards %s (%s) — %s", t.Title, t.Slug, detail)
+}
+
+// pathChangeBody writes the change as the route between this instance's AS
+// and the AS announcing the address actually measured.
+func (s *Store) pathChangeBody(t *Target, dest string, before, now []string) string {
+	site := s.Site()
+	from := "this instance"
+	if n, err := normalizeASN(site.ASN); err == nil {
+		from = "AS" + strings.TrimPrefix(n, "AS")
+		if site.Org != "" {
+			from += " (" + site.Org + ")"
+		}
+	}
+	to := t.Title
+	if last := now[len(now)-1]; last != "" {
+		to = "AS" + strings.TrimPrefix(last, "AS") + " (" + t.Title + ")"
+	}
+	if dest != "" && !t.HideHost {
+		to += " at " + dest
+	}
+	return fmt.Sprintf("Route from %s to %s: AS path %s → %s", from, to,
+		strings.Join(before, " "), strings.Join(now, " "))
 }
 
 // RecentPathChange reports whether the AS path of a target changed in the
-// last window, and what the change was.
+// last window, and what the change was. It reads the target's own events,
+// never another target's.
 func (s *Store) RecentPathChange(targetID int64, since int64) (string, bool) {
-	title := ""
-	if t, err := s.TargetByID(targetID); err == nil {
-		title = t.Title
-	}
-	if title == "" {
-		return "", false
-	}
-	var detail string
-	err := s.cfg.QueryRow(`SELECT title FROM events WHERE kind='path' AND ts_start>=?
-	                       AND title LIKE ? ORDER BY ts_start DESC LIMIT 1`,
-		since, title+":%").Scan(&detail)
+	var title, body string
+	err := s.cfg.QueryRow(
+		`SELECT title, COALESCE(body,'') FROM events
+		  WHERE kind='path' AND scope='target' AND scope_id=? AND ts_start>=?
+		  ORDER BY ts_start DESC LIMIT 1`, targetID, since).Scan(&title, &body)
 	if err != nil {
 		return "", false
 	}
-	var body string
-	s.cfg.QueryRow(`SELECT COALESCE(body,'') FROM events WHERE kind='path' AND title=?
-	                ORDER BY ts_start DESC LIMIT 1`, detail).Scan(&body)
-	if body != "" {
-		detail += " (" + body + ")"
+	if t, err := s.TargetByID(targetID); err == nil && t.Title != "" {
+		title = t.Title + ": " + strings.ToLower(title)
 	}
-	return detail, true
+	if body != "" {
+		title += " (" + body + ")"
+	}
+	return title, true
 }
 
 func (s *Store) Traceroutes(targetID int64, kinds []string, limit int) ([]*Traceroute, error) {
@@ -612,6 +646,10 @@ type ASGraph struct {
 	Reached    bool          `json:"reached"`
 	Pending    bool          `json:"pending,omitempty"`
 	Incomplete bool          `json:"incomplete,omitempty"`
+	// OtherAddrs counts the traceroutes left out because they went to
+	// another address of the same name. A route is a route to one machine,
+	// so mixing several would draw a path that was never taken.
+	OtherAddrs int `json:"other_addrs,omitempty"`
 }
 
 // asSeq turns one traceroute into the sequence of AS it crossed, with the
@@ -677,6 +715,31 @@ func (s *Store) BuildASGraph(targetID int64, originASN, destASN string, limit in
 	nodes := map[string]*ASGraphNode{}
 	edges := map[string]*ASGraphEdge{}
 	current := map[string]bool{}
+
+	// A name that answers from several machines — a pool, an anycast name
+	// resolved differently at each pass — was traced to different places. The
+	// graph keeps the address of the most recent traceroute, or the pinned
+	// one, and counts the rest: drawing them together would show a path that
+	// no packet ever took.
+	want := ""
+	if t, err := s.TargetByID(targetID); err == nil && t.PinIP != "" {
+		want = t.PinIP
+	}
+	for _, tr := range trs {
+		if want == "" && tr.Dest != "" {
+			want = tr.Dest
+			break // newest first, so this is the address in use now
+		}
+	}
+	kept := trs[:0:0]
+	for _, tr := range trs {
+		if want != "" && tr.Dest != "" && tr.Dest != want {
+			g.OtherAddrs++
+			continue
+		}
+		kept = append(kept, tr)
+	}
+	trs = kept
 
 	for i, tr := range trs {
 		seq, rtt := asSeq(tr, originASN, destASN)

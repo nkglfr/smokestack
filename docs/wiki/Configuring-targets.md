@@ -153,6 +153,9 @@ Two settings matter:
   default (24 h) for most things, set 4 h on the paths you watch closely.
 - The comparison is on AS paths, not addresses: an operator balancing traffic
   across parallel links raises nothing.
+- A name answering from several machines raises nothing either: two reference traceroutes towards a pool did not go to the same server, so a different path there means a different destination, not a different route. Pin the address if you want one machine measured and one path drawn.
+
+The mark belongs to its target alone. A route change towards one destination is never drawn on another target's graph, and the event names both ends of the path — this instance's AS, the AS announcing the address measured, and that address.
 
 ## Let the instance tell you
 

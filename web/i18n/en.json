@@ -101,6 +101,7 @@
     "as_gap": "unknown",
     "as_gap_hint": "The traceroute did not reveal this part of the path: those routers answered nothing, or the destination was not reached.",
     "as_map_note": "{n} traceroutes · solid: current path, dashed: seen earlier",
+    "as_one_addr": "this address only · {n} traceroutes to the name's other addresses left out",
     "ris": "In global routing (RIPE RIS)",
     "ris_line": "{prefix} is announced by {origin} and seen by {peers} collector peers.",
     "ris_up": "Networks seen in front of it",

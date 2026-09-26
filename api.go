@@ -337,14 +337,41 @@ type Event struct {
 	Body    string `json:"body"`
 }
 
+// targetByIDOrSlug accepts either form, because a page holds the numeric
+// identifier while a hand-written URL carries the slug.
+func (a *API) targetByIDOrSlug(q string) (*Target, error) {
+	if id, err := strconv.ParseInt(q, 10, 64); err == nil {
+		return a.store.TargetByID(id)
+	}
+	return a.store.TargetBySlug(q)
+}
+
+// events serves the annotations drawn on a graph. Without a target it
+// returns only what concerns the whole instance; with one it adds that
+// target's own events and no other's. A route change is a fact about one
+// path, between this instance and one destination, so it belongs to that
+// target's page and would be misleading anywhere else.
 func (a *API) events(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().Unix()
 	from := parseTime(r.URL.Query().Get("from"), now-7*86400)
 	to := parseTime(r.URL.Query().Get("to"), now)
+
+	where := `public=1 AND ts_start<=? AND (ts_end IS NULL OR ts_end>=?)`
+	args := []any{to, from}
+	if q := r.URL.Query().Get("target"); q != "" {
+		t, err := a.targetByIDOrSlug(q)
+		if err != nil {
+			writeErr(w, 404, "target not found")
+			return
+		}
+		where += ` AND (scope='global' OR (scope='target' AND scope_id=?))`
+		args = append(args, t.ID)
+	} else {
+		where += ` AND scope='global'`
+	}
 	rows, err := a.store.cfg.Query(
 		`SELECT id,ts_start,ts_end,kind,title,COALESCE(body,'')
-		   FROM events WHERE public=1 AND ts_start<=? AND (ts_end IS NULL OR ts_end>=?)
-		  ORDER BY ts_start`, to, from)
+		   FROM events WHERE `+where+` ORDER BY ts_start`, args...)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return

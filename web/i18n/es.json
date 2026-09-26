@@ -101,6 +101,7 @@
     "as_gap": "desconocido",
     "as_gap_hint": "El traceroute no reveló esta parte del camino: esos routers no respondieron, o no se alcanzó el destino.",
     "as_map_note": "{n} traceroutes · continuo: camino actual, discontinuo: vistos antes",
+    "as_one_addr": "solo esta dirección · {n} traceroutes a otras direcciones de este nombre excluidos",
     "ris": "En el enrutamiento global (RIPE RIS)",
     "ris_line": "{prefix} lo anuncia {origin} y lo ven {peers} pares de recolectores.",
     "ris_up": "Redes vistas delante",

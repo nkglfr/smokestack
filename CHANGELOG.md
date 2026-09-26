@@ -3,6 +3,12 @@
 Versions are published as signed releases; servers with automatic updates
 install the newest one directly, whatever versions came in between.
 
+## Unreleased
+
+- **A route event now belongs to its target and to nothing else.** It was recorded at instance level, so every target's page showed every other target's route changes: on an NTP pool you watched marks scroll past that said nothing about that path. A route change is a fact about one path — between the AS announcing this instance's address and the address actually measured — and it now appears on that target's page and nowhere else. `/api/v1/events` takes a `target` parameter: without it, it returns only what concerns the whole instance, which excludes every route event. Events recorded before this are attached to their target during the migration, from the name they carried.
+- **The event names both ends of the path.** Instead of a bare `AS path X → Y` it says from where to where: this instance's AS, the AS announcing the measured address, that address, then the path before and after. A route means nothing without its two ends, and those two ends are exactly what you want to read on a target like Netflix.
+- **A server that changed is no longer reported as a route that changed.** On a name answering from several machines, two reference traceroutes did not go to the same place: the AS path differs because the destination differs, not because anything was rerouted. That case no longer produces an event, and the route map no longer mixes paths towards different addresses — it keeps the one in use, or the pinned address, and says how many traceroutes it left out. This is what made pool targets unreadable.
+
 ## 0.3.0
 
 **Upgrade note — federation.** The format of the signature carried by
