@@ -534,6 +534,12 @@ git tag v0.2.2 && git push origin v0.2.2
 
 or *Actions → release → Run workflow*, with `0.2.2` as the version. The dispatched run refuses a version that is already tagged — overwriting one would change what instances have already installed — creates the tag itself on the current `main`, and then does exactly what a tag push does.
 
+### Rebuilding an image without burning a version
+
+The container image is built by `image.yml`, which the release workflow calls and which also runs on its own from *Actions → image → Run workflow* with a tag. An image build can fail for reasons that have nothing to do with the release it accompanies — a registry outage, a skipped job — and the remedy for that should not be a new version number. Running it by hand rebuilds and pushes the image for an existing tag; it refuses a tag that does not exist, and refuses anything that is not a version tag, so nothing unreleased can be pushed behind a version.
+
+A pre-release tag (`v0.6.2-rc1`) pushes only its own tag: `latest` stays where it is, which matches what the release job already does for automatic updates.
+
 ### The approval gate on dispatched releases
 
 Set this up once, in *Settings → Environments → New environment → `release`*, with yourself under **Required reviewers**. A dispatched run then stops and waits for your click before it tags or publishes anything; a pushed tag never waits, because pushing it was already the decision.

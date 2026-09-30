@@ -142,31 +142,20 @@ jobs:
           gh release create "$TAG" dist/* $PRE \
             --title "smokestack ${{ steps.v.outputs.v }}" --notes-file notes.md
 
-  # Publishes the container image next to the release. Tests and native
-  # packages do not depend on it.
+  # The image is built by the shared workflow, so the same definition serves
+  # the release and a by-hand rebuild. Tests and native packages do not
+  # depend on it.
+  #
+  # The condition is not decoration: the gate above is skipped on a tag push
+  # and GitHub carries that skip down the whole chain, so a job that merely
+  # needs a job that succeeded is skipped anyway because an ancestor was not
+  # run. That is what kept the 0.6.1 image from being published.
   image:
     needs: release
-    runs-on: ubuntu-24.04
-    steps:
-      # On a dispatched run github.ref_name is the branch, not the tag, so
-      # the version comes from the job above rather than from the ref.
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.release.outputs.tag }}
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-      - name: Build and push (amd64, arm64)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          build-args: VERSION=${{ needs.release.outputs.tag }}
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:${{ needs.release.outputs.tag }}
-            ghcr.io/${{ github.repository }}:latest
+    if: always() && needs.release.result == 'success'
+    uses: ./.github/workflows/image.yml
+    with:
+      tag: ${{ needs.release.outputs.tag }}
+    permissions:
+      contents: read
+      packages: write

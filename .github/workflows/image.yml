@@ -1,0 +1,78 @@
+name: image
+# Builds and pushes the container image for one tag.
+#
+# Two entry points, one definition. The release workflow calls it, and it can
+# also be run by hand from Actions with a tag — because an image build can
+# fail for reasons that have nothing to do with the release it accompanies (a
+# registry outage, a skipped job), and the remedy for that should not be
+# burning a version number.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Tag to build, with the leading v (e.g. v0.6.1)"
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build, with the leading v (e.g. v0.6.1)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      # The tag must exist and must be a tag: building "main" and pushing it
+      # as a version would put something unreleased behind a version number.
+      - name: The tag must exist
+        run: |
+          case "${{ inputs.tag }}" in
+            v[0-9]*) ;;
+            *) echo "not a version tag: ${{ inputs.tag }}" >&2; exit 1 ;;
+          esac
+          git fetch --tags --force --quiet
+          git rev-parse -q --verify "refs/tags/${{ inputs.tag }}" >/dev/null \
+            || { echo "tag ${{ inputs.tag }} does not exist" >&2; exit 1; }
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      # latest moves only for a final version: a pre-release tag carries its
+      # own tag and nothing else, so an automatic puller never lands on one.
+      - name: Decide whether latest moves
+        id: t
+        env:
+          TAG: ${{ inputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          # A multi-line output needs a delimiter; a bare "k=a\nb" would set
+          # the first line and drop the rest.
+          {
+            echo "tags<<TAGS_EOF"
+            echo "ghcr.io/$REPO:$TAG"
+            case "$TAG" in
+              *-*) ;;                        # pre-release: latest stays put
+              *)   echo "ghcr.io/$REPO:latest" ;;
+            esac
+            echo "TAGS_EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: Build and push (amd64, arm64)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          build-args: VERSION=${{ inputs.tag }}
+          push: true
+          tags: ${{ steps.t.outputs.tags }}
