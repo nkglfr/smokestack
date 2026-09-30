@@ -136,6 +136,17 @@
     "until": "tot {until}",
     "measure_paused": "meting opgeschort"
   },
+  "corr": {
+    "title": "Gecontroleerd vanuit een ander netwerk",
+    "hint": "Een peer-instantie in een ander AS heeft dit doel op verzoek gemeten. Eén observatiepunt kan een uitgevallen doel niet onderscheiden van een gebroken pad; twee punten in verschillende netwerken wel. De cijfers zijn van die peer, over een kort tijdvenster, en worden gepubliceerd omdat de beheerder van deze instantie daarvoor koos.",
+    "seen": "{asn} kreeg antwoord bij {ok} van {n} rondes",
+    "median": "mediaan {ms} ms van daar",
+    "v_path": "van daar bereikbaar, van hier niet",
+    "v_target": "vanuit beide netwerken onbereikbaar",
+    "v_both_ok": "vanuit beide netwerken bereikbaar",
+    "v_intermittent": "van daar slechts soms bereikbaar",
+    "v_pending": "meting bezig"
+  },
   "fed": {
     "title": "Federatie",
     "lead": "Operators die dit hulpmiddel gebruiken, meten elkaars ankers en delen de resultaten. Elke koppeling hieronder is aan beide kanten door een mens goedgekeurd en wordt alleen getoond omdat beide partijen ermee instemden.",

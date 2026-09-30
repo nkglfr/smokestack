@@ -136,6 +136,17 @@
     "until": "até {until}",
     "measure_paused": "medição suspensa"
   },
+  "corr": {
+    "title": "Verificado a partir de outra rede",
+    "hint": "Uma instância par situada noutro AS mediu este alvo a pedido. Um único ponto de observação não distingue um alvo em baixo de um caminho quebrado; dois pontos em redes diferentes sim. Os números são desse par, sobre uma janela curta, e são publicados porque o operador desta instância escolheu publicá-los.",
+    "seen": "{asn} obteve resposta em {ok} de {n} passagens",
+    "median": "mediana {ms} ms de lá",
+    "v_path": "alcançável de lá, não de cá",
+    "v_target": "inalcançável de ambas as redes",
+    "v_both_ok": "alcançável de ambas as redes",
+    "v_intermittent": "alcançável de lá apenas por vezes",
+    "v_pending": "medição em curso"
+  },
   "fed": {
     "title": "Federação",
     "lead": "Os operadores que usam esta ferramenta medem mutuamente as suas âncoras e partilham os resultados. Cada emparelhamento abaixo foi aprovado por uma pessoa dos dois lados e só é mostrado porque ambos concordaram.",

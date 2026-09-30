@@ -166,6 +166,12 @@ func fedDialControl(network, address string, _ syscall.RawConn) error {
 	if ip == nil {
 		return fmt.Errorf("unresolved address")
 	}
+	if fedAllowPrivateForTests {
+		// Same escape hatch as safeFedURL, and for the same reason: the
+		// tests run real instances on the loopback. Nothing outside a
+		// _test.go file sets it.
+		return nil
+	}
 	if !isPublicIP(ip) || ip.IsMulticast() || ip.IsInterfaceLocalMulticast() ||
 		ip.IsLinkLocalMulticast() {
 		return fmt.Errorf("refusing to connect to a non-public address (%s)", host)

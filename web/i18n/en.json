@@ -136,6 +136,17 @@
     "until": "until {until}",
     "measure_paused": "measurement paused"
   },
+  "corr": {
+    "title": "Checked from another network",
+    "hint": "A peer instance in a different AS measured this target on request. One vantage point cannot tell a target that is down from a path that is broken; two in different networks can. The figures are that peer's, over a short window, and are published because the operator of this instance chose to publish them.",
+    "seen": "{asn} answered on {ok} of {n} passes",
+    "median": "median {ms} ms from there",
+    "v_path": "reachable from there, not from here",
+    "v_target": "unreachable from both networks",
+    "v_both_ok": "reachable from both networks",
+    "v_intermittent": "reachable from there only sometimes",
+    "v_pending": "measurement under way"
+  },
   "fed": {
     "title": "Federation",
     "lead": "Operators running this tool measure each other's anchors and share the results. Each pairing below was approved by a human on both sides, and is shown here only because both agreed to it.",

@@ -1,6 +1,8 @@
 # Federated double-check — design note
 
-**Status: proposal, not implemented.** This note exists to be argued with before any code is written, because the feature asks one operator's machine to measure something on another operator's behalf. That is a different kind of request from everything else the federation does today, and getting the consent model wrong would turn a monitoring tool into an open measurement relay.
+**Status: implemented.** This note was written as a proposal, to be argued with before any code existed, because the feature asks one operator's machine to measure something on another operator's behalf — a different kind of request from everything else the federation does, and getting the consent model wrong would turn a monitoring tool into an open measurement relay.
+
+It is kept as written rather than rewritten into documentation, because the reasoning is the useful part and a specification that hides its own trade-offs is worse than one that shows them. Two questions were settled by the operator and are marked as such below; the operational description lives in [DEPLOY.md § 13](../DEPLOY.md#13-federation-what-protects-what).
 
 Read alongside [DESIGN.md §10 Federation](../DESIGN.md#10-federation), whose pairing, signing and nonce machinery this builds on and does not replace.
 
@@ -82,7 +84,7 @@ On A's side the incident then reads as corroborated or contradicted:
 - *B does not reach it either* → the target is down. Two AS, one conclusion.
 - *B reaches it intermittently* → reported as such rather than forced into one of the two.
 
-**Open question for you:** should that corroboration be shown on A's public page — "not reachable from AS64500 either" — or stay in A's back-office? It is genuinely useful to a reader, and it publishes a fact about a third party's reachability as measured by somebody who never agreed to have that published. I lean towards back-office first, public later behind a switch, and I would like your view.
+**Decided: back-office by default, publishable by a switch.** The corroboration is useful to a reader, but it publishes a fact about a third party's reachability as measured by an operator who never agreed to have it published, so it is the local operator's deliberate choice rather than a default. With the switch on, what reaches a visitor is the peer's AS, the answered-pass counts, the median and the verdict — never the check identifier, the peer URL or the raw passes.
 
 ## 6. What A learns about B, and B about A
 
@@ -99,12 +101,14 @@ A learns nothing about B's network it could not measure itself.
 
 ## 8. Rollout
 
-1. The grant, its switch, its audit trail and its back-office page — with no ability to request anything yet. Useless alone, and it makes the consent model reviewable on its own.
+The four steps were planned to be separable, and were built in one change once the two questions above were settled:
+
+1. The grant, its switch and its back-office page.
 2. The request, the caps, the address checks, the temporary target and the purge.
 3. The signed report and its display in A's back-office.
-4. Only then, if wanted, the public wording.
+4. The public wording, behind the switch of §5.
 
-Each step is testable without the next one, and step 1 can be rejected outright without any of the rest having been written.
+Each guard has a test that fails when that guard alone is removed, which was checked by removing each one in turn rather than assumed: consent, the public-target verification, each of the three caps, and the diversion that keeps a peer's measurements out of our own data.
 
 ## 9. Questions
 
@@ -115,7 +119,9 @@ Each step is testable without the next one, and step 1 can be rejected outright 
 **Still open**
 
 2. Are the proposed caps right? (§2.3) They are a starting point, not a measurement — nobody has run this yet.
-3. Corroboration on A's **public** page, or back-office only to start? (§5)
-4. Reciprocity: should the back-office offer "grant in return" as one click when a peer grants us, or keep the two grants entirely separate acts?
+3. ~~Corroboration on A's **public** page, or back-office only to start?~~ **Back-office by default, with a switch to publish** (§5).
 
-Step 1 of the rollout below does not depend on any of the three, so it can be built while they are argued.
+**Still open**
+
+2. Are the proposed caps right? (§2.3) They shipped as proposed — 15 minutes, 3 concurrent, 20 a day, 30 s floor, with hard ceilings of 60, 10 and 50 above them. They are a starting point, not a measurement: nobody has run this at scale yet, and the first operator to hit one should say which.
+4. Reciprocity: should the back-office offer "grant in return" as one click when a peer grants us, or keep the two grants entirely separate acts? Shipped as two separate acts, which is the conservative reading; a one-click reciprocal grant is an interface question, not a safety one.

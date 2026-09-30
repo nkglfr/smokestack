@@ -136,6 +136,17 @@
     "until": "til {until}",
     "measure_paused": "måling satt på pause"
   },
+  "corr": {
+    "title": "Kontrollert fra et annet nett",
+    "hint": "En motpartsinstans i et annet AS har målt dette målet på forespørsel. Ett observasjonspunkt kan ikke skille et nede mål fra en brutt vei; to punkter i ulike nett kan det. Tallene kommer fra den motparten, over et kort vindu, og publiseres fordi den som drifter denne instansen valgte å publisere dem.",
+    "seen": "{asn} fikk svar i {ok} av {n} omganger",
+    "median": "median {ms} ms derfra",
+    "v_path": "nåbart derfra, ikke herfra",
+    "v_target": "unåbart fra begge nett",
+    "v_both_ok": "nåbart fra begge nett",
+    "v_intermittent": "nåbart derfra bare av og til",
+    "v_pending": "måling pågår"
+  },
   "fed": {
     "title": "Føderasjon",
     "lead": "Operatører som bruker dette verktøyet, måler hverandres ankere og deler resultatene. Hver sammenkobling nedenfor er godkjent av et menneske på begge sider, og vises her bare fordi begge samtykket.",

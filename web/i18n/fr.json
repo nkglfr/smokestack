@@ -136,6 +136,17 @@
     "until": "jusqu'au {until}",
     "measure_paused": "mesure suspendue"
   },
+  "corr": {
+    "title": "Vérifié depuis un autre réseau",
+    "hint": "Une instance pair située dans un autre AS a mesuré cette cible à la demande. Un seul point d'observation ne permet pas de distinguer une cible en panne d'un chemin cassé ; deux points dans des réseaux différents, si. Les chiffres sont ceux de ce pair, sur une fenêtre courte, et sont publiés parce que l'exploitant de cette instance a choisi de les publier.",
+    "seen": "{asn} a obtenu une réponse sur {ok} passes sur {n}",
+    "median": "médiane {ms} ms depuis là-bas",
+    "v_path": "joignable depuis là-bas, pas depuis ici",
+    "v_target": "injoignable depuis les deux réseaux",
+    "v_both_ok": "joignable depuis les deux réseaux",
+    "v_intermittent": "joignable depuis là-bas seulement par moments",
+    "v_pending": "mesure en cours"
+  },
   "fed": {
     "title": "Fédération",
     "lead": "Les opérateurs qui exploitent cet outil mesurent mutuellement leurs ancres et partagent les résultats. Chaque appairage ci-dessous a été approuvé par un humain des deux côtés, et n'est affiché ici que parce que les deux l'ont accepté.",

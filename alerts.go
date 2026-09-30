@@ -83,6 +83,11 @@ type Alerter struct {
 	now   func() int64
 	send  func(cfg AlertConfig, subject, body string) error
 	trace func(targetID int64) // asks the probe for a traceroute
+	// corroborate asks granted peers for a second opinion when an
+	// incident opens. A field, like the others, so the state machine can
+	// be tested without a federation behind it. Nil when the instance is
+	// not federated.
+	corroborate func(targetID int64)
 }
 
 func NewAlerter(store *Store) *Alerter {
@@ -93,6 +98,15 @@ func NewAlerter(store *Store) *Alerter {
 		send:  sendAlert,
 		trace: func(id int64) { traceRequests.Push(id) },
 	}
+}
+
+// UseFederation wires the double-check in. Kept out of NewAlerter because
+// the federation is built after the alerter and may not exist at all.
+func (a *Alerter) UseFederation(f *Federation) {
+	if f == nil {
+		return
+	}
+	a.corroborate = f.AutoDoubleCheck
 }
 
 func (a *Alerter) openIncident(targetID, now int64, detail string) {
@@ -184,6 +198,13 @@ func (a *Alerter) Tick(statuses map[int64]string, details map[int64]string) int 
 			// that the path is captured while it is still broken.
 			a.openIncident(targetID, now, details[targetID])
 			a.trace(targetID)
+			// The second opinion is asked for the moment the incident
+			// opens, not when the alert fires: by the time the threshold
+			// is reached the peer's window has already produced passes,
+			// so the answer is there when somebody reads the alert.
+			if a.corroborate != nil {
+				go a.corroborate(targetID)
+			}
 			continue
 		}
 		if !cfg.Enabled || inc.NotifiedAt > 0 {

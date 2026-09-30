@@ -136,6 +136,17 @@
     "until": "til {until}",
     "measure_paused": "måling sat på pause"
   },
+  "corr": {
+    "title": "Kontrolleret fra et andet net",
+    "hint": "En modpartsinstans i et andet AS har målt dette mål efter anmodning. Ét observationspunkt kan ikke skelne et nede mål fra en brudt vej; to punkter i forskellige net kan. Tallene kommer fra den modpart, over et kort vindue, og offentliggøres, fordi den, der driver denne instans, valgte at offentliggøre dem.",
+    "seen": "{asn} fik svar i {ok} af {n} runder",
+    "median": "median {ms} ms derfra",
+    "v_path": "nåbart derfra, ikke herfra",
+    "v_target": "unåbart fra begge net",
+    "v_both_ok": "nåbart fra begge net",
+    "v_intermittent": "nåbart derfra kun til tider",
+    "v_pending": "måling i gang"
+  },
   "fed": {
     "title": "Føderation",
     "lead": "Operatører, der bruger dette værktøj, måler hinandens ankre og deler resultaterne. Hver parring herunder er godkendt af et menneske på begge sider og vises kun her, fordi begge har givet samtykke.",

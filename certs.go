@@ -241,7 +241,7 @@ func (s *Store) certTargets() []*Target {
 	}
 	var out []*Target
 	for _, t := range all {
-		if t.Proto == "tcp" && t.Port > 0 && !t.CertOff {
+		if t.Proto == "tcp" && t.Port > 0 && !t.CertOff && t.DCCheck == "" {
 			out = append(out, t)
 		}
 	}
@@ -413,7 +413,7 @@ func (a *API) certRows() []CertRow {
 	certs := a.store.Certs()
 	var out []CertRow
 	for _, t := range all {
-		if t.Proto != "tcp" || t.Port <= 0 {
+		if t.Proto != "tcp" || t.Port <= 0 || t.DCCheck != "" {
 			continue
 		}
 		row := CertRow{TargetID: t.ID, Title: t.Title, Host: maskHost(t.Host),

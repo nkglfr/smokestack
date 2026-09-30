@@ -186,6 +186,9 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 - Ed25519-signed messages, fingerprints compared out of band
 - Pairings shown publicly only if both operators agree
 - NOC alerts only when several independent observers confirm an incident
+- Double-check: a peer in another AS measures one of your targets on request, so an incident says
+  whether the target is down or your own path is. Opt-in per peer, capped, and only for a target you
+  already publish; the peer's measurements never enter its own data and are deleted afterwards
 
 ---
 

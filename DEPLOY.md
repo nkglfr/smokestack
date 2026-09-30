@@ -1314,6 +1314,29 @@ measured yourself.
 Recipient and sender addresses are validated before the message is handed
 to SMTP, and the subject cannot carry extra headers.
 
+### Double-check: measuring on a peer's behalf
+
+The double-check asks a peer's machine to measure something for you, which is a different kind of request from everything else here. Unguarded it is a measurement relay: a way to make somebody else's machine probe a third party, and to launder the origin of that probing behind their AS number. Three guards, and none of them is sufficient alone.
+
+1. **Consent in advance, per peer.** A request is refused outright unless you have granted that peer the right, in *Double-check with peers*. Pairing is not a grant: pairing is agreeing to exchange anchor measurements. A grant is one-directional — granting a peer does not grant you — and revoking it takes effect on the next request **and** stops whatever that peer has running, because a revocation that left running checks in place would be a revocation in name only. A grant can only name a peer that is already approved: an AS number is declared and never proved, so granting a stranger would grant whoever turns up with that number.
+2. **The address must already be a public target on the requesting instance.** Verified by reading that instance's own public API, not taken on trust. This is the only one of the three that constrains *what* can be probed rather than merely how much: a peer can only ever ask for a second opinion on something it already publishes under its own name. The cost is real and accepted — a **private target cannot be double-checked**. Covering private targets would need a target list pre-registered between the two peers, not a relaxation of this rule.
+3. **Caps, per peer.** Duration (15 min by default, 60 max), concurrent checks (3 by default, 10 max), checks per rolling day (20 by default, 50 max), and an interval floor of 30 s — nothing measured for somebody else runs faster than you measure for yourself. A grant may lower these, never raise them: if an operator grants more than the instance is willing to do, it is his own instance that refuses. Every refusal names the cap it hit, so a peer can tell a limit from a fault.
+
+The address itself is hostile input, so it is resolved and **every** resolved address must be public unicast — a name answering with one public and one private address is refused, not partly accepted.
+
+What the measurements become, on the measuring side:
+
+- a **temporary target**, private, alerts off, absent from the tree and therefore from every public page;
+- its passes are **diverted before the write path reaches `samples`**, into a table of their own. They never enter the rollup cascade, the availability figures, the fault counts or the history. They are not your data about your network;
+- the temporary target and every pass it produced are **deleted when the window closes**;
+- it is **listed in your back-office** throughout, with the AS that asked and the address, because consent given in advance must not mean invisible: you answer for what your instance measures.
+
+What goes back is a summary — passes, silent passes, median, p95 — and not the individual passes: a summary is enough to learn whether the target answers, and harder to repurpose.
+
+On the requesting side the corroboration is **back-office only by default**. Publishing it on the target's public page is a switch, off when shipped, because it publishes a fact about a third party's reachability as measured by an operator who never agreed to have it published. Even with the switch on, the check identifier, the peer URL and the raw passes are never published.
+
+Asking automatically when an incident opens is on by default. That is deliberate rather than careless: a request is refused unless a peer granted it in advance, so the switch cannot cause anything a peer has not consented to — it only decides whether the answer arrives during the incident or only if somebody thinks to click. A target that flaps is not asked about twice in the same hour, so it cannot spend a peer's daily allowance.
+
 ### Outbound requests
 
 All federation traffic goes through a client that refuses to connect to a

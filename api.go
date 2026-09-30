@@ -546,6 +546,16 @@ func (a *API) targetsGet(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 500, err.Error())
 		return
 	}
+	// A temporary double-check target is not one of this instance's
+	// targets: it belongs to a peer's request and appears on the
+	// double-check page, with the AS that asked for it, not here.
+	kept := make([]*Target, 0, len(ts))
+	for _, t := range ts {
+		if t.DCCheck == "" {
+			kept = append(kept, t)
+		}
+	}
+	ts = kept
 	errs := a.store.TargetErrors()
 	addrs := a.store.TargetAddresses(time.Now().Unix() - 24*3600)
 	type targetWithError struct {

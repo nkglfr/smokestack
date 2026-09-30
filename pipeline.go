@@ -177,6 +177,18 @@ func (s *Store) RecordBatch(batch []queuedMeasure) error {
 		return err
 	}
 	defer clearErr.Close()
+	// Measurements made for a peer's double-check are diverted here, not
+	// written to samples: they are not this instance's data about its own
+	// network, and nothing of them must reach the cascade, the
+	// availability figures or the history. They are deleted outright when
+	// the check's window closes.
+	dcIns, err := tx.Prepare(`INSERT INTO fed_dc_samples(target_id,check_id,ts,sent,lost,cnt,med_us)
+	                          VALUES(?,?,?,?,?,?,?)
+	                          ON CONFLICT(target_id,ts) DO NOTHING`)
+	if err != nil {
+		return err
+	}
+	defer dcIns.Close()
 	seenIP, err := tx.Prepare(`INSERT INTO target_addresses(target_id,ip,last_seen) VALUES(?,?,?)
 	                           ON CONFLICT(target_id,ip) DO UPDATE SET last_seen=excluded.last_seen`)
 	if err != nil {
@@ -200,6 +212,13 @@ func (s *Store) RecordBatch(batch []queuedMeasure) error {
 			sk.Add(v)
 			sum += v
 			sumsq += v * v
+		}
+		if cid, ok := s.dc.get(m.TargetID); ok {
+			if _, err := dcIns.Exec(m.TargetID, cid, m.TS, m.Sent, m.Lost,
+				len(m.RTTus), sk.Quantile(0.5)); err != nil {
+				return err
+			}
+			continue
 		}
 		if _, err := ins.Exec(m.TargetID, m.ProbeID, m.TS, m.Sent, m.Lost, len(m.RTTus),
 			sk.Min(), sk.Max(), sum, sumsq, sk.MarshalBinary(), 1, downOf(m)); err != nil {

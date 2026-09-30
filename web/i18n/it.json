@@ -136,6 +136,17 @@
     "until": "fino al {until}",
     "measure_paused": "misura sospesa"
   },
+  "corr": {
+    "title": "Verificato da un'altra rete",
+    "hint": "Un'istanza pari situata in un altro AS ha misurato questo bersaglio su richiesta. Un solo punto di osservazione non distingue un bersaglio guasto da un percorso rotto; due punti in reti diverse sì. Le cifre sono di quel pari, su una finestra breve, e sono pubblicate perché l'operatore di questa istanza ha scelto di pubblicarle.",
+    "seen": "{asn} ha ottenuto risposta in {ok} passaggi su {n}",
+    "median": "mediana {ms} ms da là",
+    "v_path": "raggiungibile da là, non da qui",
+    "v_target": "irraggiungibile da entrambe le reti",
+    "v_both_ok": "raggiungibile da entrambe le reti",
+    "v_intermittent": "raggiungibile da là solo a tratti",
+    "v_pending": "misura in corso"
+  },
   "fed": {
     "title": "Federazione",
     "lead": "Gli operatori che usano questo strumento misurano reciprocamente le proprie ancore e ne condividono i risultati. Ogni abbinamento qui sotto è stato approvato da una persona da entrambe le parti ed è mostrato solo perché entrambe hanno acconsentito.",

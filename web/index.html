@@ -127,6 +127,11 @@ canvas{display:block;width:100%}
 .av-m{font-size:11px;color:var(--ink-3);line-height:1.5}
 .av-ok{border-left-color:var(--ok)} .av-warn{border-left-color:var(--warn)}
 .av-crit{border-left-color:var(--crit)} .av-n{border-left-color:var(--line)}
+.corr{display:flex;gap:9px;align-items:center;flex-wrap:wrap;border:1px solid var(--line-2);
+  border-left-width:3px;border-radius:9px;padding:9px 12px;background:var(--bg-soft)}
+.corr-m{font-size:12.5px;color:var(--ink-2)}
+.corr-ok{border-left-color:var(--ok)} .corr-warn{border-left-color:var(--warn)}
+.corr-crit{border-left-color:var(--crit)} .corr-n{border-left-color:var(--line)}
 .trl{width:100%;border-collapse:collapse;font-size:13px}
 .trl td,.trl th{padding:8px 10px;border-top:1px solid var(--line-2);text-align:left}
 .trl th{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.05em;font-weight:550;border-top:none}
@@ -639,6 +644,10 @@ function renderDetail() {
       <ol class="evlist" id="evlist"></ol>
       <p class="strip-hint">${esc(t("detail.ev_hint"))}</p></div></div>
     <div class="stats" id="stats"></div>
+    <div class="card" id="cobox" hidden style="margin-top:10px"><div class="card-b" style="padding-block:12px">
+      <div class="lbl" style="margin-bottom:7px">${esc(t("corr.title"))}</div>
+      <div id="corr"></div>
+      <p class="strip-hint">${esc(t("corr.hint"))}</p></div></div>
     <div class="card" id="avbox" hidden style="margin-top:10px"><div class="card-b" style="padding-block:12px">
       <div class="lbl" style="margin-bottom:7px">${esc(t("avail.title"))}</div>
       <div class="avrow" id="avrow"></div>
@@ -683,6 +692,31 @@ async function paint() {
     st("metric.jitter", n2(avg(jit)), "ms") + st("metric.loss", loss == null ? "—" : n1(loss), "%");
   document.querySelectorAll("[data-p]").forEach(b => b.setAttribute("aria-pressed", String(S.preset === +b.dataset.p)));
   renderAvailability(tg);
+  renderCorroboration(tg);
+}
+
+/* --------------------------------------------------------- corroboration */
+// What a peer in another AS saw of this target, when the operator of this
+// instance chose to publish it. One vantage point cannot tell a target that
+// is down from a path that is broken; two in different networks can. The
+// endpoint answers empty unless publishing is on, so there is nothing to
+// hide here — an absent card means no corroboration was published.
+async function renderCorroboration(tg) {
+  const box = $("#cobox");
+  if (!box) return;
+  let d = null;
+  try {
+    const r = await fetch(`/api/v1/corroboration?target=${tg.id}` + (SHARE ? "&share=" + encodeURIComponent(SHARE) : ""));
+    if (r.ok) d = await r.json();
+  } catch (e) { d = null; }
+  if (S.view !== "detail" || S.target !== tg) return;
+  if (!d || !d.verdict || !d.peer_asn) { box.hidden = true; return; }
+  const cls = { path: "crit", target: "crit", both_ok: "ok", intermittent: "warn", pending: "n" }[d.verdict] || "n";
+  box.hidden = false;
+  $("#corr").innerHTML = `<div class="corr corr-${cls}">
+    <span class="badge b-${cls}">${esc(t("corr.v_" + d.verdict) || d.verdict)}</span>
+    <span class="corr-m">${esc(t("corr.seen", { asn: d.peer_asn, ok: I18N.num(d.answered), n: I18N.num(d.passes) }))}${
+      d.med_ms ? " · " + esc(t("corr.median", { ms: n2(d.med_ms) })) : ""}</span></div>`;
 }
 
 /* ---------------------------------------------------------- availability */

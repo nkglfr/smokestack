@@ -136,6 +136,17 @@
     "until": "bis {until}",
     "measure_paused": "Messung ausgesetzt"
   },
+  "corr": {
+    "title": "Aus einem anderen Netz geprüft",
+    "hint": "Eine Partnerinstanz in einem anderen AS hat dieses Ziel auf Anfrage gemessen. Ein einzelner Beobachtungspunkt kann ein ausgefallenes Ziel nicht von einem gestörten Pfad unterscheiden; zwei Punkte in verschiedenen Netzen können es. Die Zahlen stammen von diesem Partner, über ein kurzes Zeitfenster, und werden veröffentlicht, weil der Betreiber dieser Instanz sich dafür entschieden hat.",
+    "seen": "{asn} erhielt bei {ok} von {n} Durchläufen eine Antwort",
+    "median": "Median {ms} ms von dort",
+    "v_path": "von dort erreichbar, von hier nicht",
+    "v_target": "aus beiden Netzen nicht erreichbar",
+    "v_both_ok": "aus beiden Netzen erreichbar",
+    "v_intermittent": "von dort nur zeitweise erreichbar",
+    "v_pending": "Messung läuft"
+  },
   "fed": {
     "title": "Föderation",
     "lead": "Betreiber dieses Werkzeugs messen gegenseitig ihre Anker und teilen die Ergebnisse. Jede Kopplung unten wurde auf beiden Seiten von einem Menschen genehmigt und wird nur angezeigt, weil beide zugestimmt haben.",

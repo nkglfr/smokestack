@@ -136,6 +136,17 @@
     "until": "hasta {until}",
     "measure_paused": "medición suspendida"
   },
+  "corr": {
+    "title": "Verificado desde otra red",
+    "hint": "Una instancia par situada en otro AS ha medido este objetivo a petición. Un solo punto de observación no distingue un objetivo caído de un camino roto; dos puntos en redes distintas sí. Las cifras son de ese par, sobre una ventana corta, y se publican porque el operador de esta instancia eligió publicarlas.",
+    "seen": "{asn} obtuvo respuesta en {ok} de {n} pasadas",
+    "median": "mediana {ms} ms desde allí",
+    "v_path": "alcanzable desde allí, no desde aquí",
+    "v_target": "inalcanzable desde ambas redes",
+    "v_both_ok": "alcanzable desde ambas redes",
+    "v_intermittent": "alcanzable desde allí solo a veces",
+    "v_pending": "medición en curso"
+  },
   "fed": {
     "title": "Federación",
     "lead": "Los operadores que utilizan esta herramienta miden mutuamente sus anclas y comparten los resultados. Cada emparejamiento de abajo fue aprobado por una persona en ambos lados, y solo se muestra porque ambos lo aceptaron.",

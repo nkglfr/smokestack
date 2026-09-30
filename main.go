@@ -282,6 +282,7 @@ func main() {
 		log.Fatalf("federation: %v", err)
 	}
 	go fed.Loop(stop)
+	go fed.dcLoop(stop)
 
 	sub, err := fs.Sub(webFS, "web")
 	if err != nil {
@@ -331,6 +332,7 @@ func main() {
 	api.CertRoutes(mux)
 	api.BreakdownRoutes(mux)
 	api.MaintenanceRoutes(mux)
+	api.DoubleCheckRoutes(mux)
 	api.probeInProcess = cfg.Probe.Enabled && cfg.Probe.Mode != "external"
 	api.ContactRoutes(mux)
 	api.LogRoutes(mux)
@@ -415,6 +417,7 @@ func main() {
 	mux.HandleFunc("GET /api/v1/admin/probe/status", api.need(RoleViewer, api.probeStatus))
 	go ovCache.Loop(stop)
 	alerter := NewAlerter(store)
+	alerter.UseFederation(fed)
 	api.alerter = alerter
 	go alerter.Loop(stop, api.probeID)
 

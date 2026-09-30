@@ -172,7 +172,7 @@ func (s *Store) Breakdowns() []Breakdown {
 	}
 	var out []Breakdown
 	for _, t := range all {
-		if t.Proto != "tcp" || t.Port <= 0 {
+		if t.Proto != "tcp" || t.Port <= 0 || t.DCCheck != "" {
 			continue
 		}
 		b := last[t.ID]
