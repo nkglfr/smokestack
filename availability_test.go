@@ -180,3 +180,104 @@ func TestAvailTable(t *testing.T) {
 		}
 	}
 }
+
+// The probe writes through RecordBatch, never through Record. When the two
+// were separate copies of the same INSERT, a column added to the tested one
+// alone was written nowhere in production while every test passed. This
+// test goes through the batch path on purpose, and the one below pins the
+// two paths together.
+func TestAvailabilityThroughTheBatchPath(t *testing.T) {
+	store, id := availStore(t)
+	now := time.Now()
+	base := now.Unix() - 1800
+	var batch []queuedMeasure
+	for i := 0; i < 20; i++ {
+		lost := 0
+		if i%5 == 0 {
+			lost = 5 // four silent passes out of twenty
+		}
+		m := Measurement{TargetID: id, ProbeID: 1, TS: base + int64(i)*60,
+			Sent: 5, Lost: lost}
+		for j := 0; j < 5-lost; j++ {
+			m.RTTus = append(m.RTTus, 1000)
+		}
+		batch = append(batch, queuedMeasure{m: m, host: "192.0.2.1"})
+	}
+	if err := store.RecordBatch(batch); err != nil {
+		t.Fatal(err)
+	}
+	w := store.availWindow(id, 1, "1h", base-60, now.Unix()+60)
+	if w.Passes != 20 || w.Down != 4 {
+		t.Fatalf("the batch path must count passes too: passes=%d down=%d", w.Passes, w.Down)
+	}
+	if w.Pct == nil || *w.Pct < 79.9 || *w.Pct > 80.1 {
+		t.Errorf("availability should be 80 %%, got %v", w.Pct)
+	}
+}
+
+// Whatever a single write and a batched write do, they must do the same
+// thing, so a column can never again be filled by one and not the other.
+func TestRecordAndRecordBatchAgree(t *testing.T) {
+	store, id := availStore(t)
+	tg, err := store.TargetByID(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := store.CreateTarget(&Target{CategoryID: tg.CategoryID, Slug: "t2", Title: "T2",
+		Host: "192.0.2.2", Proto: "icmp", IntervalS: 60, Packets: 5, SpacingMs: 100,
+		TimeoutMs: 1000, Public: true, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := time.Now().Unix() - 600
+	mk := func(target int64, lost int) Measurement {
+		m := Measurement{TargetID: target, ProbeID: 1, TS: ts, Sent: 5, Lost: lost}
+		for j := 0; j < 5-lost; j++ {
+			m.RTTus = append(m.RTTus, 1234)
+		}
+		return m
+	}
+	for _, lost := range []int{0, 3, 5} {
+		ts++
+		if err := store.Record(mk(id, lost)); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.RecordBatch([]queuedMeasure{{m: mk(other, lost), host: ""}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cols := "sent,lost,cnt,min_us,max_us,sum_us,sumsq_us,passes,down"
+	rows := func(target int64) [][]float64 {
+		r, err := store.mx.Query("SELECT "+cols+
+			" FROM samples WHERE target_id=? ORDER BY bucket", target)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer r.Close()
+		var out [][]float64
+		for r.Next() {
+			v := make([]float64, 9)
+			ptr := make([]any, 9)
+			for i := range v {
+				ptr[i] = &v[i]
+			}
+			if err := r.Scan(ptr...); err != nil {
+				t.Fatal(err)
+			}
+			out = append(out, v)
+		}
+		return out
+	}
+	a, b := rows(id), rows(other)
+	if len(a) != 3 || len(b) != 3 {
+		t.Fatalf("three passes each, got %d and %d", len(a), len(b))
+	}
+	for i := range a {
+		for j := range a[i] {
+			if a[i][j] != b[i][j] {
+				t.Errorf("pass %d: Record and RecordBatch disagree on column %d of (%s): %v vs %v",
+					i, j, cols, a[i][j], b[i][j])
+			}
+		}
+	}
+}

@@ -148,8 +148,8 @@ func (s *Store) RecordBatch(batch []queuedMeasure) error {
 	}
 	defer tx.Rollback()
 	ins, err := tx.Prepare(`INSERT INTO samples(target_id,probe_id,bucket,sent,lost,cnt,
-	                        min_us,max_us,sum_us,sumsq_us,sketch)
-	                        VALUES(?,?,?,?,?,?,?,?,?,?,?)
+	                        min_us,max_us,sum_us,sumsq_us,sketch,passes,down)
+	                        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
 	                        ON CONFLICT(target_id,probe_id,bucket) DO NOTHING`)
 	if err != nil {
 		return err
@@ -202,7 +202,7 @@ func (s *Store) RecordBatch(batch []queuedMeasure) error {
 			sumsq += v * v
 		}
 		if _, err := ins.Exec(m.TargetID, m.ProbeID, m.TS, m.Sent, m.Lost, len(m.RTTus),
-			sk.Min(), sk.Max(), sum, sumsq, sk.MarshalBinary()); err != nil {
+			sk.Min(), sk.Max(), sum, sumsq, sk.MarshalBinary(), 1, downOf(m)); err != nil {
 			return err
 		}
 		loss := 0.0

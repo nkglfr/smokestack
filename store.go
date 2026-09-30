@@ -1550,45 +1550,24 @@ func (s *Store) TargetErrors() map[int64]TargetError {
 	return out
 }
 
+// Record writes one measurement. It delegates to the batch path rather
+// than repeating the insert: there used to be two copies of this SQL, one
+// used by the probe and one used by the tests, and a column added to the
+// tested copy alone was written nowhere in production while every test
+// passed. One path, exercised by both.
 func (s *Store) Record(m Measurement) error {
-	sk := NewSketch()
-	var sum, sumsq float64
-	for _, v := range m.RTTus {
-		sk.Add(v)
-		sum += v
-		sumsq += v * v
-	}
-	// Une passe est muette quand aucun des paquets envoyes n'est revenu.
-	// C'est cet evenement-la qui compte pour la disponibilite, pas le
-	// nombre de paquets perdus : une passe qui perd quatre paquets sur
-	// cinq prouve que la cible repond.
-	down := 0
-	if m.Sent > 0 && m.Lost >= m.Sent {
-		down = 1
-	}
-	_, err := s.mxw.Exec(
-		`INSERT INTO samples(target_id,probe_id,bucket,sent,lost,cnt,
-		                     min_us,max_us,sum_us,sumsq_us,sketch,passes,down)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
-		 ON CONFLICT(target_id,probe_id,bucket) DO NOTHING`,
-		m.TargetID, m.ProbeID, m.TS, m.Sent, m.Lost, len(m.RTTus),
-		sk.Min(), sk.Max(), sum, sumsq, sk.MarshalBinary(), 1, down)
-	if err != nil {
-		return err
-	}
+	return s.RecordBatch([]queuedMeasure{{m: m, host: m.IP}})
+}
 
-	loss := 0.0
-	if m.Sent > 0 {
-		loss = float64(m.Lost) * 100 / float64(m.Sent)
+// downOf reports whether a pass was silent: not a single packet came back.
+// That is the event availability counts, and it is not the same as packet
+// loss — a pass losing four packets out of five still proves the target
+// answers, and counts as available.
+func downOf(m Measurement) int {
+	if m.Sent > 0 && m.Lost >= m.Sent {
+		return 1
 	}
-	_, err = s.mxw.Exec(
-		`INSERT INTO live(target_id,probe_id,ts,med_us,p95_us,loss_pct)
-		 VALUES(?,?,?,?,?,?)
-		 ON CONFLICT(target_id,probe_id) DO UPDATE SET
-		   ts=excluded.ts, med_us=excluded.med_us,
-		   p95_us=excluded.p95_us, loss_pct=excluded.loss_pct`,
-		m.TargetID, m.ProbeID, m.TS, sk.Quantile(0.5), sk.Quantile(0.95), loss)
-	return err
+	return 0
 }
 
 // --------------------------------------------------------------- rollups
