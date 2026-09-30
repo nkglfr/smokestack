@@ -1,21 +1,97 @@
 name: release
-# Push a tag to publish:  git tag v1.2.0 && git push origin v1.2.0
+# Two ways in, one path out.
+#
+#   git tag v1.2.0 && git push origin v1.2.0
+#   or: Actions -> release -> Run workflow, with the version
+#
+# The second exists because an agent session cannot create a git ref, so it
+# would otherwise have to hand every release back to a human at the last
+# step — which is where today's mistake came from: a tag pushed before the
+# work behind it was finished. A dispatched run creates the tag itself, and
+# waits for whoever reviews the "release" environment before it does. Both
+# ways then run exactly the same build, so nothing can drift between them.
+#
 # Instances with automatic updates enabled pick the release up within hours.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish, with or without the leading v (e.g. 0.6.1)"
+        required: true
+        type: string
 
 permissions:
   contents: write
   packages: write
 
 jobs:
-  release:
+  # A gate, and nothing else. Required reviewers on the "release"
+  # environment are what makes a dispatched release a request rather than an
+  # act; a tag push skips this job, because pushing the tag was already the
+  # human decision. It is a job of its own rather than an environment
+  # expression on the job below, so that nothing depends on how an empty
+  # environment name is treated.
+  authorize:
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
+    environment: release
+    steps:
+      - run: echo "Publishing ${{ inputs.version }}, approved."
+
+  release:
+    needs: [authorize]
+    # The gate is skipped on a tag push, and a skipped dependency would
+    # otherwise skip this job too.
+    if: always() && (needs.authorize.result == 'success' || needs.authorize.result == 'skipped')
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      v: ${{ steps.v.outputs.v }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      # One name for the version, whichever door the run came through, so
+      # every step below stops caring which it was.
+      - name: Resolve the version
+        id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            V="${INPUT_VERSION#v}"
+            case "$V" in
+              [0-9]*.[0-9]*.[0-9]*) ;;
+              *) echo "not a version: $INPUT_VERSION" >&2; exit 1 ;;
+            esac
+          else
+            V="${GITHUB_REF_NAME#v}"
+          fi
+          echo "v=$V" >> "$GITHUB_OUTPUT"
+          echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          echo "publishing $V"
+
+      # Refuse before building rather than after: a tag that already exists
+      # means somebody has published this version, and overwriting it would
+      # change what an instance already installed.
+      - name: The version must not already be published
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if git rev-parse -q --verify "refs/tags/${{ steps.v.outputs.tag }}" >/dev/null; then
+            echo "${{ steps.v.outputs.tag }} already exists" >&2
+            exit 1
+          fi
+
+      - name: Tag this commit
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.v.outputs.tag }}" -m "Release ${{ steps.v.outputs.v }}"
+          git push origin "${{ steps.v.outputs.tag }}"
       - uses: actions/setup-go@v7
         with:
           go-version: "1.25"
@@ -26,7 +102,7 @@ jobs:
           SMOKESTACK_RELEASE_KEY: ${{ secrets.SMOKESTACK_RELEASE_KEY }}
         run: |
           test -n "$SMOKESTACK_RELEASE_KEY" || { echo "secret SMOKESTACK_RELEASE_KEY is missing"; exit 1; }
-          make dist VERSION="${GITHUB_REF_NAME#v}" \
+          make dist VERSION="${{ steps.v.outputs.v }}" \
                     OFFICIAL_URL="${{ vars.OFFICIAL_URL || format('https://github.com/{0}', github.repository) }}" \
                     REPO_URL="https://github.com/${{ github.repository }}"
       # A published version must be described in the changelog. Catching it
@@ -37,7 +113,7 @@ jobs:
       # version is often tagged while its entries still sit under Unreleased.
       - name: The changelog must describe this version
         run: |
-          V="${GITHUB_REF_NAME#v}"
+          V="${{ steps.v.outputs.v }}"
           awk -v v="## $V" '$0 == v {f=1; next} /^## / {f=0} f' CHANGELOG.md > notes.md
           if [ ! -s notes.md ]; then
             # Pending work is written under "## Unreleased" until a number is
@@ -60,10 +136,11 @@ jobs:
           # A version with a hyphen (v0.2.0-rc1) is published as a
           # pre-release: GitHub leaves it out of "latest", so servers with
           # automatic updates never install it by themselves.
+          TAG="${{ steps.v.outputs.tag }}"
           PRE=""
-          case "$GITHUB_REF_NAME" in *-*) PRE="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" dist/* $PRE \
-            --title "smokestack ${GITHUB_REF_NAME#v}" --notes-file notes.md
+          case "$TAG" in *-*) PRE="--prerelease" ;; esac
+          gh release create "$TAG" dist/* $PRE \
+            --title "smokestack ${{ steps.v.outputs.v }}" --notes-file notes.md
 
   # Publishes the container image next to the release. Tests and native
   # packages do not depend on it.
@@ -71,7 +148,11 @@ jobs:
     needs: release
     runs-on: ubuntu-24.04
     steps:
+      # On a dispatched run github.ref_name is the branch, not the tag, so
+      # the version comes from the job above rather than from the ref.
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.tag }}
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
@@ -84,8 +165,8 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          build-args: VERSION=${{ github.ref_name }}
+          build-args: VERSION=${{ needs.release.outputs.tag }}
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ghcr.io/${{ github.repository }}:${{ needs.release.outputs.tag }}
             ghcr.io/${{ github.repository }}:latest

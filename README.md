@@ -327,10 +327,18 @@ make release-key                        # once: signing key pair (see DEPLOY.md 
 git tag v0.2.2 && git push origin v0.2.2
 ```
 
-Pushing the tag is all it takes: GitHub Actions runs the tests, builds
-linux/amd64 and linux/arm64, signs the packages and publishes the release
-(do not create the release by hand in the GitHub interface). Instances with automatic updates install it within a
-few hours. See [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
+Pushing the tag is all it takes: GitHub Actions runs the tests, builds linux/amd64 and linux/arm64,
+signs the packages and publishes the release (do not create the release by hand in the GitHub
+interface). Instances with automatic updates install it within a few hours.
+
+The same workflow also runs from *Actions → release → Run workflow*, with the version as its input:
+it creates the tag itself and then takes exactly the same path, so nothing can differ between the
+two doors. That one waits for a reviewer of the `release` environment before it does anything, which
+is what makes it safe to leave in the hands of whoever prepared the release rather than whoever
+holds a shell. Set the environment up once in *Settings → Environments → release* with yourself as a
+required reviewer; without it the dispatched run publishes as soon as it is started.
+
+See [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
 ---
 

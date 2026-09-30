@@ -508,7 +508,7 @@ matter when rolling back:
 
 ## 6. Publishing your own releases
 
-Releases are built and signed by GitHub Actions when you push a tag.
+Releases are built and signed by GitHub Actions, from a tag you push or from the workflow you start by hand. Both doors lead into the same build, so nothing can differ between them.
 
 **Once** (on any machine with Go, a GitHub Codespace works well):
 
@@ -526,11 +526,19 @@ make release-key                 # creates release.key (secret) and prints the p
 - store `release.key` offline and delete it from the build machine.
   **Never commit it** (it is in `.gitignore`).
 
-**Each release:**
+**Each release**, either way:
 
 ```sh
 git tag v0.2.2 && git push origin v0.2.2
 ```
+
+or *Actions → release → Run workflow*, with `0.2.2` as the version. The dispatched run refuses a version that is already tagged — overwriting one would change what instances have already installed — creates the tag itself on the current `main`, and then does exactly what a tag push does.
+
+### The approval gate on dispatched releases
+
+Set this up once, in *Settings → Environments → New environment → `release`*, with yourself under **Required reviewers**. A dispatched run then stops and waits for your click before it tags or publishes anything; a pushed tag never waits, because pushing it was already the decision.
+
+Without that environment the gate is an empty formality: the run publishes as soon as it is started. The reason to have it is that starting a workflow needs far less than a shell with push rights — an agent session, a phone, a collaborator with write access — and publishing a release is the one action in this repository that reaches machines you do not control, since instances with automatic updates install it by themselves. Worth one click.
 
 The version must be described in [CHANGELOG.md](CHANGELOG.md), either in a
 section named exactly `## X.Y.Z` or in the `## Unreleased` section where
