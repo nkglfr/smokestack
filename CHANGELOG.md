@@ -3,6 +3,10 @@
 Versions are published as signed releases; servers with automatic updates
 install the newest one directly, whatever versions came in between.
 
+## Unreleased
+
+- **SQLite and the Go toolchain are brought up to date.** `modernc.org/sqlite` goes from 1.34.5 to 1.59.0 — twenty-five minor versions of the engine that writes every measurement — along with its own dependencies and `golang.org/x/sys`. The update requires Go 1.25, so the build, the release workflow and the container image move from 1.22 and 1.23 to 1.25: a version from early 2024 no longer receives the runtime and standard-library fixes that a network-facing service should have. The binary stays static and `CGO_ENABLED=0`, so nothing about how it is deployed changes.
+
 ## 0.5.1
 
 Addresses, and who gets to see them. 0.5.0 masked a pinned address and left two other paths open; this closes them and says, on the about page, where the measurements come from — without publishing that address either.
