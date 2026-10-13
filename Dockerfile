@@ -1,7 +1,7 @@
 # smokestack container image — meant for tests and for people who already
 # run everything in containers. For published measurements, prefer the
 # native install (install.sh): see the disclaimer in DEPLOY.md § 12.
-FROM golang:1.25-alpine AS build
+FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

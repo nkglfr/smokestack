@@ -6,6 +6,14 @@ Versions are published as signed releases; servers with automatic updates instal
 
 ### Changed
 
+- **SQLite and the Go toolchain move together again.**
+
+  `modernc.org/sqlite` goes from 1.59.0 to 1.60.1, with `modernc.org/libc` and `golang.org/x/sys`. It raises the `go` directive to 1.26, so the build, the release workflow and the container image move from 1.25 to 1.26 in the same change.
+
+  Dependabot proposed the dependency alone, which could not build: the module would have been refused before the tests ran. This is the second time that has happened, and the reason is structural rather than accidental — a bot that bumps one dependency cannot know the toolchain it now requires is pinned in three other files.
+
+  The binary stays static and `CGO_ENABLED=0`; nothing about deployment changes.
+
 - **The footer no longer disclaims the measurements it publishes.**
   The bottom line of every public page read `© 2026 <operator> — All measurements are published as-is, without warranty.`. The second half was shipped as a translated string, so it spoke for operators who had never written it: instances whose terms live on their own website, and instances that publish figures they stand behind.
   What remains is the copyright line and the link to the project. A disclaimer belongs on the About page, which is the operator's own text and can say exactly what that instance means. The `footer.rights` key leaves the ten language files with it.

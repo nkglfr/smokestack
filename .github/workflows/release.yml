@@ -94,7 +94,7 @@ jobs:
           git push origin "${{ steps.v.outputs.tag }}"
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.25"
+          go-version: "1.26"
       - name: Resolve dependencies
         run: test -f go.sum || go mod tidy
       - name: Build and sign packages
