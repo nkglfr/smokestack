@@ -1611,6 +1611,15 @@ type agg struct {
 // idempotent, il rattrape une sonde en retard qui envoie des donnees
 // anciennes, et il coute quelques millisecondes.
 func (s *Store) RollupRange(src, dst string, secs, from, to int64) error {
+	// Read from the start of the destination bucket that contains `from`,
+	// not from `from` itself. The delete below clears whole buckets, so a
+	// read that started mid-bucket would rebuild that bucket from part of
+	// its source — and when no source row falls in the remaining part, it
+	// would not rebuild it at all. Since the aligned bound advances one
+	// bucket at a time while `from` sweeps continuously, that is exactly
+	// what erased the trailing bucket just before the window left it, and
+	// why a tier never held more than its own rebuild window (#68).
+	from -= mod(from, secs)
 	rows, err := s.mx.Query(fmt.Sprintf(
 		`SELECT target_id,probe_id,bucket,sent,lost,cnt,min_us,max_us,
 		        sum_us,sumsq_us,sketch,passes,down
@@ -1666,7 +1675,7 @@ func (s *Store) RollupRange(src, dst string, secs, from, to int64) error {
 
 	if _, err := tx.Exec(fmt.Sprintf(
 		`DELETE FROM %s WHERE bucket>=? AND bucket<?`, dst),
-		from-mod(from, secs), to); err != nil {
+		from, to); err != nil {
 		return err
 	}
 	stmt, err := tx.Prepare(fmt.Sprintf(
@@ -1714,6 +1723,60 @@ func (s *Store) RollupTick(now int64) error {
 		}
 	}
 	return nil
+}
+
+// RollupBackfill extends a tier backwards over a period its source covers
+// and it does not. RollupTick only ever rebuilds a recent window, which is
+// right for keeping up but leaves nothing to recover history with: an
+// instance that was stopped, that ran a version where the cascade leaked,
+// or that is upgrading from one, keeps empty coarse tiers for ever and
+// draws empty 3-month and 1-year views over data it actually holds (#68).
+//
+// One bounded chunk per call, newest missing span first, so the long views
+// fill from the right-hand edge and the work never blocks a start-up.
+// Returns true while there is more to do.
+func (s *Store) RollupBackfill(now, chunk int64) (bool, error) {
+	if chunk <= 0 {
+		chunk = 7 * 86400
+	}
+	for i := 0; i+1 < len(cascade); i++ {
+		src, dst := cascade[i], cascade[i+1]
+		srcMin, ok := s.oldestBucket(src.table)
+		if !ok {
+			continue
+		}
+		// Never reach further back than the destination is allowed to keep,
+		// or the next purge would undo the work.
+		if dst.keep > 0 && srcMin < now-dst.keep {
+			srcMin = now - dst.keep
+		}
+		dstMin, has := s.oldestBucket(dst.table)
+		if !has {
+			dstMin = now + dst.secs
+		}
+		dstMin -= mod(dstMin, dst.secs)
+		if srcMin >= dstMin {
+			continue // nothing older in the source than the tier already has
+		}
+		from := dstMin - chunk
+		if from < srcMin {
+			from = srcMin
+		}
+		if err := s.RollupRange(src.table, dst.table, dst.secs, from, dstMin); err != nil {
+			return false, fmt.Errorf("backfill %s->%s: %w", src.table, dst.table, err)
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+func (s *Store) oldestBucket(table string) (int64, bool) {
+	var b *int64
+	if err := s.mx.QueryRow(fmt.Sprintf(
+		`SELECT MIN(bucket) FROM %s`, table)).Scan(&b); err != nil || b == nil {
+		return 0, false
+	}
+	return *b, true
 }
 
 func (s *Store) Purge(now int64) error {

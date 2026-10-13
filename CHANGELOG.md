@@ -2,6 +2,20 @@
 
 Versions are published as signed releases; servers with automatic updates install the newest one directly, whatever versions came in between. The release workflow reads a section straight out of this file and publishes it as the release notes, so how an entry is written matters — see [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
+## Unreleased
+
+### Fixed
+
+- **The 10-day, 3-month and 1-year views were empty, and the year navigator with them** (#68).
+
+  The coarse aggregation tiers never held more than the window the rollup rebuilds, so an instance measuring for two weeks drew three days at best and nothing at all on the longest views — over data it was holding the whole time.
+
+  `RollupRange` clears whole destination buckets but read its source from the raw instant it was given. The bucket containing that instant was therefore rebuilt from only the part of its source lying after it, and when no source row fell in that part, the bucket was cleared and not rebuilt at all. Since the cleared range advances one whole bucket at a time while the read start sweeps continuously, the trailing bucket was reliably destroyed in the moment before the window moved past it. Every coarse bucket met that fate as the window left it, which is why a tier could never accumulate.
+
+  The read is now aligned to the destination bucket, as the delete always was. That also fixes a quieter error in the same place: the edge bucket was being published as a complete hour while holding a fraction of one — three five-minute rows out of twelve, in the case this was found with.
+
+  **An upgrade does not lose anything, and does not repair the past by itself**, so a backfill comes with it: a bounded chunk every twenty seconds, newest missing span first, until each tier covers everything its source still holds. An instance with months of fine-grained measurement recovers its long views without the start-up doing anything but measuring, and it says in the log when the tiers are complete. It never reaches further back than a tier is allowed to keep, so it cannot fight the next purge.
+
 ## 0.6.1
 
 Two things 0.6.0 got wrong or got late: the availability figure it shipped never worked, and the federated double-check landed a few minutes after the tag went out.

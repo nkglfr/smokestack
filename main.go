@@ -485,8 +485,15 @@ func execBinary(path string) {
 func backgroundLoop(store *Store, stop <-chan struct{}) {
 	rollup := time.NewTicker(30 * time.Second)
 	purge := time.NewTicker(6 * time.Hour)
+	// Catching up on history is not the same job as keeping up with the
+	// present. One chunk at a time, slowly, so an instance with months of
+	// fine-grained data recovers its long views without the start-up doing
+	// anything but measuring.
+	backfill := time.NewTicker(20 * time.Second)
 	defer rollup.Stop()
 	defer purge.Stop()
+	defer backfill.Stop()
+	caughtUp := false
 	for {
 		select {
 		case <-stop:
@@ -495,11 +502,26 @@ func backgroundLoop(store *Store, stop <-chan struct{}) {
 			if err := store.RollupTick(time.Now().Unix()); err != nil {
 				log.Printf("rollup: %v", err)
 			}
+		case <-backfill.C:
+			if caughtUp {
+				continue
+			}
+			more, err := store.RollupBackfill(time.Now().Unix(), 7*86400)
+			if err != nil {
+				log.Printf("rollup backfill: %v", err)
+				continue
+			}
+			if !more {
+				caughtUp = true
+				log.Printf("aggregation tiers are complete: the long views cover everything measured")
+			}
 		case <-purge.C:
 			store.PurgeSessions()
 			if err := store.Purge(time.Now().Unix()); err != nil {
 				log.Printf("purge: %v", err)
 			}
+			// A purge can expose a new oldest row, so look again.
+			caughtUp = false
 		}
 	}
 }
