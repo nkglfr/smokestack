@@ -302,6 +302,84 @@ func (s *Store) PrimaryTargets(probeID int64) (map[int64]bool, error) {
 	return out, rows.Err()
 }
 
+// TargetPrimaries maps every target to the probe that decides it, with the
+// local probe's own id substituted for the zero that means "nobody chose".
+// Callers then have one rule instead of two.
+func (s *Store) TargetPrimaries(localProbeID int64) (map[int64]int64, error) {
+	rows, err := s.cfg.Query(`SELECT id, primary_probe_id FROM targets`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]int64{}
+	for rows.Next() {
+		var id, pid int64
+		if err := rows.Scan(&id, &pid); err != nil {
+			return nil, err
+		}
+		if pid == 0 {
+			pid = localProbeID
+		}
+		out[id] = pid
+	}
+	return out, rows.Err()
+}
+
+// TargetWatchers maps every target to the probes that measure it. The local
+// probe measures everything and is in no assignment row, so it is added to
+// every target rather than left out of all of them.
+func (s *Store) TargetWatchers(localProbeID int64) (map[int64][]int64, error) {
+	rows, err := s.cfg.Query(`SELECT pt.target_id, pt.probe_id FROM probe_targets pt
+	                          JOIN probes p ON p.id = pt.probe_id
+	                          WHERE p.enabled = 1`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64][]int64{}
+	for rows.Next() {
+		var tid, pid int64
+		if err := rows.Scan(&tid, &pid); err != nil {
+			return nil, err
+		}
+		out[tid] = append(out[tid], pid)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	trows, err := s.cfg.Query(`SELECT id FROM targets`)
+	if err != nil {
+		return nil, err
+	}
+	defer trows.Close()
+	for trows.Next() {
+		var tid int64
+		if err := trows.Scan(&tid); err != nil {
+			return nil, err
+		}
+		out[tid] = append(out[tid], localProbeID)
+	}
+	return out, trows.Err()
+}
+
+// EnabledProbeIDs lists the probes worth asking for an opinion.
+func (s *Store) EnabledProbeIDs() ([]int64, error) {
+	rows, err := s.cfg.Query(`SELECT id FROM probes WHERE enabled=1 ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 // SetTargetPrimaryProbe chooses which probe decides a target's status. Zero
 // hands it back to the local probe.
 //
