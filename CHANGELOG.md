@@ -50,6 +50,14 @@ Versions are published as signed releases; servers with automatic updates instal
 
   Traceroute and immediate-check requests now go to that probe rather than to whichever probe asks for work first, so an anomaly is traced from the vantage point it was seen from. A request its probe has not collected within two minutes may be run by any probe: a primary that is not answering is itself something worth a traceroute, and running it elsewhere says more than not running it at all.
 
+- **An alert says whether the other probes see the same thing.**
+
+  When a target is in trouble, the probes that also measure it are asked what they see of it, and the answer goes into the alert. Everyone sees it, so it is the target. Only the deciding probe sees it, so it is likely the path from there. Something in between is reported as what it is, rather than resolved into a verdict nobody can check.
+
+  This never changes whether an alert fires, only what it says. Requiring several probes to agree before alerting would turn a probe with a broken path into silence, which is the failure that costs the most and is noticed last.
+
+  A probe with no data, or one whose targets are under maintenance, has no opinion and is not counted either way: counting silence as agreement would manufacture a confirmation out of nothing.
+
 ## 0.7.3
 
 Three things an operator ran into on a real instance, which turned out to be three defects rather than three mistakes on his side.
