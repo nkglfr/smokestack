@@ -29,6 +29,15 @@ func TestNoDataNeverClosesAnIncident(t *testing.T) {
 	if _, open := a.openFor(tid); !open {
 		t.Fatal("a critical target opened no incident")
 	}
+	// The opening tick records the incident; the next one is what alerts. A
+	// recovery notice is only owed where an alert was actually sent, so this
+	// second tick is what makes the end of the test meaningful.
+	now += 60
+	a.Tick(map[int64]string{tid: "crit"}, map[int64]string{tid: "100 % packet loss"})
+	if inc, _ := a.openFor(tid); inc == nil || inc.NotifiedAt == 0 {
+		t.Fatal("a sustained critical target sent no alert")
+	}
+	before := len(subjects)
 
 	// The probe goes quiet. Nothing is measured, so nothing is known — which
 	// is not the same as knowing it is fine.
@@ -37,7 +46,7 @@ func TestNoDataNeverClosesAnIncident(t *testing.T) {
 	if _, open := a.openFor(tid); !open {
 		t.Fatal("missing data closed the incident")
 	}
-	for _, s := range subjects {
+	for _, s := range subjects[before:] {
 		if strings.Contains(s, "Recovered") {
 			t.Fatalf("missing data announced a recovery: %q", s)
 		}
@@ -57,13 +66,13 @@ func TestNoDataNeverClosesAnIncident(t *testing.T) {
 		t.Fatal("a target measured healthy did not close its incident")
 	}
 	found := false
-	for _, s := range subjects {
+	for _, s := range subjects[before:] {
 		if strings.Contains(s, "Recovered") {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("no recovery notice when the target actually recovered")
+		t.Errorf("no recovery notice when the target actually recovered, subjects: %v", subjects)
 	}
 }
 
