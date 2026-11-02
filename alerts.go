@@ -174,6 +174,17 @@ func (a *Alerter) Tick(statuses map[int64]string, details map[int64]string) int 
 	// graphe — seule la notification est retenue.
 	maint := a.store.ActiveMaintenances(now)
 	for targetID, status := range statuses {
+		// No data is not a recovery, and neither is a planned maintenance.
+		// Both used to fall through to the branch below, which closed any
+		// open incident and announced the target as back to normal — so a
+		// probe that stopped reporting declared every target it decided
+		// recovered, in silence, which is the opposite of what this is for.
+		// An incident is left exactly as it is until something is measured
+		// again, and that measurement is what closes or confirms it.
+		// Reported by @mayssa-bm in #93.
+		if status == "nodata" || status == "maint" {
+			continue
+		}
 		inc, open := a.openFor(targetID)
 		if status != "crit" {
 			if !open {
@@ -385,6 +396,9 @@ func (a *Alerter) Loop(stop <-chan struct{}, probeID int64) {
 		case <-tick.C:
 			alertSMTP = loadNotifyConfig(a.store)
 			alertChannels = a.store.Channels()
+			// Before the targets, because a silent probe explains what the
+			// targets are about to not say.
+			a.checkProbes(a.now())
 			statuses, details, err := a.gather(probeID)
 			if err != nil {
 				continue
@@ -392,6 +406,55 @@ func (a *Alerter) Loop(stop <-chan struct{}, probeID int64) {
 			a.Tick(statuses, details)
 		}
 	}
+}
+
+// How long a probe may say nothing before somebody is told. A probe asks for
+// work every five seconds and flushes what it has measured every second, so
+// silence of this length is not a slow network: it is a probe that is gone,
+// a token that was revoked, or a service it can no longer reach.
+const probeSilentAfter = 5 * 60
+
+// checkProbes alerts on a probe that has stopped reporting, and says so again
+// when it comes back.
+//
+// This is the other half of refusing to treat missing data as a recovery. A
+// target whose probe is gone now keeps its incident open and stops being
+// judged, which is honest but silent — and silence is what this is for.
+// Without it, an operator would see a target frozen mid-incident with no
+// indication that the reason is the probe rather than the target.
+func (a *Alerter) checkProbes(now int64) int {
+	cfg := a.store.AlertConfig()
+	probes, err := a.store.ReportingProbes()
+	if err != nil {
+		return 0
+	}
+	sent := 0
+	for _, p := range probes {
+		silent := now-p.LastSeenAt >= probeSilentAfter
+		switch {
+		case silent && p.SilentNotifiedAt == 0:
+			// Recorded before the notice is sent, not after: a send that
+			// fails must not leave this alerting every minute.
+			a.store.MarkProbeSilent(p.ID, now)
+			if cfg.Enabled {
+				a.send(cfg, fmt.Sprintf("[smokestack] Probe silent: %s", p.Name),
+					fmt.Sprintf("Probe %s (%s) has not reported for %s.\n\n"+
+						"The targets it measures are no longer being judged from it, and any incident "+
+						"open on them stays open until it reports again.\n",
+						p.Name, p.Slug, humanSince(p.LastSeenAt, now)))
+				sent++
+			}
+		case !silent && p.SilentNotifiedAt > 0:
+			a.store.MarkProbeSilent(p.ID, 0)
+			if cfg.Enabled && cfg.Recovery {
+				a.send(cfg, fmt.Sprintf("[smokestack] Probe back: %s", p.Name),
+					fmt.Sprintf("Probe %s (%s) is reporting again after %s.\n",
+						p.Name, p.Slug, humanSince(p.SilentNotifiedAt, now)))
+				sent++
+			}
+		}
+	}
+	return sent
 }
 
 // probeView is one probe's opinion of every target it measures.
