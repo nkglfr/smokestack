@@ -58,6 +58,24 @@ Versions are published as signed releases; servers with automatic updates instal
 
   A probe with no data, or one whose targets are under maintenance, has no opinion and is not counted either way: counting silence as agreement would manufacture a confirmation out of nothing.
 
+### Fixed
+
+- **A probe that stopped reporting declared its targets recovered.**
+
+  Missing data was treated like a healthy measurement: it closed any open incident and, where recovery notices are on, announced the target as back to normal. With one probe this was mostly hidden, because the only probe dying meant the whole instance was down and somebody noticed. With probes on several machines, one of them going quiet silently reported every target it decides as fine.
+
+  Missing data now closes nothing. An incident stays exactly as it is until something is measured again, and that measurement is what closes or confirms it. A planned maintenance is treated the same way, for the same reason: a window that was scheduled is not a recovery either.
+
+  Reported by @mayssa-bm.
+
+- **Nothing watched the probes themselves.**
+
+  A probe that has not reported for five minutes now raises its own alert, and another when it comes back. Five minutes is well past the five seconds a probe waits between asking for work, so it means the probe is gone, its token was withdrawn, or it can no longer reach the service.
+
+  This is the other half of the fix above. A target whose probe is gone keeps its incident open and stops being judged, which is honest but says nothing — without this, an operator would find a target frozen mid-incident with no indication that the probe, rather than the target, is the reason.
+
+  A probe with nothing to measure is never called silent. Its last contact only moves when it has something to report, so an idle probe would otherwise look dead while being perfectly healthy.
+
 ## 0.7.3
 
 Three things an operator ran into on a real instance, which turned out to be three defects rather than three mistakes on his side.

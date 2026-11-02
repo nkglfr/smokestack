@@ -298,6 +298,10 @@ func OpenStore(dir string) (*Store, error) {
 	// otherwise — so an instance that never enrols a remote probe behaves
 	// exactly as it did before this column existed.
 	addColumn(cfg, "targets", "primary_probe_id INTEGER NOT NULL DEFAULT 0")
+	// When this probe was last reported as silent, so that going quiet wakes
+	// somebody once rather than every minute. Cleared the moment it reports
+	// again, which is also what sends the notice that it is back.
+	addColumn(cfg, "probes", "silent_notified_at INTEGER NOT NULL DEFAULT 0")
 	addColumn(cfg, "probes", "address TEXT NOT NULL DEFAULT ''")
 	addColumn(cfg, "probes", "seen_address TEXT NOT NULL DEFAULT ''")
 	migrateTCPPorts(cfg)
