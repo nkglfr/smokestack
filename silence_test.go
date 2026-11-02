@@ -23,7 +23,10 @@ func TestNoDataNeverClosesAnIncident(t *testing.T) {
 		send:  func(_ AlertConfig, subject, _ string) error { subjects = append(subjects, subject); return nil },
 		trace: func(int64) {}}
 	alertSchema(store)
-	store.SetAlertConfig(AlertConfig{Enabled: true, AfterMinutes: 0, RepeatHours: 6, Recovery: true})
+	// One minute, stated rather than left at zero: AlertConfig() reads a
+	// non-positive value as unset and puts the shipped five minutes back, so
+	// a test asking for "alert immediately" would quietly be asking for five.
+	store.SetAlertConfig(AlertConfig{Enabled: true, AfterMinutes: 1, RepeatHours: 6, Recovery: true})
 
 	a.Tick(map[int64]string{tid: "crit"}, map[int64]string{tid: "100 % packet loss"})
 	if _, open := a.openFor(tid); !open {
@@ -32,7 +35,7 @@ func TestNoDataNeverClosesAnIncident(t *testing.T) {
 	// The opening tick records the incident; the next one is what alerts. A
 	// recovery notice is only owed where an alert was actually sent, so this
 	// second tick is what makes the end of the test meaningful.
-	now += 60
+	now += 120
 	a.Tick(map[int64]string{tid: "crit"}, map[int64]string{tid: "100 % packet loss"})
 	if inc, _ := a.openFor(tid); inc == nil || inc.NotifiedAt == 0 {
 		t.Fatal("a sustained critical target sent no alert")
