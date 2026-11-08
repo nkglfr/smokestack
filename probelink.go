@@ -242,7 +242,7 @@ func ProbeRoutes(mux *http.ServeMux, store *Store, cache *TargetCache, writer *W
 		// the service learns a remote probe's address on its own.
 		store.SeenProbeFrom(id, clientIP(r))
 		return probeCaller{id: id,
-			allowed: func() (map[int64]bool, error) { return store.ProbeTargetIDs(id) },
+			allowed: func() (map[int64]bool, error) { return store.ProbeAllowedTargets(id) },
 			primary: func() (map[int64]bool, error) { return store.PrimaryTargets(id) },
 		}, true
 	})

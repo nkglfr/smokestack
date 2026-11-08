@@ -57,6 +57,9 @@ type Probe struct {
 	// SilentNotifiedAt is when its silence was last reported, zero when it is
 	// reporting normally. Internal bookkeeping, not part of the API.
 	SilentNotifiedAt int64 `json:"-"`
+	// AllTargets is true when this probe measures every target instead of an
+	// explicit list. The list it had is kept, so turning this off restores it.
+	AllTargets bool `json:"all_targets"`
 }
 
 // EffectiveAddress is the stated address when there is one, the observed
@@ -95,7 +98,7 @@ func (s *Store) Probes() ([]Probe, error) {
 	rows, err := s.cfg.Query(
 		`SELECT id, slug, name, COALESCE(location,''), local, enabled,
 		        COALESCE(last_seen_at,0), COALESCE(token_hash,'') <> '',
-		        COALESCE(address,''), COALESCE(seen_address,'')
+		        COALESCE(address,''), COALESCE(seen_address,''), COALESCE(all_targets,0)
 		   FROM probes ORDER BY local DESC, slug`)
 	if err != nil {
 		return nil, err
@@ -104,12 +107,12 @@ func (s *Store) Probes() ([]Probe, error) {
 	out := []Probe{}
 	for rows.Next() {
 		var p Probe
-		var local, enabled, hasTok int
+		var local, enabled, hasTok, all int
 		if err := rows.Scan(&p.ID, &p.Slug, &p.Name, &p.Location,
-			&local, &enabled, &p.LastSeenAt, &hasTok, &p.Address, &p.SeenAddress); err != nil {
+			&local, &enabled, &p.LastSeenAt, &hasTok, &p.Address, &p.SeenAddress, &all); err != nil {
 			return nil, err
 		}
-		p.Local, p.Enabled, p.HasToken = local == 1, enabled == 1, hasTok == 1
+		p.Local, p.Enabled, p.HasToken, p.AllTargets = local == 1, enabled == 1, hasTok == 1, all == 1
 		p.From = p.EffectiveAddress()
 		out = append(out, p)
 	}
@@ -201,8 +204,50 @@ func (s *Store) SetProbeEnabled(id int64, on bool) error {
 	return nil
 }
 
-// ProbeTargetIDs is the set of targets a probe may measure. It is consulted
-// on the probe's own hot path, so it returns a set rather than a list.
+// ProbeAllowedTargets is what a probe may measure: a set of target ids, or
+// nil when it may measure every target. Every path that enforces the
+// restriction asks this one function, so there is a single rule rather than
+// one per caller — and nil consistently means "no restriction", never "no
+// targets", which is the distinction a caller must not get wrong.
+//
+// A probe set to all targets keeps whatever explicit list it had. Turning the
+// option off puts that list back, instead of leaving the operator to rebuild
+// something they never asked to lose.
+func (s *Store) ProbeAllowedTargets(probeID int64) (map[int64]bool, error) {
+	var all int
+	err := s.cfg.QueryRow(`SELECT COALESCE(all_targets,0) FROM probes WHERE id=?`, probeID).Scan(&all)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+	if all == 1 {
+		return nil, nil
+	}
+	return s.ProbeTargetIDs(probeID)
+}
+
+// SetProbeAllTargets switches a probe between an explicit list and everything.
+//
+// It refuses the local probe, which measures every target by construction and
+// is read from none of this: an option on it would be a setting that looks
+// meaningful and changes nothing.
+func (s *Store) SetProbeAllTargets(probeID int64, all bool) error {
+	v := 0
+	if all {
+		v = 1
+	}
+	res, err := s.cfg.Exec(`UPDATE probes SET all_targets=? WHERE id=? AND local=0`, v, probeID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("unknown probe")
+	}
+	return nil
+}
+
+// ProbeTargetIDs is the explicit set a probe was assigned. Callers enforcing
+// the restriction want ProbeAllowedTargets instead, which also accounts for a
+// probe set to measure everything; this one is the stored list as written.
 //
 // A probe with no assignment gets an empty set, and an empty set means an
 // empty target list. That is the safe way round: a probe enrolled today
@@ -350,6 +395,27 @@ func (s *Store) TargetWatchers(localProbeID int64) (map[int64][]int64, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	// The local probe, and any remote probe set to measure everything, are in
+	// no assignment row at all. They watch every target rather than none, so
+	// they are added to each one the way the local probe already was.
+	everyone := []int64{localProbeID}
+	arows, err := s.cfg.Query(`SELECT id FROM probes WHERE enabled=1 AND local=0 AND COALESCE(all_targets,0)=1`)
+	if err != nil {
+		return nil, err
+	}
+	for arows.Next() {
+		var pid int64
+		if err := arows.Scan(&pid); err != nil {
+			arows.Close()
+			return nil, err
+		}
+		everyone = append(everyone, pid)
+	}
+	arows.Close()
+	if err := arows.Err(); err != nil {
+		return nil, err
+	}
+
 	trows, err := s.cfg.Query(`SELECT id FROM targets`)
 	if err != nil {
 		return nil, err
@@ -360,7 +426,7 @@ func (s *Store) TargetWatchers(localProbeID int64) (map[int64][]int64, error) {
 		if err := trows.Scan(&tid); err != nil {
 			return nil, err
 		}
-		out[tid] = append(out[tid], localProbeID)
+		out[tid] = append(out[tid], everyone...)
 	}
 	return out, trows.Err()
 }
@@ -382,6 +448,8 @@ func (s *Store) ReportingProbes() ([]Probe, error) {
 		 WHERE enabled = 1
 		   AND COALESCE(last_seen_at,0) > 0
 		   AND ( (local = 1 AND EXISTS(SELECT 1 FROM targets WHERE enabled=1 AND archived_at=0))
+		      OR (local = 0 AND COALESCE(all_targets,0) = 1
+		          AND EXISTS(SELECT 1 FROM targets WHERE enabled=1 AND archived_at=0))
 		      OR (local = 0 AND EXISTS(SELECT 1 FROM probe_targets WHERE probe_id = p.id)) )
 		 ORDER BY id`)
 	if err != nil {
@@ -449,13 +517,14 @@ func (s *Store) SetTargetPrimaryProbe(targetID, probeID int64) error {
 		if enabled != 1 {
 			return fmt.Errorf("that probe is disabled")
 		}
-		var n int
-		if err := s.cfg.QueryRow(
-			`SELECT COUNT(*) FROM probe_targets WHERE probe_id=? AND target_id=?`,
-			probeID, targetID).Scan(&n); err != nil {
+		// A probe measuring everything is assigned this target as much as one
+		// holding it in a list, so asking the allowed set rather than the
+		// table keeps the two kinds of assignment telling the same story.
+		allowed, err := s.ProbeAllowedTargets(probeID)
+		if err != nil {
 			return err
 		}
-		if n == 0 {
+		if allowed != nil && !allowed[targetID] {
 			return fmt.Errorf("that probe is not assigned this target, so it cannot be its primary")
 		}
 	}
@@ -628,7 +697,11 @@ func (a *API) probeTargetsGet(w http.ResponseWriter, r *http.Request, u *User) {
 		ids = append(ids, tid)
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	writeJSON(w, map[string]any{"targets": ids})
+	var all int
+	a.store.cfg.QueryRow(`SELECT COALESCE(all_targets,0) FROM probes WHERE id=?`, id).Scan(&all)
+	// The stored list travels with the flag rather than instead of it: an
+	// operator switching back to an explicit list gets what they had.
+	writeJSON(w, map[string]any{"targets": ids, "all_targets": all == 1})
 }
 
 func (a *API) probeTargetsPut(w http.ResponseWriter, r *http.Request, u *User) {
@@ -684,16 +757,24 @@ func (a *API) probesPatch(w http.ResponseWriter, r *http.Request, u *User) {
 		return
 	}
 	var in struct {
-		Enabled *bool   `json:"enabled"`
-		Address *string `json:"address"`
+		Enabled    *bool   `json:"enabled"`
+		Address    *string `json:"address"`
+		AllTargets *bool   `json:"all_targets"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, 400, err.Error())
 		return
 	}
-	if in.Enabled == nil && in.Address == nil {
+	if in.Enabled == nil && in.Address == nil && in.AllTargets == nil {
 		writeErr(w, 400, "nothing to change")
 		return
+	}
+	if in.AllTargets != nil {
+		if err := a.store.SetProbeAllTargets(id, *in.AllTargets); err != nil {
+			writeErr(w, 400, err.Error())
+			return
+		}
+		a.store.Audit(u, clientIP(r), "probe_all_targets", "probe", strconv.FormatInt(id, 10))
 	}
 	// A pointer rather than a string, so that clearing the override is
 	// expressible: an absent field changes nothing, an empty one hands the
@@ -737,6 +818,7 @@ func cmdProbe(args []string) error {
 	location := fsn.String("location", "", "where it measures from")
 	address := fsn.String("address", "", "its public IP, when the observed one would be wrong (NAT, reverse proxy)")
 	targets := fsn.String("targets", "", "comma-separated target ids this probe measures (targets only)")
+	allTargets := fsn.Bool("all", false, "measure every target, now and as targets are added (targets only)")
 	withToken := fsn.Bool("token", false, "issue a token straight away (add only)")
 	fsn.Parse(args[1:])
 
@@ -772,7 +854,7 @@ func cmdProbe(args []string) error {
 			return err
 		}
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "SLUG\tNAME\tLOCATION\tFROM\tKIND\tSTATE\tTOKEN")
+		fmt.Fprintln(w, "SLUG\tNAME\tLOCATION\tFROM\tTARGETS\tKIND\tSTATE\tTOKEN")
 		for _, p := range list {
 			kind, state, tok := "remote", "disabled", "none"
 			if p.Local {
@@ -792,7 +874,13 @@ func cmdProbe(args []string) error {
 			} else if p.Address != "" {
 				from += " (stated)"
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", p.Slug, p.Name, p.Location, from, kind, state, tok)
+			scope := "list"
+			if p.Local {
+				scope = "all"
+			} else if p.AllTargets {
+				scope = "all"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", p.Slug, p.Name, p.Location, from, scope, kind, state, tok)
 		}
 		return w.Flush()
 
@@ -836,6 +924,20 @@ func cmdProbe(args []string) error {
 	case "targets":
 		id, err := bySlug()
 		if err != nil {
+			return err
+		}
+		if *allTargets {
+			if err := store.SetProbeAllTargets(id, true); err != nil {
+				return err
+			}
+			store.Audit(nil, "cli", "probe_all_targets", "probe", strconv.FormatInt(id, 10))
+			fmt.Printf("%s now measures every target, including ones added later\n", *slug)
+			return nil
+		}
+		// Naming a list turns the everything option off: the operator asked
+		// for these targets, so leaving the flag on would silently ignore
+		// what they just typed.
+		if err := store.SetProbeAllTargets(id, false); err != nil {
 			return err
 		}
 		// An empty -targets clears the assignment, which is the same thing
