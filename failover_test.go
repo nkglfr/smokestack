@@ -183,3 +183,22 @@ func TestBackupsMustBeAbleToMeasureTheTarget(t *testing.T) {
 		t.Errorf("a refused list left %d entries", len(got))
 	}
 }
+
+// The interface filters it out, but the API and the CLI reach the same store
+// and an operator writing a list by hand should be told, not silently given
+// something that does nothing.
+func TestABackupCannotBeThePrimary(t *testing.T) {
+	store, tid, _, first, second := failoverFixture(t)
+	if err := store.SetTargetPrimaryProbe(tid, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SetTargetBackups(tid, []int64{first.ID}); err == nil {
+		t.Error("the probe that decides the target was accepted as its own fallback")
+	}
+	if err := store.SetTargetBackups(tid, []int64{second.ID, first.ID}); err == nil {
+		t.Error("the primary was accepted further down the list")
+	}
+	if err := store.SetTargetBackups(tid, []int64{second.ID}); err != nil {
+		t.Errorf("a valid list was refused: %v", err)
+	}
+}

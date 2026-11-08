@@ -2,6 +2,30 @@
 
 Versions are published as signed releases; servers with automatic updates install the newest one directly, whatever versions came in between. The release workflow reads a section straight out of this file and publishes it as the release notes, so how an entry is written matters — see [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
+## 0.8.3
+
+**A target does not stop being judged because its probe went away.** 0.8.0 gave a target a probe that decides it and 0.8.2 stopped a silent probe from being read as good news. Between the two, a target whose probe disappeared kept its incident open and was judged by nobody — honest, and useless when another probe was standing right there able to judge it.
+
+### New
+
+- **A target can name the probes to fall back to.**
+
+  An ordered list, set beside the probe that decides the target. While that probe is silent the first fallback still reporting takes over, and the chosen probe takes its targets back once it has been reporting again for ten minutes.
+
+  That delay is the feature rather than a detail: coming back deliberately costs more than going away. Without it a probe flapping on a bad link would hand its targets over and reclaim them every few minutes, and every handover is a moment when two views of the same target disagree.
+
+  A target whose probe and every fallback are silent stays with the probe that was chosen for it. Somebody has to own it, and leaving it owned by something that is not answering is what keeps its incident open.
+
+  An instance that writes no list behaves exactly as before: with nowhere to fall back to, the chosen probe decides, silent or not.
+
+  Every fallback must already be allowed to measure the target, and cannot be the probe it stands in for. The form offers two levels; the API and the command line accept more.
+
+  Asked for by @mayssa-bm.
+
+- **An incident records which probe decided it.**
+
+  With one probe the question never arose. With a probe that can hand over to another, an incident that does not say where it was seen from cannot be read a week later.
+
 ## 0.8.2
 
 **What a remote probe measures is now visible.** 0.8.0 made probes elsewhere work; until this release, what they measured could only be read in the back-office and in the alerts.

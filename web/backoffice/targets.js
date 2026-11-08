@@ -89,6 +89,13 @@ async function viewTargets(m){
           <div id="tprimnote" style="font-size:11px;color:var(--ink3);margin-top:3px"></div>
           <div style="font-size:11px;color:var(--ink3);margin-top:3px">The probe chosen here decides this
             target's status and runs its traceroutes; the others, if any, still measure it.</div></div>
+        <div class="field" id="tbkfield" hidden><label for="tbk1">If it is silent, fall back to</label>
+          <select id="tbk1"><option value="0">None</option></select>
+          <select id="tbk2" aria-label="Second fallback" style="margin-top:6px"><option value="0">None</option></select>
+          <div id="tbknote" style="font-size:11px;color:var(--ink3);margin-top:3px" hidden></div>
+          <div style="font-size:11px;color:var(--ink3);margin-top:3px">Tried in this order while the primary
+            probe is silent. Two levels are offered here; the API and the CLI accept a longer list, which
+            this form cuts to two as soon as you change either choice.</div></div>
       </div>
       <label class="chk"><input type="checkbox" id="thide"><span>Hide the address on the public page
         <small>The graph stays public, the host or IP is not shown, and neither are its traceroutes.
@@ -273,8 +280,8 @@ async function viewTargets(m){
   // "Measured from": only enabled remote probes that are assigned this target are offered, because the
   // server refuses any other. It is sent only once the operator changes it, so saving an unrelated edit
   // never rewrites a choice made elsewhere in the meantime.
-  let primaryTouched=false;
-  $("#tprim").onchange=()=>{primaryTouched=true;};
+  let primaryTouched=false, backupsTouched=false, backupsStored=[], refilterBackups=null, initBackups=null;
+  $("#tprim").onchange=()=>{primaryTouched=true; if(refilterBackups) refilterBackups();};
   if(!EDIT){
     H.render($("#tprimnote"),html`Save the target first, then assign it to a probe on the Probes page.`);
   }else{
@@ -285,6 +292,38 @@ async function viewTargets(m){
         ((await api("GET","/api/v1/admin/probes/"+p.id+"/targets")).targets||[]).includes(editId)));
       const offered=remote.filter((p,i)=>assigned[i]);
       const cur=EDIT_PRIMARY;
+      // The fallback list reuses the probes and assignments fetched just above; only the list itself is new.
+      // Hidden when no remote probe is assigned this target, since there would be nothing to choose from.
+      if(offered.length){
+        backupsStored=(await api("GET","/api/v1/admin/targets/"+editId+"/backups")).backups||[];
+        const usable=backupsStored.filter(id=>id!==cur&&offered.some(p=>p.id===id));
+        const label=p=>p.name||p.slug;
+        const opts=(excluded)=>html`<option value="0">None</option>${offered.filter(p=>!excluded.includes(p.id)).map(p=>
+          html`<option value="${p.id}">${label(p)}</option>`)}`;
+        // The primary is never offered as a fallback, and the second slot never repeats the first, so no
+        // invalid combination can be built. A selection that has become invalid (the primary was changed to
+        // it) is cleared and counts as a change, so it is not silently kept or silently dropped.
+        refilterBackups=(init)=>{
+          const prim=parseInt($("#tprim").value,10)||0;
+          let b1=init?init[0]:(parseInt($("#tbk1").value,10)||0), b2=init?init[1]:(parseInt($("#tbk2").value,10)||0);
+          if(b1===prim){b1=0; backupsTouched=true;}
+          if(b2===prim||b2===b1){b2=0; backupsTouched=true;}
+          H.render($("#tbk1"),opts([prim]));
+          H.render($("#tbk2"),opts([prim,b1]));
+          $("#tbk1").value=String(b1); $("#tbk2").value=String(b2);
+        };
+        // The first filtering happens once the primary select below holds its real value.
+        initBackups=[usable[0]||0,usable[1]||0];
+        $("#tbk1").onchange=()=>{backupsTouched=true; refilterBackups();};
+        $("#tbk2").onchange=()=>{backupsTouched=true; refilterBackups();};
+        if(backupsStored.length>usable.length||backupsStored.length>2){
+          H.render($("#tbknote"),html`The saved list holds ${backupsStored.length} probe(s), some of which are
+            no longer assigned this target, disabled, or beyond the second place. Changing a choice here
+            replaces the whole list with what is shown.`);
+          $("#tbknote").hidden=false;
+        }
+        $("#tbkfield").hidden=false;
+      }
       // A primary that is no longer among the offered probes means it was unassigned from this target
       // after being chosen. Showing it rather than silently falling back to "This instance" is what tells
       // the operator their choice is no longer being honoured.
@@ -295,6 +334,7 @@ async function viewTargets(m){
           html`<option value="${cur}">probe ${cur} — no longer assigned this target</option>`:""}`);
         $("#tprim").value=String(cur);
         $("#tprim").disabled=false;
+        if(initBackups) refilterBackups(initBackups);
         if(stale) H.render($("#tprimnote"),html`The chosen probe is no longer assigned this target: assign it again on the Probes page, or pick another.`);
       }else{
         H.render($("#tprimnote"),html`Unavailable: this target must first be assigned to a probe on the Probes page.`);
@@ -305,6 +345,12 @@ async function viewTargets(m){
   }
   $("#savetgt").onclick=async()=>{
     const primaryId=(primaryTouched&&!$("#tprim").disabled)?parseInt($("#tprim").value,10):null;
+    // Fallbacks are sent only once touched and only if they differ from the stored list; empty slots are skipped.
+    let backupIds=null;
+    if(backupsTouched&&!$("#tbkfield").hidden){
+      const ids=[$("#tbk1").value,$("#tbk2").value].map(v=>parseInt(v,10)||0).filter(id=>id!==0);
+      if(ids.join(",")!==backupsStored.join(",")) backupIds=ids;
+    }
     const body={category_id:parseInt($("#tcat").value,10),title:$("#ttitle").value,
       host:cleanHost($("#thost").value),family:parseInt($("#tfam").value,10),proto:$("#tproto").value,
       port:($("#tproto").value==="tcp"||$("#tproto").value==="udp")?parseInt($("#tport").value||"0",10):0,
@@ -320,11 +366,18 @@ async function viewTargets(m){
         const sl=($("#tslug").value||"").trim();
         if(sl && sl!==EDIT.slug) body.slug=sl;
         await api("PATCH","/api/v1/admin/targets/"+EDIT.id,body);
-        const savedId=EDIT.id; EDIT=null; toast("Target saved");
+        const savedId=EDIT.id; let primaryFailed=false; EDIT=null; toast("Target saved");
         // Its own request, right after the target is saved: a refusal must not hide that the target was saved.
         if(primaryId!==null){
           try{await api("PUT","/api/v1/admin/targets/"+savedId+"/primary",{probe_id:primaryId});}
-          catch(e){toast("Target saved, but the probe was not changed: "+e.message,true);}
+          catch(e){primaryFailed=true; toast("Target saved, but the probe was not changed: "+e.message+
+            (backupIds!==null?" The fallback probes were not sent either.":""),true);}
+        }
+        // After the primary, which it must follow. Skipped when the primary was refused, since the list was
+        // chosen against that new primary. A refusal keeps the previous list, and the target is saved anyway.
+        if(backupIds!==null&&!primaryFailed){
+          try{await api("PUT","/api/v1/admin/targets/"+savedId+"/backups",{backups:backupIds});}
+          catch(e){toast("Target saved, but the fallback probes were not changed: "+e.message,true);}
         } }
       else { await api("POST","/api/v1/admin/targets",Object.assign(body,{enabled:true})); toast("Target created, first measurement under way"); }
       render();

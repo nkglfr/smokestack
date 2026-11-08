@@ -1122,7 +1122,8 @@ func (s *Store) TargetBackups(targetID int64) ([]int64, error) {
 // primary must: a probe that may not measure it could never decide it, and
 // the list would quietly skip over an entry nobody could see was dead.
 func (s *Store) SetTargetBackups(targetID int64, ids []int64) error {
-	if _, err := s.TargetByID(targetID); err != nil {
+	t, err := s.TargetByID(targetID)
+	if err != nil {
 		return fmt.Errorf("unknown target")
 	}
 	seen := map[int64]bool{}
@@ -1131,6 +1132,13 @@ func (s *Store) SetTargetBackups(targetID int64, ids []int64) error {
 			return fmt.Errorf("probe %d is listed twice", id)
 		}
 		seen[id] = true
+		// A fallback that is the probe being fallen back from is not a
+		// fallback. Harmless at read time, since a silent probe is skipped
+		// wherever it appears, but an operator who writes it has misread
+		// what the list is for and nothing would tell them.
+		if t.PrimaryProbeID != 0 && id == t.PrimaryProbeID {
+			return fmt.Errorf("probe %d already decides this target, so it cannot stand in for itself", id)
+		}
 		var local, enabled int
 		err := s.cfg.QueryRow(`SELECT local, enabled FROM probes WHERE id=?`, id).Scan(&local, &enabled)
 		if err == sql.ErrNoRows {
