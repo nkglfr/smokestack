@@ -76,6 +76,14 @@ Versions are published as signed releases; servers with automatic updates instal
 
   A probe with nothing to measure is never called silent. Its last contact only moves when it has something to report, so an idle probe would otherwise look dead while being perfectly healthy.
 
+- **A target could claim one protocol and be measured with another.**
+
+  Nothing validated the protocol — not the target form's own checks, not the API, and the prober was a switch that fell through to ICMP for anything it did not recognise. A target created through the API saying `udp`, or `quux`, or nothing at all, was stored as written, shown that way in the back-office, named that way in its alerts, and measured with ICMP throughout.
+
+  Every surface agreed on the same wrong answer, which is why this lasted: nothing looked out of place. It was found while designing the UDP echo probe in discussion #69, not by anyone noticing a wrong graph.
+
+  An unknown protocol is now refused when a target is created or changed, and the prober reports one it does not recognise as an error instead of measuring something else. An empty protocol means ICMP, which is what the prober has always done with it — existing targets are normalised on upgrade, so nothing changes about what they measure.
+
 ## 0.7.3
 
 Three things an operator ran into on a real instance, which turned out to be three defects rather than three mistakes on his side.

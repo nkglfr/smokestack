@@ -379,8 +379,17 @@ func (p *Prober) Run(t *Target) {
 	switch t.Proto {
 	case "tcp":
 		m.RTTus, m.Err = p.runTCP(t)
-	default:
+	case "icmp", "":
+		// Empty is ICMP, as it has always been here. Targets written before
+		// the protocol was validated are normalised at startup, so this only
+		// covers one that arrives mid-flight.
 		m.RTTus, m.Err = p.runICMP(t)
+	default:
+		// Refused rather than measured with ICMP. Falling through used to
+		// mean a target could claim one protocol and be graphed from
+		// another, with the back-office and the alert text repeating the
+		// claim. An error says what is wrong where somebody will read it.
+		m.Err = fmt.Sprintf("unknown protocol %q: this target is not being measured", t.Proto)
 	}
 	// The address actually probed: a rotating name (a pool) points at a
 	// different machine every few minutes, which the back-office flags.
