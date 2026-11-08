@@ -88,6 +88,8 @@
     "once_hint": "Mostrar cada destino apenas uma vez: um destino com falha fica na secção das falhas e desaparece dos destinos críticos e da sua categoria."
   },
   "detail": {
+    "probe_from": "Medido a partir de",
+    "probe_default": "predefinida",
     "navigator": "Ano inteiro — arraste para escolher um período",
     "hint": "Arraste no gráfico para ampliar, clique duas vezes para voltar.",
     "resolution": "Resolução",

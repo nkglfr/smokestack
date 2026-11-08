@@ -88,6 +88,8 @@
     "once_hint": "Visa varje mål endast en gång: ett mål med fel stannar i felavsnittet och försvinner från de kritiska målen och från sin kategori."
   },
   "detail": {
+    "probe_from": "Mätt från",
+    "probe_default": "standard",
     "navigator": "Hela året — dra för att välja en period",
     "hint": "Dra i diagrammet för att zooma, dubbelklicka för att återställa.",
     "resolution": "Upplösning",

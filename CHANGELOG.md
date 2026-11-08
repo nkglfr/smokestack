@@ -2,6 +2,29 @@
 
 Versions are published as signed releases; servers with automatic updates install the newest one directly, whatever versions came in between. The release workflow reads a section straight out of this file and publishes it as the release notes, so how an entry is written matters — see [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
+## 0.8.2
+
+**What a remote probe measures is now visible.** 0.8.0 made probes elsewhere work; until this release, what they measured could only be read in the back-office and in the alerts.
+
+### New
+
+- **A target page can be read from any probe.**
+
+  Where an instance has more than one probe, the target page offers the choice, and the graph, the availability figure, the traceroutes and the AS path all follow it. With a single probe nothing appears: a control that offers no choice is furniture that explains nothing.
+
+  The choice travels in the address, so a view from one vantage point is a link somebody else can open. Copying the link already copied the view; it now copies which probe the view is from.
+
+  A probe that is disabled is not offered. It is not measuring, so picking it would show an empty graph and say nothing about why it is empty.
+
+- **An endpoint that says where this instance measures from.**
+
+  `GET /api/v1/probes` lists the probes a visitor may know about: name, location, masked address and AS. It is deliberately the same answer for everybody, operator included, so that it can be cached once and shared. Varying it by caller would mean one cache entry per visitor, on exactly the pages that need the cache most during an incident — and the back-office listing already serves the operator.
+
+- **Traceroutes and the AS path can be narrowed to one probe.**
+
+  A traceroute only means something alongside the vantage point it was run from. Showing every probe's on one page invites comparing a path from one city with a path from another and concluding something about neither.
+
+  A probe that is named but no longer exists is read as no choice rather than as an error, so an old bookmark shows the page instead of a refusal.
 ## 0.8.1
 
 **Deploying a probe, rather than only running one.** 0.8.0 made a probe on another machine work; this is the part that makes one practical to put there.

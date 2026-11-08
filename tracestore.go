@@ -187,10 +187,30 @@ func (s *Store) RecentPathChange(targetID int64, since int64) (string, bool) {
 	return title, true
 }
 
+// Traceroutes keeps the shape every caller already had: every probe's, which
+// is what a page that does not offer a choice of vantage point wants. The
+// callers that do offer one use TraceroutesFrom, so adding the filter costs
+// nothing to the six that do not.
 func (s *Store) Traceroutes(targetID int64, kinds []string, limit int) ([]*Traceroute, error) {
+	return s.TraceroutesFrom(targetID, 0, kinds, limit)
+}
+
+// TraceroutesFrom narrows to one probe. Zero means any, so that the caller
+// deciding this does not have to special-case "no choice made" itself.
+//
+// The existing index is on (target_id, ts), so the probe is a filter inside
+// one target's rows rather than a seek. That is cheap at the number of
+// traceroutes a target keeps; it would want (target_id, probe_id, ts) if that
+// ever stopped being true, and this comment is here so that the next person
+// measuring a slow page knows where to look.
+func (s *Store) TraceroutesFrom(targetID, probeID int64, kinds []string, limit int) ([]*Traceroute, error) {
 	q := `SELECT id,target_id,probe_id,ts,kind,reason,family,dest,reached,hops
 	        FROM traceroutes WHERE target_id=?`
 	args := []any{targetID}
+	if probeID > 0 {
+		q += ` AND probe_id=?`
+		args = append(args, probeID)
+	}
 	if len(kinds) > 0 {
 		q += ` AND kind IN (`
 		for i, k := range kinds {
@@ -594,9 +614,10 @@ func (a *API) asPathView(w http.ResponseWriter, r *http.Request) {
 
 	// The middle comes from the last healthy traceroute, or the last one of
 	// any kind if none is healthy yet.
-	trs, err := a.store.Traceroutes(id, []string{"reference"}, 1)
+	probe := probeParam(r)
+	trs, err := a.store.TraceroutesFrom(id, probe, []string{"reference"}, 1)
 	if err != nil || len(trs) == 0 {
-		trs, _ = a.store.Traceroutes(id, nil, 1)
+		trs, _ = a.store.TraceroutesFrom(id, probe, nil, 1)
 	}
 	if len(trs) == 0 {
 		// Nothing was recorded yet. A reference path is taken once a day by
@@ -654,6 +675,18 @@ func (a *API) TracerouteRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/admin/traceroutes", a.need(RoleEditor, a.traceroutesRequest))
 }
 
+// probeParam reads an optional ?probe=. Anything unparseable is no choice at
+// all rather than an error: a stale bookmark naming a probe that has since
+// gone should show the page, not a refusal.
+func probeParam(r *http.Request) int64 {
+	if v := r.URL.Query().Get("probe"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 0
+}
+
 func (a *API) listTraceroutes(w http.ResponseWriter, r *http.Request, public bool) {
 	id, err := strconv.ParseInt(r.URL.Query().Get("target"), 10, 64)
 	if err != nil {
@@ -673,7 +706,7 @@ func (a *API) listTraceroutes(w http.ResponseWriter, r *http.Request, public boo
 	if k := r.URL.Query().Get("kind"); k != "" {
 		kinds = []string{k}
 	}
-	list, err := a.store.Traceroutes(id, kinds, limit)
+	list, err := a.store.TraceroutesFrom(id, probeParam(r), kinds, limit)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
