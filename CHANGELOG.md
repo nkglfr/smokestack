@@ -76,6 +76,22 @@ Versions are published as signed releases; servers with automatic updates instal
 
   A probe with nothing to measure is never called silent. Its last contact only moves when it has something to report, so an idle probe would otherwise look dead while being perfectly healthy.
 
+- **UDP echo targets, for equipment that answers from the forwarding hardware.**
+
+  ICMP and a TCP handshake both answer from the wrong place for some measurements. A router replies to an ICMP echo from its routing engine, so the round trip carries whatever the control plane was busy with, and those replies are rate-limited on most platforms. A datagram echoed by the forwarding hardware has neither problem — on Junos, a `probe-server` listening for RFC 862 echo answers with a hardware timestamp.
+
+  A UDP target measures a plain RFC 862 echo: the datagram goes out, the same bytes come back, and the round trip is timed here. Port 7 by default, settable, since a receiver can be told to use the 49160–65535 range instead.
+
+  Three outcomes rather than two. An echo is a round trip, silence is loss, and a host that answers with an ICMP port-unreachable is reported as exactly that — up, with nothing listening on the port — rather than as a path problem. A firewall that swallows the ICMP error leaves it reading as silence, which is the honest answer when nothing was said.
+
+  Each packet carries a sequence number and a nonce for the pass, so a reply that arrives late is recognised as belonging to an earlier packet and dropped instead of being timed against the current one. Without that, a straggler would report a latency far below the truth, and nothing about the resulting graph would look wrong.
+
+  The payload is 56 bytes, the same as an ICMP one, so the three protocols measure comparable datagrams. The reply is never larger than the request and the source address is always the instance's own, so the probe can be neither an amplifier nor a reflector. It needs no privilege, unlike ICMP, so a UDP target works in either probe mode.
+
+  The response-time breakdown stays TCP-only — there is no handshake to break down — and a peer double-check still accepts only ICMP and TCP, since an echo target is usually equipment on your own network that a peer could not reach anyway.
+
+  Asked for by @blakedot.
+
 - **A target could claim one protocol and be measured with another.**
 
   Nothing validated the protocol — not the target form's own checks, not the API, and the prober was a switch that fell through to ICMP for anything it did not recognise. A target created through the API saying `udp`, or `quux`, or nothing at all, was stored as written, shown that way in the back-office, named that way in its alerts, and measured with ICMP throughout.

@@ -28,7 +28,7 @@ func TestTargetProtocolIsValidated(t *testing.T) {
 		return err
 	}
 
-	for _, bad := range []string{"udp", "quux", "icmp6", "ICMPv6", "tcp6", "ping"} {
+	for _, bad := range []string{"quux", "icmp6", "ICMPv6", "tcp6", "ping"} {
 		if err := mk("bad-"+strings.ToLower(bad), bad, 443); err == nil {
 			t.Errorf("protocol %q was accepted", bad)
 		}
@@ -129,7 +129,7 @@ func TestKnownProtocols(t *testing.T) {
 			t.Errorf("%q is listed in a form checkTarget would never produce", p)
 		}
 	}
-	for _, p := range []string{"", " ", "ICMP", "udp", "quux"} {
+	for _, p := range []string{"", " ", "ICMP", "UDP", "quux"} {
 		if validProto(p) {
 			t.Errorf("%q is accepted and should not be", p)
 		}

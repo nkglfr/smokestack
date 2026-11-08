@@ -1285,7 +1285,7 @@ func normalizeHost(raw string) (string, error) {
 // The protocols a target may be measured with. One list, so that adding one
 // is a single edit and so that nothing can be stored that Prober.Run would
 // not recognise.
-var knownProtos = []string{"icmp", "tcp"}
+var knownProtos = []string{"icmp", "tcp", "udp"}
 
 func validProto(p string) bool {
 	for _, k := range knownProtos {
@@ -1358,6 +1358,17 @@ func checkTarget(t *Target) error {
 		}
 		if t.Port < 1 || t.Port > 65535 {
 			return fmt.Errorf("a TCP target needs a port between 1 and 65535")
+		}
+	}
+	// An echo target defaults to 7, the RFC 862 port, which is what a Junos
+	// probe-server listens on. It stays settable because a receiver can be
+	// told to use the 49160-65535 range instead.
+	if t.Proto == "udp" {
+		if t.Port == 0 {
+			t.Port = udpEchoPort
+		}
+		if t.Port < 1 || t.Port > 65535 {
+			return fmt.Errorf("a UDP echo target needs a port between 1 and 65535 (7 by default)")
 		}
 	}
 	// Zero means "inherit from the category, then from what the binary

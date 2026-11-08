@@ -38,10 +38,12 @@ async function viewTargets(m){
             free for another target. Existing share links follow the target, not the address.</div></div>
         <div class="field"><label>Host or IP address</label><input id="thost" placeholder="192.0.2.1 or 2001:db8::1"></div>
         <div class="field"><label>Protocol</label><select id="tproto">
-          <option value="icmp">ICMP</option><option value="tcp">TCP connect</option></select></div>
-        <div class="field" id="portfield" hidden><label>TCP port</label>
+          <option value="icmp">ICMP</option><option value="tcp">TCP connect</option>
+          <option value="udp">UDP echo</option></select></div>
+        <div class="field" id="portfield" hidden><label id="portlabel">TCP port</label>
           <input id="tport" list="ports" placeholder="443">
-          <datalist id="ports">${COMMON_PORTS.map(([p,l])=>html`<option value="${p}">${p} — ${l}</option>`)}</datalist></div>
+          <datalist id="ports">${COMMON_PORTS.map(([p,l])=>html`<option value="${p}">${p} — ${l}</option>`)}</datalist>
+          <div id="portnote" style="font-size:11px;color:var(--ink3);margin-top:3px" hidden>Port 7 is the RFC 862 echo port, which a Junos probe-server listens on. A receiver can be told to use the 49160–65535 range instead.</div></div>
         <div class="note" style="grid-column:1/-1">Prefer a name over a public IP address.
           Publishing the address of a machine you do not own exposes it, and that stays the
           responsibility of whoever runs this instance — not of the tool. Public pages show only
@@ -232,7 +234,15 @@ async function viewTargets(m){
     const txt=(e.clipboardData||window.clipboardData).getData("text");
     if(txt){e.preventDefault();$("#thost").value=cleanHost(txt);}
   });
-  const syncProto=()=>{$("#portfield").hidden=$("#tproto").value!=="tcp";};
+  // A UDP echo target needs a port as much as a TCP one does. Leaving this on "tcp" alone was the
+  // one-line gap that would have shipped a protocol with no way to set the port it measures.
+  const syncProto=()=>{
+    const p=$("#tproto").value, needsPort=p==="tcp"||p==="udp";
+    $("#portfield").hidden=!needsPort;
+    $("#portlabel").textContent=p==="udp"?"UDP port":"TCP port";
+    $("#portnote").hidden=p!=="udp";
+    if(p==="udp"&&!$("#tport").value) $("#tport").value="7";
+  };
   $("#tproto").onchange=syncProto;
   if(EDIT){
     $("#tcat").value=EDIT.category_id; $("#ttitle").value=EDIT.title; $("#thost").value=EDIT.host;
@@ -297,7 +307,7 @@ async function viewTargets(m){
     const primaryId=(primaryTouched&&!$("#tprim").disabled)?parseInt($("#tprim").value,10):null;
     const body={category_id:parseInt($("#tcat").value,10),title:$("#ttitle").value,
       host:cleanHost($("#thost").value),family:parseInt($("#tfam").value,10),proto:$("#tproto").value,
-      port:$("#tproto").value==="tcp"?parseInt($("#tport").value||"0",10):0,
+      port:($("#tproto").value==="tcp"||$("#tproto").value==="udp")?parseInt($("#tport").value||"0",10):0,
       interval_s:num0($("#tiv").value), keep_days:parseInt($("#tkeep").value||"0",10),
       packets:num0($("#tpk").value), spacing_ms:num0($("#tsp").value), timeout_ms:num0($("#tto").value),
       pin_ip:$("#tpin").value.trim(), alerts_off:!$("#talert").checked,
