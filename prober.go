@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	crand "crypto/rand"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log"
@@ -12,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -379,6 +383,8 @@ func (p *Prober) Run(t *Target) {
 	switch t.Proto {
 	case "tcp":
 		m.RTTus, m.Err = p.runTCP(t)
+	case "udp":
+		m.RTTus, m.Err = p.runUDP(t)
 	case "icmp", "":
 		// Empty is ICMP, as it has always been here. Targets written before
 		// the protocol was validated are normalised at startup, so this only
@@ -516,6 +522,114 @@ func (p *Prober) runTCP(t *Target) ([]float64, string) {
 		return nil, lastErr
 	}
 	return out, ""
+}
+
+// The echo payload is the same size as an ICMP one, so that the three
+// protocols measure comparable datagrams. RFC 862 echoes the bytes back
+// verbatim, so the reply is never larger than the request and this cannot be
+// turned into an amplifier; the source address is always the instance's own,
+// so it cannot be used as a reflector either.
+const udpEchoBytes = 56
+
+// The port a Junos probe-server listens on for RFC 862 echo. Configurable,
+// because a receiver can be told to use the 49160-65535 range instead.
+const udpEchoPort = 7
+
+// runUDP measures an RFC 862 echo. It exists because the other two protocols
+// both answer from the wrong place for this purpose: a router replies to an
+// ICMP echo from its routing engine, so the round trip carries whatever the
+// control plane was busy with, and those replies are rate-limited on most
+// platforms. A datagram echoed by the forwarding hardware has neither
+// problem. Asked for by @blakedot in discussion #69.
+func (p *Prober) runUDP(t *Target) ([]float64, string) {
+	timeout := time.Duration(t.TimeoutMs) * time.Millisecond
+	spacing := time.Duration(t.SpacingMs) * time.Millisecond
+	port := t.Port
+	if port <= 0 {
+		port = udpEchoPort
+	}
+	// Resolved once per pass, as ICMP and TCP targets are: looking the name
+	// up inside each packet's timeout made a hesitating resolver read as loss
+	// on every named target at once.
+	ip, err := p.targetIP(t)
+	if err != nil {
+		return nil, err.Error()
+	}
+	// Connected, so that the kernel filters replies by peer address and so
+	// that an ICMP port-unreachable comes back as an error on this socket
+	// rather than being discarded.
+	c, err := net.Dial("udp", net.JoinHostPort(ip.String(), strconv.Itoa(port)))
+	if err != nil {
+		return nil, err.Error()
+	}
+	defer c.Close()
+
+	// A nonce for the pass and a sequence number per packet, both echoed back
+	// for free. This is not belt and braces: a connected socket filters by
+	// peer but not by which packet, so a reply arriving late — during the
+	// wait for the next one — would otherwise be timed against the wrong
+	// request and report a latency far below the truth. Understated latency
+	// is the worst failure a latency tool has, because nothing about the
+	// graph looks wrong.
+	payload := make([]byte, udpEchoBytes)
+	var nonce [8]byte
+	if _, err := crand.Read(nonce[:]); err != nil {
+		return nil, "could not generate a probe nonce: " + err.Error()
+	}
+	copy(payload, nonce[:])
+	buf := make([]byte, udpEchoBytes+128)
+
+	var out []float64
+	var lastErr string
+	for i := 0; i < t.Packets; i++ {
+		binary.BigEndian.PutUint16(payload[8:10], uint16(i))
+		start := time.Now()
+		c.SetDeadline(start.Add(timeout))
+		if _, err := c.Write(payload); err != nil {
+			lastErr = udpEchoError(err, port)
+			if i < t.Packets-1 {
+				time.Sleep(spacing)
+			}
+			continue
+		}
+		for {
+			n, err := c.Read(buf)
+			if err != nil {
+				lastErr = udpEchoError(err, port)
+				break
+			}
+			// Anything that is not this packet's own echo is a straggler from
+			// an earlier one. It is dropped and the wait continues on the
+			// same deadline, so a late reply costs nothing and times nothing.
+			if n >= 10 && bytes.Equal(buf[:8], nonce[:]) &&
+				binary.BigEndian.Uint16(buf[8:10]) == uint16(i) {
+				out = append(out, float64(time.Since(start).Microseconds()))
+				break
+			}
+		}
+		if i < t.Packets-1 {
+			time.Sleep(spacing)
+		}
+	}
+	if len(out) == 0 {
+		return nil, lastErr
+	}
+	return out, ""
+}
+
+// udpEchoError separates the two things silence can mean. A host that answers
+// with an ICMP port-unreachable is up and running nothing on that port, which
+// is a configuration to fix; a host that says nothing at all is a path to
+// investigate. Reporting both as loss would leave an operator guessing which
+// one they have.
+//
+// A firewall may swallow the ICMP error, in which case this reads as silence.
+// That is the honest outcome: we were told nothing.
+func udpEchoError(err error, port int) string {
+	if errors.Is(err, syscall.ECONNREFUSED) {
+		return fmt.Sprintf("the host answered: nothing is listening on UDP/%d", port)
+	}
+	return err.Error()
 }
 
 // passJitter is a small random delay added to each pass, so that targets
