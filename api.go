@@ -656,14 +656,17 @@ func (a *API) ingest(w http.ResponseWriter, r *http.Request) {
 	// may write. Restricting one without the other would leave the
 	// restriction decorative: a probe could still move any graph by naming
 	// the target it wanted.
-	allowed, err := a.store.ProbeTargetIDs(id)
+	// nil means this probe may measure everything, which is not the same as
+	// an empty set. Reading one as the other would either refuse every
+	// measurement or accept every one of them.
+	allowed, err := a.store.ProbeAllowedTargets(id)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
 	}
 	n, refused := 0, 0
 	for _, m := range body.Batch {
-		if !allowed[m.TargetID] {
+		if allowed != nil && !allowed[m.TargetID] {
 			refused++
 			continue
 		}

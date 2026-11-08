@@ -302,6 +302,12 @@ func OpenStore(dir string) (*Store, error) {
 	// somebody once rather than every minute. Cleared the moment it reports
 	// again, which is also what sends the notice that it is back.
 	addColumn(cfg, "probes", "silent_notified_at INTEGER NOT NULL DEFAULT 0")
+	// A probe set to measure every target, rather than an explicit list. It
+	// exists because the explicit list does not survive a growing instance:
+	// a target created later is measured by no remote probe until every
+	// probe's list is updated by hand, which at fifty probes is fifty edits
+	// for one new target. Reported by @mayssa-bm in #93.
+	addColumn(cfg, "probes", "all_targets INTEGER NOT NULL DEFAULT 0")
 	addColumn(cfg, "probes", "address TEXT NOT NULL DEFAULT ''")
 	addColumn(cfg, "probes", "seen_address TEXT NOT NULL DEFAULT ''")
 	// Rows written before the protocol was validated. An empty one has always

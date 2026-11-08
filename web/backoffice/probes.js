@@ -56,11 +56,12 @@ async function viewProbes(m){
       <td>${p.local?html`<span class="badge b-n">local</span> `:""}
         ${p.enabled?html`<span class="badge b-ok">enabled</span>`:html`<span class="badge b-warn">disabled</span>`}
         ${p.local?"":p.has_token?html` <span class="badge b-ok">token set</span>`:html` <span class="badge b-crit">no token</span>`}
-        ${p.local||counts[p.id]!==0?"":html` <span class="badge b-warn" title="This probe has no assigned target, so it measures nothing">no targets</span>`}</td>
+        ${p.local||p.all_targets?"":counts[p.id]!==0?"":html` <span class="badge b-warn" title="This probe has no assigned target, so it measures nothing">no targets</span>`}
+        ${p.local||!p.all_targets?"":html` <span class="badge b-n" title="This probe measures every target, including ones added later">all targets</span>`}</td>
       <td class="acts">${p.local?"":html`
         <button class="btn s" data-tok="${p.id}" data-slug="${p.slug}" data-had="${p.has_token?"1":"0"}">${p.has_token?"Rotate token":"Issue token"}</button>
         ${p.has_token?html`<button class="btn d s" data-rev="${p.id}" data-slug="${p.slug}">Revoke token</button>`:""}
-        <button class="btn s" data-tg="${p.id}" data-slug="${p.slug}">${counts[p.id]==null?"Targets":"Targets ("+counts[p.id]+")"}</button>
+        <button class="btn s" data-tg="${p.id}" data-slug="${p.slug}">${p.all_targets?"Targets (all)":counts[p.id]==null?"Targets":"Targets ("+counts[p.id]+")"}</button>
         <button class="btn s" data-addr="${p.id}" data-slug="${p.slug}" data-cur="${p.address||""}">Set address</button>
         ${p.address?html`<button class="btn s" data-addr-clear="${p.id}" data-slug="${p.slug}">Use observed</button>`:""}
         <button class="btn s" data-en="${p.id}" data-to="${p.enabled?"0":"1"}">${p.enabled?"Disable":"Enable"}</button>`}</td>
@@ -80,16 +81,28 @@ async function viewProbes(m){
         const on=new Set(cur.targets||[]);
         // A boolean prints nothing in the template engine, so the attribute is spelled out as a string.
         H.render($("#pe"),html`<div class="card"><h3>Targets measured by ${b.dataset.slug}</h3><div class="body">
-          <p style="margin:0 0 10px">A probe measures only the targets ticked here. With none ticked it measures nothing.</p>
+          <label class="chk"><input type="checkbox" id="tgall" ${cur.all_targets?"checked":""}>
+            <span>Measure every target<small>Including targets added later. The list below is kept and comes back if you turn this off.</small></span></label>
+          <p style="margin:10px 0">A probe measures only the targets ticked here. With none ticked it measures nothing.</p>
           ${targets.length?targets.map(t=>html`<label class="chk"><input type="checkbox" data-tid="${t.id}" ${on.has(t.id)?"checked":""}>
             <span>${t.title}<small class="mono">${t.host}${t.port?":"+t.port:""}</small></span></label>`):html`<div class="empty">No target.</div>`}
           <div class="acts"><button class="btn p" id="tgsave">Save</button><button class="btn" id="tgcancel">Cancel</button></div>
         </div></div>`);
+        // The list stays visible but inert while "every target" is on, so that what comes back when it is
+        // turned off is on screen rather than a promise.
+        const syncAll=()=>{const off=$("#tgall").checked;
+          document.querySelectorAll("#pe [data-tid]").forEach(c=>c.disabled=off);};
+        $("#tgall").onchange=syncAll; syncAll();
         $("#tgcancel").onclick=()=>H.render($("#pe"),""); // nothing sent
         $("#tgsave").onclick=async()=>{
           const ids=[...document.querySelectorAll("#pe [data-tid]")].filter(c=>c.checked).map(c=>Number(c.dataset.tid));
-          try{await api("PUT","/api/v1/admin/probes/"+b.dataset.tg+"/targets",{targets:ids});toast("Targets saved");await load();}
-          catch(e){toast(e.message,true);}
+          try{
+            // The list is written first and the flag second, so the list is preserved either way and the
+            // probe is never briefly measuring nothing between the two requests.
+            await api("PUT","/api/v1/admin/probes/"+b.dataset.tg+"/targets",{targets:ids});
+            await api("PATCH","/api/v1/admin/probes/"+b.dataset.tg,{all_targets:$("#tgall").checked});
+            toast("Targets saved");await load();
+          }catch(e){toast(e.message,true);}
         };
       }catch(e){toast(e.message,true);}
     });
