@@ -304,6 +304,13 @@ func OpenStore(dir string) (*Store, error) {
 	addColumn(cfg, "probes", "silent_notified_at INTEGER NOT NULL DEFAULT 0")
 	addColumn(cfg, "probes", "address TEXT NOT NULL DEFAULT ''")
 	addColumn(cfg, "probes", "seen_address TEXT NOT NULL DEFAULT ''")
+	// Rows written before the protocol was validated. An empty one has always
+	// been measured with ICMP, so this records what was already happening
+	// rather than changing it; anything else is left alone and surfaces as an
+	// error on its next pass, because quietly turning it into ICMP would
+	// repeat the defect this fixes.
+	cfg.Exec(`UPDATE targets SET proto='icmp' WHERE TRIM(COALESCE(proto,''))=''`)
+	cfg.Exec(`UPDATE targets SET proto=LOWER(TRIM(proto)) WHERE proto<>LOWER(TRIM(proto))`)
 	migrateTCPPorts(cfg)
 	migratePathEventScope(cfg)
 
@@ -1275,6 +1282,20 @@ func normalizeHost(raw string) (string, error) {
 
 // checkTarget validates the settings shared by creation and update. The
 // burst must fit in the interval, with a margin.
+// The protocols a target may be measured with. One list, so that adding one
+// is a single edit and so that nothing can be stored that Prober.Run would
+// not recognise.
+var knownProtos = []string{"icmp", "tcp"}
+
+func validProto(p string) bool {
+	for _, k := range knownProtos {
+		if p == k {
+			return true
+		}
+	}
+	return false
+}
+
 func checkTarget(t *Target) error {
 	// The host is cleaned before anything else: a tab pasted in front of an
 	// address must not create a target that can never be measured.
@@ -1307,6 +1328,25 @@ func checkTarget(t *Target) error {
 	}
 	if t.Family != 0 && t.Family != 4 && t.Family != 6 {
 		return fmt.Errorf("family must be 0 (auto), 4 or 6")
+	}
+	// The protocol was never checked anywhere: not here, not in the API, and
+	// Prober.Run is a switch whose default is ICMP. A target could therefore
+	// say "udp", or "quux", be stored as it was written, be shown as that in
+	// the back-office and named as that in its alerts — and be measured with
+	// ICMP throughout. Every surface agreed on the same wrong answer, which
+	// is the worst shape a defect of this kind can take, because nothing
+	// looks out of place. Found while designing the UDP echo probe, in
+	// discussion #69.
+	//
+	// Empty means ICMP rather than being refused. It is what the prober has
+	// always done with it, so reading it that way changes no measurement; it
+	// only writes down what was already true.
+	t.Proto = strings.ToLower(strings.TrimSpace(t.Proto))
+	if t.Proto == "" {
+		t.Proto = "icmp"
+	}
+	if !validProto(t.Proto) {
+		return fmt.Errorf("protocol must be one of %s", strings.Join(knownProtos, ", "))
 	}
 	if t.Proto == "tcp" {
 		if t.Port == 0 {
