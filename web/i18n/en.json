@@ -88,6 +88,8 @@
     "once_hint": "Show each target only once: a faulty target stays in the faults section and is left out of the critical targets and of its category."
   },
   "detail": {
+    "probe_from": "Measured from",
+    "probe_default": "default",
     "navigator": "Whole year — drag to choose a period",
     "hint": "Drag on the chart to zoom, double-click to reset.",
     "resolution": "Resolution",

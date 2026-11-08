@@ -175,7 +175,7 @@ const SHARE = (location.pathname.match(/^\/s\/([A-Za-z0-9]+)\/?$/) || [])[1] || 
 
 const once = () => { try { return localStorage.getItem("smokestack.once") !== "0"; } catch (e) { return true; } };
 const S = { ov: null, net: null, peers: 0, open: {}, q: "", view: "home", target: null,
-            from: 0, to: 0, preset: 0, cur: null, nav: null, events: [] };
+            from: 0, to: 0, preset: 0, cur: null, nav: null, events: [], probes: [], probe: null };
 const PRESETS = [["detail.preset_3h", 3 * 3600], ["detail.preset_30h", 30 * 3600], ["detail.preset_10d", 10 * 86400],
                  ["detail.preset_3m", 90 * 86400], ["detail.preset_1y", 365 * 86400]];
 
@@ -193,12 +193,26 @@ async function loadOverview() {
   S.ov.categories.forEach(c => { if (S.open[c.id] === undefined) S.open[c.id] = true; });
 }
 async function loadSide() {
-  const [net, peers] = await Promise.all([
+  const [net, peers, probes] = await Promise.all([
     fetch("/api/v1/asn").then(r => r.ok ? r.json() : null).catch(() => null),
-    fetch("/api/v1/fed/peers").then(r => r.ok ? r.json() : []).catch(() => [])
+    fetch("/api/v1/fed/peers").then(r => r.ok ? r.json() : []).catch(() => []),
+    fetch("/api/v1/probes").then(r => r.ok ? r.json() : null).catch(() => null)
   ]);
   S.net = net; S.peers = (peers || []).length;
+  // A failed listing leaves the list empty, which hides the selector: the page
+  // then behaves exactly as it did before there was a choice.
+  S.probes = probes && Array.isArray(probes.probes) ? probes.probes : [];
 }
+
+// The vantage point is part of the view, like the time window. S.probe is null
+// for the instance's default, which is also what the API assumes when the
+// parameter is absent, so the default view keeps its old requests and old links.
+const probeQ = () => S.probe ? "&probe=" + S.probe : "";
+// Only a probe the instance actually lists is accepted. Anything else, and the
+// instance's own probe, which is the default, collapse to null: a stale or
+// hand-edited link falls back to the default view instead of an empty graph.
+function pickProbe(id) { S.probe = id && S.probes.some(x => x.id === id && !x.local) ? id : null; }
+function probeFromHash() { pickProbe(+new URLSearchParams(location.hash.slice(1)).get("probe")); }
 
 /* ------------------------------------------------------------ gabarits */
 function hbarHTML(tg) {
@@ -574,10 +588,12 @@ async function renderASPath(tg) {
   const box = document.getElementById("asbox"), chain = document.getElementById("aschain");
   if (!box || !chain) return;
   let v = null;
+  const pr = S.probe;
   try {
-    v = await fetch(`/api/v1/aspath?target=${tg.id}` + (SHARE ? "&share=" + encodeURIComponent(SHARE) : ""))
+    v = await fetch(`/api/v1/aspath?target=${tg.id}` + probeQ() + (SHARE ? "&share=" + encodeURIComponent(SHARE) : ""))
       .then(r => r.ok ? r.json() : null);
   } catch (e) { /* the graph matters more than this */ }
+  if (S.probe !== pr) return;
   if (!v || (!v.origin && !v.dest && !(v.path || []).length)) { box.hidden = true; return; }
   box.hidden = false;
   const node = (h, cls, sub) => html`<span class="asnode ${cls || ""}" title="${
@@ -747,6 +763,7 @@ function writeHash(push) {
     h = S.preset === -1 ? `#from=${S.from}&to=${S.to}` : `#p=${S.preset}`;
     if (!S.target.slug) { path = "/"; h = `#t=${S.target.id}` + (S.preset === -1 ? `&from=${S.from}&to=${S.to}` : `&p=${S.preset}`); }
   }
+  if (S.view === "detail" && S.target && S.probe) h += "&probe=" + S.probe;
   const url = path + location.search + h;
   if (push && location.pathname + location.hash !== path + h) history.pushState(null, "", url);
   else history.replaceState(null, "", url);
@@ -809,6 +826,23 @@ const SWAP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-
   <path d="M3 10a7 7 0 0 1 11.9-5M21 14a7 7 0 0 1-11.9 5"/>
   <path d="M3 5v5h5M21 19v-5h-5"/></svg>`;
 
+// One line per probe: its name, then where it is and which network it sits in
+// when it says so. The instance's own probe is marked as the default.
+function probeText(p) {
+  const asn = p.asn ? (/^AS/i.test(p.asn) ? p.asn : "AS" + p.asn) : "";
+  return [p.name, p.location, asn, p.local ? t("detail.probe_default") : ""].filter(Boolean).join(" · ");
+}
+// With a single probe there is nothing to choose, so nothing is drawn.
+function probePicker() {
+  if (S.probes.length < 2) return "";
+  const hasLocal = S.probes.some(p => p.local);
+  return html`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px">
+    <label class="faint" for="probesel" style="font-size:12.5px">${t("detail.probe_from")}</label>
+    <select id="probesel" style="font:inherit;font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:var(--radius-s);padding:5px 8px;max-width:100%">${
+      !hasLocal && html`<option value="" ${S.probe ? "" : "selected"}>${t("detail.probe_default")}</option>`}${
+      S.probes.map(p => html`<option value="${p.local ? "" : p.id}" ${(p.local ? !S.probe : S.probe === p.id) ? "selected" : ""}>${probeText(p)}</option>`)}</select></div>`;
+}
+
 function detailTags(tg) {
   return html`<div class="tags"><span class="tag mono">${tg.host}</span>
     <span class="tag">${tg.proto.toUpperCase()} · ${tg.interval_s} s</span>
@@ -837,6 +871,7 @@ function renderDetail() {
     <div class="crumb"><a href="/" id="bk">← ${t("common.back_home")}</a><span class="faint">/</span><span style="color:${acc}">${cname(tg._cat)}</span></div>
     <div class="dh"><h1>${tg.title}</h1><span class="badge b-${k === "nodata" ? "n" : k}">${t("status." + (k === "nodata" ? "nodata" : k + "_long"))}</span></div>
     ${detailTags(tg)}
+    ${probePicker()}
     ${SHARE && t("share.banner") ? html`<div class="note-share">${t("share.banner", {
       org: (App.site.org || App.site.title || ""), loc: (App.site.location || App.site.asn || "—") })}</div>` : ""}
     ${maintNote(tg)}
@@ -877,6 +912,10 @@ function renderDetail() {
       <div class="card"><div class="card-b scroll-x" id="trbox"></div></div></section>
   </div></div></div>`);
   bindRail();
+  const ps = $("#probesel");
+  // Changing the vantage point drops the cached year-long navigator, which was
+  // drawn from the previous probe, and fetches everything again for the new one.
+  if (ps) ps.onchange = () => { pickProbe(+ps.value); S.nav = null; writeHash(); paint(); };
   $("#bk").onclick = e => { e.preventDefault(); S.view = "home"; writeHash(true); renderHome(); };
   document.querySelectorAll("[data-p]").forEach(b => b.onclick = () => { const now = Math.floor(Date.now() / 1000); S.preset = +b.dataset.p; S.to = now; S.from = now - PRESETS[S.preset][1]; writeHash(); paint(); });
   $("#cp").onclick = () => { navigator.clipboard && navigator.clipboard.writeText(location.href); $("#cp").textContent = "✓"; };
@@ -884,17 +923,20 @@ function renderDetail() {
 }
 async function paint() {
   const tg = S.target, acc = color(tg._ci), now = Math.floor(Date.now() / 1000);
-  const q = `/api/v1/series?target=${tg.id}&from=${S.from}&to=${S.to}&points=1500`;
+  // The probe this paint was started for: a slower answer for a probe the visitor
+  // has already left must not overwrite the one they are looking at.
+  const pr = S.probe, pq = probeQ();
+  const q = `/api/v1/series?target=${tg.id}&from=${S.from}&to=${S.to}&points=1500` + pq;
   const got = await Promise.all([
     App.getJSON(q + (SHARE ? "&share=" + encodeURIComponent(SHARE) : "")),
     fetch(`/api/v1/events?target=${tg.id}&from=${S.from}&to=${S.to}`).then(r => r.ok ? r.json() : []).catch(() => []),
-    S.nav ? Promise.resolve(S.nav) : App.getJSON(`/api/v1/series?target=${tg.id}&from=${now - 365 * 86400}&to=${now}&points=600` + (SHARE ? "&share=" + encodeURIComponent(SHARE) : "")),
-    fetch(`/api/v1/traceroutes?target=${tg.id}&limit=40` + (SHARE ? "&share=" + encodeURIComponent(SHARE) : "")).then(r => r.ok ? r.json() : []).catch(() => [])
+    S.nav ? Promise.resolve(S.nav) : App.getJSON(`/api/v1/series?target=${tg.id}&from=${now - 365 * 86400}&to=${now}&points=600` + pq + (SHARE ? "&share=" + encodeURIComponent(SHARE) : "")),
+    fetch(`/api/v1/traceroutes?target=${tg.id}&limit=40` + pq + (SHARE ? "&share=" + encodeURIComponent(SHARE) : "")).then(r => r.ok ? r.json() : []).catch(() => [])
   ]).catch(() => null);
-  if (S.view !== "detail" || S.target !== tg) return;
+  if (S.view !== "detail" || S.target !== tg || S.probe !== pr) return;
   if (!got) {
     $("#res").textContent = t("common.load_failed");
-    setTimeout(() => { if (S.view === "detail" && S.target === tg) paint(); }, 10000);
+    setTimeout(() => { if (S.view === "detail" && S.target === tg && S.probe === pr) paint(); }, 10000);
     return;
   }
   const [cur, ev, nav, traces] = got;
@@ -958,15 +1000,21 @@ async function renderCorroboration(tg) {
 async function renderAvailability(tg) {
   const box = $("#avbox"), row = $("#avrow");
   if (!box || !row) return;
+  // Which vantage point this answer is about, kept so that a slow reply for a probe the reader has since
+  // moved away from cannot land in the card as though it described the one they are looking at.
+  const pr = S.probe;
   // The operator can stop publishing the figure. Asking for it anyway
   // would be answered with a 404, so the page does not ask.
   if (!App.site.public_availability) { box.hidden = true; return; }
   let d = null;
   try {
-    const r = await fetch(`/api/v1/availability?target=${tg.id}` + (SHARE ? "&share=" + encodeURIComponent(SHARE) : ""));
+    // The availability figure follows the chosen vantage point, which the endpoint already supports. A
+    // percentage from the default probe sitting beside a graph from another one would be read as describing
+    // that graph, and a figure that is wrong while looking right is worse than no figure at all.
+    const r = await fetch(`/api/v1/availability?target=${tg.id}` + probeQ() + (SHARE ? "&share=" + encodeURIComponent(SHARE) : ""));
     if (r.ok) d = await r.json();
   } catch (e) { d = null; }
-  if (S.view !== "detail" || S.target !== tg) return;
+  if (S.view !== "detail" || S.target !== tg || S.probe !== pr) return;
   const ws = (d && d.windows) || [];
   if (!ws.some(w => w.pct != null)) { box.hidden = true; return; }
   box.hidden = false;
@@ -1079,6 +1127,7 @@ function bySlug(slug) {
 }
 // openShared opens the single target a share link carries.
 function openShared() {
+  probeFromHash();
   const only = ((S.ov.categories || [])[0] || {}).targets || [];
   if (!only.length) return false;
   openTarget(only[0].id);
@@ -1087,6 +1136,7 @@ function openShared() {
 
 function fromHash() {
   const p = new URLSearchParams(location.hash.slice(1));
+  probeFromHash();
   // /t/<slug>, then the older #t=<id> form so old links keep working.
   const m = location.pathname.match(/^\/t\/([^/]+)\/?$/);
   const tg = m ? bySlug(decodeURIComponent(m[1])) : null;

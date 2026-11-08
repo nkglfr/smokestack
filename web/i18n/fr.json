@@ -88,6 +88,8 @@
     "once_hint": "N'afficher chaque cible qu'une seule fois : une cible en défaut reste dans les défauts et disparaît des cibles critiques et de sa catégorie."
   },
   "detail": {
+    "probe_from": "Mesuré depuis",
+    "probe_default": "par défaut",
     "navigator": "Année entière — glissez pour choisir une période",
     "hint": "Glissez sur le graphe pour zoomer, double-cliquez pour revenir.",
     "resolution": "Résolution",

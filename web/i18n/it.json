@@ -88,6 +88,8 @@
     "once_hint": "Mostra ogni destinazione una sola volta: una destinazione in errore resta nella sezione dei guasti e sparisce dalle destinazioni critiche e dalla sua categoria."
   },
   "detail": {
+    "probe_from": "Misurato da",
+    "probe_default": "predefinita",
     "navigator": "Anno intero — trascina per scegliere un periodo",
     "hint": "Trascina sul grafico per ingrandire, doppio clic per tornare.",
     "resolution": "Risoluzione",

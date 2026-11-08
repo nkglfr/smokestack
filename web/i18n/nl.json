@@ -88,6 +88,8 @@
     "once_hint": "Elk doel maar één keer tonen: een doel met een storing blijft in het storingsoverzicht en verdwijnt uit de kritieke doelen en uit zijn categorie."
   },
   "detail": {
+    "probe_from": "Gemeten vanaf",
+    "probe_default": "standaard",
     "navigator": "Heel jaar — sleep om een periode te kiezen",
     "hint": "Sleep over de grafiek om in te zoomen, dubbelklik om terug te gaan.",
     "resolution": "Resolutie",
