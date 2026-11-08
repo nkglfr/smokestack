@@ -129,6 +129,8 @@ func (a *API) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/v1/admin/probes/{id}", a.need(RoleAdmin, a.probesPatch))
 	mux.HandleFunc("GET /api/v1/probes", a.probesPublic)
 	mux.HandleFunc("PUT /api/v1/admin/targets/{id}/primary", a.need(RoleAdmin, a.targetPrimaryPut))
+	mux.HandleFunc("GET /api/v1/admin/targets/{id}/backups", a.need(RoleAdmin, a.targetBackupsGet))
+	mux.HandleFunc("PUT /api/v1/admin/targets/{id}/backups", a.need(RoleAdmin, a.targetBackupsPut))
 	mux.HandleFunc("GET /api/v1/admin/probes/{id}/targets", a.need(RoleAdmin, a.probeTargetsGet))
 	mux.HandleFunc("PUT /api/v1/admin/probes/{id}/targets", a.need(RoleAdmin, a.probeTargetsPut))
 	mux.HandleFunc("POST /api/v1/admin/probes/{id}/token", a.need(RoleAdmin, a.probeTokenPost))

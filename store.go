@@ -93,6 +93,17 @@ CREATE TABLE IF NOT EXISTS probes (
 -- it: it reaches the service through a Unix socket only a process on the
 -- host can open, and restricting it would stop every existing instance
 -- measuring anything.
+-- The probes a target falls back to, in order, when the one that decides it
+-- has gone quiet. Separate from probe_targets because being allowed to
+-- measure a target and being next in line to decide it are different
+-- questions: every backup must be assigned the target, but most probes
+-- assigned a target are not backups for it.
+CREATE TABLE IF NOT EXISTS target_backups (
+  target_id INTEGER NOT NULL,
+  pos       INTEGER NOT NULL,
+  probe_id  INTEGER NOT NULL,
+  PRIMARY KEY (target_id, pos)
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS probe_targets (
   probe_id  INTEGER NOT NULL,
   target_id INTEGER NOT NULL,
@@ -308,6 +319,10 @@ func OpenStore(dir string) (*Store, error) {
 	// probe's list is updated by hand, which at fifty probes is fifty edits
 	// for one new target. Reported by @mayssa-bm in #93.
 	addColumn(cfg, "probes", "all_targets INTEGER NOT NULL DEFAULT 0")
+	// When this probe last went from silent back to reporting. A probe that
+	// has just returned is not yet trusted with the targets it decides: see
+	// probeReclaimAfter.
+	addColumn(cfg, "probes", "reporting_since INTEGER NOT NULL DEFAULT 0")
 	addColumn(cfg, "probes", "address TEXT NOT NULL DEFAULT ''")
 	addColumn(cfg, "probes", "seen_address TEXT NOT NULL DEFAULT ''")
 	// Rows written before the protocol was validated. An empty one has always

@@ -476,6 +476,13 @@ func (s *Store) MarkProbeSilent(id, at int64) {
 	s.cfg.Exec(`UPDATE probes SET silent_notified_at=? WHERE id=?`, at, id)
 }
 
+// MarkProbeBack notes the moment a probe started reporting again, which is
+// what probeReclaimAfter counts from. Stamped only on the transition: a probe
+// that never went quiet has nothing to wait for.
+func (s *Store) MarkProbeBack(id, at int64) {
+	s.cfg.Exec(`UPDATE probes SET silent_notified_at=0, reporting_since=? WHERE id=?`, at, id)
+}
+
 // EnabledProbeIDs lists the probes worth asking for an opinion.
 func (s *Store) EnabledProbeIDs() ([]int64, error) {
 	rows, err := s.cfg.Query(`SELECT id FROM probes WHERE enabled=1 ORDER BY id`)
@@ -747,6 +754,41 @@ func (a *API) targetPrimaryPut(w http.ResponseWriter, r *http.Request, u *User) 
 		return
 	}
 	a.store.Audit(u, clientIP(r), "target_primary_probe", "target", strconv.FormatInt(id, 10))
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *API) targetBackupsGet(w http.ResponseWriter, r *http.Request, u *User) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, 400, "bad target id")
+		return
+	}
+	ids, err := a.store.TargetBackups(id)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	writeJSON(w, map[string]any{"backups": ids})
+}
+
+func (a *API) targetBackupsPut(w http.ResponseWriter, r *http.Request, u *User) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeErr(w, 400, "bad target id")
+		return
+	}
+	var in struct {
+		Backups []int64 `json:"backups"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	if err := a.store.SetTargetBackups(id, in.Backups); err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	a.store.Audit(u, clientIP(r), "target_backups", "target", strconv.FormatInt(id, 10))
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -1042,4 +1084,188 @@ func (a *API) probesPublic(w http.ResponseWriter, r *http.Request) {
 	// whole point of it being this shape.
 	w.Header().Set("Cache-Control", "public, max-age=60")
 	writeJSON(w, map[string]any{"probes": out})
+}
+
+// ------------------------------------------------------------- failover
+
+// How long a probe must have been reporting again before it takes back the
+// targets it decides. Without it, a probe flapping on a bad link would hand
+// its targets to a backup and reclaim them every few minutes, and every
+// handover is a moment where two views of the same target disagree.
+//
+// Longer than probeSilentAfter on purpose: coming back must cost more than
+// going away, or the hysteresis is not hysteresis.
+const probeReclaimAfter = 10 * 60
+
+// TargetBackups is the ordered list of probes a target falls back to.
+func (s *Store) TargetBackups(targetID int64) ([]int64, error) {
+	rows, err := s.cfg.Query(`SELECT probe_id FROM target_backups WHERE target_id=? ORDER BY pos`, targetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// SetTargetBackups replaces the list. Order is the caller's: first in the
+// slice is first in line.
+//
+// Every backup must be allowed to measure the target, for the same reason a
+// primary must: a probe that may not measure it could never decide it, and
+// the list would quietly skip over an entry nobody could see was dead.
+func (s *Store) SetTargetBackups(targetID int64, ids []int64) error {
+	if _, err := s.TargetByID(targetID); err != nil {
+		return fmt.Errorf("unknown target")
+	}
+	seen := map[int64]bool{}
+	for _, id := range ids {
+		if seen[id] {
+			return fmt.Errorf("probe %d is listed twice", id)
+		}
+		seen[id] = true
+		var local, enabled int
+		err := s.cfg.QueryRow(`SELECT local, enabled FROM probes WHERE id=?`, id).Scan(&local, &enabled)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("unknown probe %d", id)
+		}
+		if err != nil {
+			return err
+		}
+		if local == 1 {
+			return fmt.Errorf("the local probe is the fallback of last resort and is not listed")
+		}
+		if enabled != 1 {
+			return fmt.Errorf("probe %d is disabled, so it cannot stand in for anything", id)
+		}
+		allowed, err := s.ProbeAllowedTargets(id)
+		if err != nil {
+			return err
+		}
+		if allowed != nil && !allowed[targetID] {
+			return fmt.Errorf("probe %d is not assigned this target, so it cannot stand in for it", id)
+		}
+	}
+	tx, err := s.cfg.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM target_backups WHERE target_id=?`, targetID); err != nil {
+		return err
+	}
+	for i, id := range ids {
+		if _, err := tx.Exec(`INSERT INTO target_backups(target_id,pos,probe_id) VALUES(?,?,?)`,
+			targetID, i, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// probeLiveness is what deciding needs to know about every probe at once:
+// whether it is reporting, and since when it has been doing so again.
+type probeLiveness struct {
+	enabled        bool
+	lastSeen       int64
+	reportingSince int64
+}
+
+func (s *Store) probeLiveness() (map[int64]probeLiveness, error) {
+	rows, err := s.cfg.Query(`SELECT id, enabled, COALESCE(last_seen_at,0), COALESCE(reporting_since,0) FROM probes`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]probeLiveness{}
+	for rows.Next() {
+		var id int64
+		var en int
+		var l probeLiveness
+		if err := rows.Scan(&id, &en, &l.lastSeen, &l.reportingSince); err != nil {
+			return nil, err
+		}
+		l.enabled = en == 1
+		out[id] = l
+	}
+	return out, rows.Err()
+}
+
+// EffectivePrimaries says which probe decides each target right now, which is
+// not always the one the operator chose: a primary that has gone quiet hands
+// over to the first backup still reporting, and takes its targets back once it
+// has been reporting again for probeReclaimAfter.
+//
+// A target whose primary and every backup are silent stays with its primary.
+// Somebody has to own it, and leaving it owned by a probe that is not
+// answering is what keeps its incident open — which is the honest outcome,
+// and the one 0.8.0 was fixed to produce.
+func (s *Store) EffectivePrimaries(localProbeID, now int64) (map[int64]int64, error) {
+	stored, err := s.TargetPrimaries(localProbeID)
+	if err != nil {
+		return nil, err
+	}
+	live, err := s.probeLiveness()
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.cfg.Query(`SELECT target_id, probe_id FROM target_backups ORDER BY target_id, pos`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	backups := map[int64][]int64{}
+	for rows.Next() {
+		var tid, pid int64
+		if err := rows.Scan(&tid, &pid); err != nil {
+			return nil, err
+		}
+		backups[tid] = append(backups[tid], pid)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// A probe nobody has ever heard from is not reporting. One that has
+	// reported within the silence threshold is.
+	reporting := func(id int64) bool {
+		l, ok := live[id]
+		return ok && l.enabled && l.lastSeen > 0 && now-l.lastSeen < probeSilentAfter
+	}
+
+	out := make(map[int64]int64, len(stored))
+	for tid, primary := range stored {
+		if len(backups[tid]) == 0 {
+			// No list, nothing to fail over to: the ordinary case, and the
+			// one every instance has until somebody writes a list.
+			out[tid] = primary
+			continue
+		}
+		if reporting(primary) {
+			// Back from silence, but not for long enough to be trusted with
+			// what it decides. A probe flapping on a bad link would otherwise
+			// take its targets back and lose them again every few minutes.
+			l := live[primary]
+			if l.reportingSince == 0 || now-l.reportingSince >= probeReclaimAfter {
+				out[tid] = primary
+				continue
+			}
+		}
+		chosen := primary
+		for _, b := range backups[tid] {
+			if reporting(b) {
+				chosen = b
+				break
+			}
+		}
+		out[tid] = chosen
+	}
+	return out, nil
 }
