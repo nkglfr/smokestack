@@ -74,6 +74,10 @@ func alertSchema(s *Store) {
 		closed_at INTEGER NOT NULL DEFAULT 0,
 		detail TEXT NOT NULL DEFAULT '')`)
 	s.cfg.Exec(`CREATE INDEX IF NOT EXISTS idx_local_inc ON local_incidents(target_id, closed_at)`)
+	// Which probe decided this incident. With one probe the question did not
+	// arise; with a primary that can hand over to a backup, an incident that
+	// does not say where it was seen from cannot be read a week later.
+	addColumn(s.cfg, "local_incidents", "probe_id INTEGER NOT NULL DEFAULT 0")
 }
 
 // Alerter holds what the loop needs. The clock and the sender are fields so
@@ -109,9 +113,9 @@ func (a *Alerter) UseFederation(f *Federation) {
 	a.corroborate = f.AutoDoubleCheck
 }
 
-func (a *Alerter) openIncident(targetID, now int64, detail string) {
-	a.store.cfg.Exec(`INSERT INTO local_incidents(target_id,opened_at,detail) VALUES(?,?,?)`,
-		targetID, now, detail)
+func (a *Alerter) openIncident(targetID, probeID, now int64, detail string) {
+	a.store.cfg.Exec(`INSERT INTO local_incidents(target_id,probe_id,opened_at,detail) VALUES(?,?,?,?)`,
+		targetID, probeID, now, detail)
 }
 
 func (a *Alerter) openFor(targetID int64) (*LocalIncident, bool) {
@@ -165,7 +169,13 @@ func (a *Alerter) Incidents(limit int) ([]LocalIncident, error) {
 
 // Tick advances the state machine for one round of statuses. Returns the
 // number of alerts sent, which the tests check.
+// Tick keeps the shape its callers already had. TickFrom is the one that also
+// records which probe decided each target, which only the loop knows.
 func (a *Alerter) Tick(statuses map[int64]string, details map[int64]string) int {
+	return a.TickFrom(statuses, details, nil)
+}
+
+func (a *Alerter) TickFrom(statuses map[int64]string, details map[int64]string, by map[int64]int64) int {
 	cfg := a.store.AlertConfig()
 	now, sent := a.now(), 0
 	// Fenetres de maintenance en cours : une cible qu'on redemarre
@@ -207,7 +217,7 @@ func (a *Alerter) Tick(statuses map[int64]string, details map[int64]string) int 
 		if !open {
 			// A traceroute is asked for as soon as the incident opens, so
 			// that the path is captured while it is still broken.
-			a.openIncident(targetID, now, details[targetID])
+			a.openIncident(targetID, by[targetID], now, details[targetID])
 			a.trace(targetID)
 			// The second opinion is asked for the moment the incident
 			// opens, not when the alert fires: by the time the threshold
@@ -399,11 +409,11 @@ func (a *Alerter) Loop(stop <-chan struct{}, probeID int64) {
 			// Before the targets, because a silent probe explains what the
 			// targets are about to not say.
 			a.checkProbes(a.now())
-			statuses, details, err := a.gather(probeID)
+			statuses, details, by, err := a.gather(probeID)
 			if err != nil {
 				continue
 			}
-			a.Tick(statuses, details)
+			a.TickFrom(statuses, details, by)
 		}
 	}
 }
@@ -445,7 +455,8 @@ func (a *Alerter) checkProbes(now int64) int {
 				sent++
 			}
 		case !silent && p.SilentNotifiedAt > 0:
-			a.store.MarkProbeSilent(p.ID, 0)
+			// The moment it came back, which is what a takeover waits on.
+			a.store.MarkProbeBack(p.ID, now)
 			if cfg.Enabled && cfg.Recovery {
 				a.send(cfg, fmt.Sprintf("[smokestack] Probe back: %s", p.Name),
 					fmt.Sprintf("Probe %s (%s) is reporting again after %s.\n",
@@ -491,18 +502,22 @@ func (a *Alerter) view(probeID int64) (probeView, error) {
 // last. What corroboration changes is what the alert says, which is the part
 // an operator acts on: everyone sees it, so it is the target; only the
 // deciding probe sees it, so it is the path from there.
-func (a *Alerter) gather(localProbeID int64) (map[int64]string, map[int64]string, error) {
-	primary, err := a.store.TargetPrimaries(localProbeID)
+func (a *Alerter) gather(localProbeID int64) (map[int64]string, map[int64]string, map[int64]int64, error) {
+	// Who decides each target now, which is not always who was chosen: a
+	// primary that has gone quiet hands over to the first backup still
+	// reporting, and takes its targets back once it has been back long
+	// enough to be trusted with them.
+	primary, err := a.store.EffectivePrimaries(localProbeID, a.now())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	watchers, err := a.store.TargetWatchers(localProbeID)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	ids, err := a.store.EnabledProbeIDs()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if len(ids) == 0 {
 		ids = []int64{localProbeID}
@@ -516,10 +531,13 @@ func (a *Alerter) gather(localProbeID int64) (map[int64]string, map[int64]string
 		}
 	}
 	if _, ok := views[localProbeID]; !ok && len(views) == 0 {
-		return nil, nil, fmt.Errorf("no probe produced a view")
+		return nil, nil, nil, fmt.Errorf("no probe produced a view")
 	}
 
 	statuses, details := map[int64]string{}, map[int64]string{}
+	// Which probe each answer came from, so that an incident records where it
+	// was seen rather than leaving a reader to guess a week later.
+	by := map[int64]int64{}
 	for tid, pid := range primary {
 		deciding, ok := views[pid]
 		if !ok {
@@ -536,6 +554,7 @@ func (a *Alerter) gather(localProbeID int64) (map[int64]string, map[int64]string
 			continue
 		}
 		statuses[tid] = st
+		by[tid] = pid
 		detail := deciding.detail[tid]
 		if note := corroborate(tid, pid, st, watchers[tid], views); note != "" {
 			if detail != "" {
@@ -546,7 +565,7 @@ func (a *Alerter) gather(localProbeID int64) (map[int64]string, map[int64]string
 		}
 		details[tid] = detail
 	}
-	return statuses, details, nil
+	return statuses, details, by, nil
 }
 
 // corroborate summarises what the other probes measuring this target see of
