@@ -85,23 +85,33 @@ func TestASilentPrimaryHandsOverAndTakesBack(t *testing.T) {
 		t.Fatalf("with the primary silent, probe %d decides, want the backup %d", eff[tid], second.ID)
 	}
 
-	// It comes back, but a probe that has just returned is not trusted with
-	// what it decides: a flapping link would otherwise hand the target back
-	// and forth every few minutes, and every handover is a moment where two
-	// views of the same target disagree.
-	seen(t, store, first.ID, now)
-	store.MarkProbeBack(first.ID, now)
+	// It comes back. The clock stays where it is and the probe's history moves instead: advancing "now"
+	// would age every probe at once, including the backup, and the target would stay with its primary
+	// because nothing else was reporting rather than because the primary had earned it back.
+	back := func(since int64) {
+		seen(t, store, first.ID, now)
+		seen(t, store, second.ID, now)
+		store.cfg.Exec(`UPDATE probes SET reporting_since=? WHERE id=?`, now-since, first.ID)
+	}
+
+	// Back for an instant: not yet trusted with what it decides. A probe flapping on a bad link would
+	// otherwise take its targets back and lose them again every few minutes, and every handover is a
+	// moment where two views of the same target disagree.
+	back(0)
 	eff, _ = store.EffectivePrimaries(local, now)
 	if eff[tid] != second.ID {
 		t.Fatalf("a probe back for an instant took its target back from %d", second.ID)
 	}
-	eff, _ = store.EffectivePrimaries(local, now+probeReclaimAfter-1)
+
+	back(probeReclaimAfter - 1)
+	eff, _ = store.EffectivePrimaries(local, now)
 	if eff[tid] != second.ID {
 		t.Error("the primary reclaimed one second before it was due to")
 	}
 
 	// And once it has been back long enough, it takes them back.
-	eff, _ = store.EffectivePrimaries(local, now+probeReclaimAfter)
+	back(probeReclaimAfter)
+	eff, _ = store.EffectivePrimaries(local, now)
 	if eff[tid] != first.ID {
 		t.Fatalf("after the hysteresis, probe %d decides, want the primary %d", eff[tid], first.ID)
 	}
