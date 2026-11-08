@@ -6,6 +6,8 @@
 #   sudo ./install.sh --package ./smokestack           # a binary you built yourself
 #   sudo ./install.sh --admin-email noc@example.net --ip 0.0.0.0 --port 8080
 #   sudo ./install.sh --embedded          # probe inside the web service (small servers)
+#   sudo ./install.sh --probe-only --server https://smokestack.example.net --token TOKEN
+#                                         # a probe alone, reporting to an instance elsewhere
 #   sudo ./install.sh --lang fr           # default language of the public pages
 #   sudo ./install.sh --yes               # never ask questions (automation)
 #   sudo ./install.sh --uninstall [--purge]
@@ -27,6 +29,11 @@ PACKAGE=""; ADMIN_EMAIL=""; LISTEN_IP=""; LISTEN_PORT=""; PUBLIC_URL=""; PUBLIC_
 MODE=""   # probe mode, read back from the configuration once systemd is set up
 ENVFILE=/etc/smokestack/smokestack.env
 NO_SERVICE=0; UNINSTALL=0; PURGE=0; EMBEDDED=0
+# A machine that runs a probe and nothing else, reporting to an instance
+# somewhere else. No web service, no database, no admin account: the only unit
+# installed is the probe, and the only configuration it needs is where to
+# report and what to prove it is. Asked for by @mayssa-bm in #93.
+PROBE_ONLY=0; PROBE_SERVER=""; PROBE_TOKEN=""
 
 say()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m  %s\n' "$*" >&2; }
@@ -45,6 +52,9 @@ while [ $# -gt 0 ]; do
     --public-url)  PUBLIC_URL="$2"; shift 2 ;;
     --no-service)  NO_SERVICE=1; shift ;;
     --embedded)    EMBEDDED=1; shift ;;
+    --probe-only)  PROBE_ONLY=1; shift ;;
+    --server)      PROBE_SERVER="$2"; shift 2 ;;
+    --token)       PROBE_TOKEN="$2"; shift 2 ;;
     --uninstall)   UNINSTALL=1; shift ;;
     --purge)       PURGE=1; shift ;;
     -h|--help)     sed -n '2,15p' "$0"; exit 0 ;;
@@ -54,6 +64,19 @@ done
 
 [ "$(id -u)" -eq 0 ] || die "run as root (sudo $0 ...)"
 [ "$(uname -s)" = "Linux" ] || die "Linux only"
+
+if [ "$PROBE_ONLY" -eq 1 ]; then
+  [ -n "$PROBE_SERVER" ] || die "--probe-only needs --server https://your-instance.example.net"
+  [ -n "$PROBE_TOKEN" ] || die "--probe-only needs --token (issue one on the instance: smokestack probe token -slug NAME)"
+  # The token travels on every request and the target list comes back on the
+  # same connection, so the probe refuses plain http at runtime. Refusing it
+  # here says so while somebody is still watching the terminal.
+  case "$PROBE_SERVER" in
+    https://*) ;;
+    *) die "--server must be an https:// URL" ;;
+  esac
+  [ "$EMBEDDED" -eq 0 ] || die "--probe-only and --embedded ask for opposite things"
+fi
 
 # ------------------------------------------------------------ uninstall
 if [ "$UNINSTALL" -eq 1 ]; then
@@ -162,10 +185,16 @@ FRESH=0
 if [ ! -f "$ETC/config.json" ]; then
   FRESH=1
   HOST=$(hostname -s 2>/dev/null || echo probe)
+  # Where to report and what to prove it is, set only for a probe that has no
+  # service of its own beside it.
+  PROBE_EXTRA=""
+  if [ "$PROBE_ONLY" -eq 1 ]; then
+    PROBE_EXTRA=", \"server\": \"$PROBE_SERVER\", \"token\": \"$PROBE_TOKEN\""
+  fi
   cat > "$ETC/config.json" <<EOF
 {
   "data_dir": "$DATA",
-  "probe": { "enabled": true, "mode": "$( [ $EMBEDDED -eq 1 ] && echo embedded || echo external )", "slug": "$HOST", "name": "$HOST", "location": "" },
+  "probe": { "enabled": true, "mode": "$( [ $EMBEDDED -eq 1 ] && echo embedded || echo external )", "slug": "$HOST", "name": "$HOST", "location": ""$PROBE_EXTRA },
   "federation": { "enabled": false, "base_url": "$PUBLIC_URL", "anchors": [] },
   "update": {
     "enabled": true,
@@ -285,6 +314,13 @@ if [ "$NO_SERVICE" -eq 0 ]; then
   # Probe mode, read from the configuration (an existing install keeps its choice).
   MODE=embedded
   grep -q '"mode": *"external"' "$ETC/config.json" && MODE=external
+  # An upgrade keeps what the machine is. Re-running the script without
+  # --probe-only on a probe-only machine would otherwise install a web
+  # service beside a probe that never asked for one, and start it.
+  if grep -q '"server" *:' "$ETC/config.json"; then
+    PROBE_ONLY=1
+    [ -n "$PROBE_SERVER" ] || PROBE_SERVER=$(sed -n 's/.*"server" *: *"\([^"]*\)".*/\1/p' "$ETC/config.json" | head -n 1)
+  fi
 
   HARDEN="NoNewPrivileges=yes
 ProtectSystem=strict
@@ -306,6 +342,12 @@ CPUWeight=50"
     WEB_CAPS="CAP_NET_RAW CAP_NET_BIND_SERVICE"; WEB_PRIO=""
   fi
 
+  if [ "$PROBE_ONLY" -eq 1 ]; then
+    # No web service on this machine: remove a unit left by an earlier
+    # full install rather than leaving one that would fail to start.
+    systemctl disable --now smokestack >/dev/null 2>&1 || true
+    rm -f "$UNIT"
+  else
   cat > "$UNIT" <<EOF
 [Unit]
 Description=smokestack latency monitoring (web service)
@@ -333,13 +375,26 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 EOF
 
+  fi
+
+  # A probe installed beside a service belongs to it: stopping one stops the
+  # other. A probe installed alone has nothing to belong to, and naming a
+  # unit that does not exist would stop it from starting at all.
+  PROBE_AFTER="network-online.target smokestack.service"
+  PROBE_PARTOF="PartOf=smokestack.service"
+  if [ "$PROBE_ONLY" -eq 1 ]; then
+    MODE=external
+    PROBE_AFTER="network-online.target"
+    PROBE_PARTOF=""
+  fi
+
   if [ "$MODE" = external ]; then
     # Probe: its own process, the only one allowed raw sockets, and
     # favoured by the CPU scheduler so web load cannot delay a measurement.
     cat > "$PROBE_UNIT" <<EOF
 [Unit]
 Description=smokestack latency monitoring (probe)
-After=network-online.target smokestack.service
+After=$PROBE_AFTER
 Wants=network-online.target
 # PartOf: stopping or restarting smokestack.service does the same to this
 # unit. Without it the probe is a second service under the same executable
@@ -347,7 +402,7 @@ Wants=network-online.target
 # process running, still had the binary held open, and could not work out
 # what kept starting it. "systemctl stop smokestack" now stops both; the
 # probe can still be restarted on its own.
-PartOf=smokestack.service
+$PROBE_PARTOF
 StartLimitIntervalSec=0
 
 [Service]
@@ -373,13 +428,23 @@ EOF
   fi
 
   systemctl daemon-reload
-  systemctl enable smokestack >/dev/null 2>&1
-  systemctl restart smokestack
+  if [ "$PROBE_ONLY" -eq 0 ]; then
+    systemctl enable smokestack >/dev/null 2>&1
+    systemctl restart smokestack
+  fi
   if [ "$MODE" = external ]; then
     systemctl enable smokestack-probe >/dev/null 2>&1
     systemctl restart smokestack-probe
   fi
 
+  if [ "$PROBE_ONLY" -eq 1 ]; then
+    say "Waiting for the probe"
+    sleep 2
+    systemctl is-active --quiet smokestack-probe || {
+      journalctl -u smokestack-probe -n 30 --no-pager >&2
+      die "the probe did not start"
+    }
+  else
   say "Waiting for the service"
   i=0; OK=0
   while [ $i -lt 30 ]; do
@@ -388,11 +453,12 @@ EOF
     i=$((i+1)); sleep 1
   done
   [ $OK -eq 1 ] || { journalctl -u smokestack -n 30 --no-pager >&2; die "the service did not start"; }
+  fi
 fi
 
 # ------------------------------------------------------ first admin account
 CREDS=""
-if [ $FRESH -eq 1 ]; then
+if [ $FRESH -eq 1 ] && [ "$PROBE_ONLY" -eq 0 ]; then
   EMAIL="${ADMIN_EMAIL:-admin@$(hostname -f 2>/dev/null || hostname)}"
   case "$EMAIL" in *@*.*) ;; *) EMAIL="$EMAIL.local" ;; esac
   if OUT=$(runuser -u "$USER_NAME" -- "$ROOT/current/smokestack" user add \
@@ -413,6 +479,18 @@ LANGS=$($SS languages -config "$ETC/config.json" -names 2>/dev/null)
 DEFLANG=$($SS languages -config "$ETC/config.json" 2>/dev/null | awk '/\(default\)/{print $2; exit}')
 
 echo
+if [ "$PROBE_ONLY" -eq 1 ]; then
+  say "smokestack $VERSION is installed as a probe"
+  echo "    reports to     $PROBE_SERVER"
+  echo "    probe name     $(hostname -s 2>/dev/null || echo probe)   (change probe.slug in $ETC/config.json)"
+  echo "    service        smokestack-probe"
+  echo "    logs           journalctl -u smokestack-probe -f"
+  echo "    update         sudo smokestack update smokestack-X.Y.Z-linux-$ARCH.zip"
+  echo
+  echo "    This machine measures nothing until the instance assigns it targets:"
+  echo "    Instance -> Probes -> Targets, or: smokestack probe targets -slug NAME -all"
+  exit 0
+fi
 say "smokestack $VERSION is installed"
 echo "    web interface  $URL"
 echo "    back-office    $URL/admin"
