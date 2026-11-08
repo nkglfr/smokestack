@@ -988,3 +988,58 @@ func printProbeToken(tok string) {
 	fmt.Println(tok)
 	fmt.Fprintln(os.Stderr, "set it as probe.token in the probe's configuration file.")
 }
+
+// ------------------------------------------------------- public listing
+
+// publicProbe is what a visitor may know about where a measurement was made.
+// Deliberately the same answer for everybody, operator included.
+//
+// The alternative was to vary it by caller and let an operator see more, which
+// is what the admin listing is for. A public endpoint that varies by caller
+// needs Vary, and Vary on a page behind a CDN means one cache entry per
+// visitor — the cache turned off on exactly the pages that need it most,
+// during exactly the incident everyone is reloading. One answer for everyone
+// costs nothing to cache and cannot leak by misconfiguration, because there is
+// nothing in it to leak.
+type publicProbe struct {
+	ID       int64  `json:"id"`
+	Slug     string `json:"slug"`
+	Name     string `json:"name"`
+	Location string `json:"location,omitempty"`
+	Local    bool   `json:"local"`
+	// Masked, like every other address a visitor is shown: roughly the
+	// operator's network rather than the host.
+	From string `json:"from,omitempty"`
+	ASN  string `json:"asn,omitempty"`
+}
+
+// probesPublic lists where this instance measures from, so that a page can
+// offer the choice. A disabled probe is left out: it is not measuring, so
+// picking it would show an empty graph and say nothing about why.
+func (a *API) probesPublic(w http.ResponseWriter, r *http.Request) {
+	list, err := a.store.Probes()
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	out := []publicProbe{}
+	for _, p := range list {
+		if !p.Enabled {
+			continue
+		}
+		pp := publicProbe{ID: p.ID, Slug: p.Slug, Name: p.Name, Location: p.Location, Local: p.Local}
+		if addr := p.EffectiveAddress(); addr != "" {
+			pp.From = maskIP(addr)
+			if a.asn != nil {
+				if as, ok := a.asn.ASNOfIP(addr); ok {
+					pp.ASN = as
+				}
+			}
+		}
+		out = append(out, pp)
+	}
+	// No Vary: this answer does not depend on who is asking, which is the
+	// whole point of it being this shape.
+	w.Header().Set("Cache-Control", "public, max-age=60")
+	writeJSON(w, map[string]any{"probes": out})
+}
