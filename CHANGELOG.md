@@ -36,6 +36,16 @@ Versions are published as signed releases; servers with automatic updates instal
 
   The local probe takes no assignment at all and keeps measuring every active target.
 
+- **A probe can be set to measure every target.**
+
+  An explicit list does not survive a growing instance. A target created after a probe was configured was measured by no remote probe until every probe's list was updated by hand, which on a deployment with fifty probes is fifty edits for one new target.
+
+  A probe can now be set to measure everything, including targets added later. The explicit list it had is kept rather than discarded, so turning the option off puts it straight back.
+
+  The default is unchanged and deliberately so: a probe enrolled today still measures nothing until somebody says what it should measure. This is an option for the ordinary case, not a new default.
+
+  Reported by @mayssa-bm.
+
 - **The instance records where each probe measures from.**
 
   The address a probe connects from is recorded automatically, and the AS it falls in is resolved from the same lookup service the Host network page uses. Both appear beside the probe in the back-office.
