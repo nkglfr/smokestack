@@ -2,11 +2,13 @@
 
 Versions are published as signed releases; servers with automatic updates install the newest one directly, whatever versions came in between. The release workflow reads a section straight out of this file and publishes it as the release notes, so how an entry is written matters — see [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
-## Unreleased
+## 0.8.0
 
-**An instance can now be measured from several places at once.** Until this batch, one instance meant one probe, running on the instance's own machine: every graph described the path from that one machine to the target, and a loss of packets looked the same whether the target was down or the path from that single vantage point was. Probes can now run on other machines, report to the instance over HTTPS, and measure alongside the local one.
+**An instance can now be measured from several places at once, and with a third protocol.** Until this batch, one instance meant one probe, running on the instance's own machine: every graph described the path from that one machine to the target, and a loss of packets looked the same whether the target was down or the path from that single vantage point was. Probes can now run on other machines, report to the instance over HTTPS, and measure alongside the local one. A target can also be measured with a UDP echo, which on supporting equipment is answered by the forwarding hardware rather than by the routing engine.
 
 **Nothing changes for an instance that does not want this.** The local probe still reaches the service through its Unix socket, still measures every active target, and is not affected by anything below. There is no migration, and no setting to revisit.
+
+**What a remote probe measures is not yet visible on the public pages.** It measures, it decides the status of the targets it is primary for, it alerts, and the other probes corroborate what it sees — all of which an operator reads in the back-office and in the alerts. But the public graphs still show one point of view, with no way to pick which probe you are looking through, and there is no map of where the probes are. Enrolling a probe is worth doing today for the alerting; if what you want is to compare two vantage points on a public page, that part is still to come.
 
 ### New
 
@@ -68,6 +70,22 @@ Versions are published as signed releases; servers with automatic updates instal
 
   A probe with no data, or one whose targets are under maintenance, has no opinion and is not counted either way: counting silence as agreement would manufacture a confirmation out of nothing.
 
+- **UDP echo targets, for equipment that answers from the forwarding hardware.**
+
+  ICMP and a TCP handshake both answer from the wrong place for some measurements. A router replies to an ICMP echo from its routing engine, so the round trip carries whatever the control plane was busy with, and those replies are rate-limited on most platforms. A datagram echoed by the forwarding hardware has neither problem — on Junos, a `probe-server` listening for RFC 862 echo answers with a hardware timestamp.
+
+  A UDP target measures a plain RFC 862 echo: the datagram goes out, the same bytes come back, and the round trip is timed here. Port 7 by default, settable, since a receiver can be told to use the 49160–65535 range instead.
+
+  Three outcomes rather than two. An echo is a round trip, silence is loss, and a host that answers with an ICMP port-unreachable is reported as exactly that — up, with nothing listening on the port — rather than as a path problem. A firewall that swallows the ICMP error leaves it reading as silence, which is the honest answer when nothing was said.
+
+  Each packet carries a sequence number and a nonce for the pass, so a reply that arrives late is recognised as belonging to an earlier packet and dropped instead of being timed against the current one. Without that, a straggler would report a latency far below the truth, and nothing about the resulting graph would look wrong.
+
+  The payload is 56 bytes, the same as an ICMP one, so the three protocols measure comparable datagrams. The reply is never larger than the request and the source address is always the instance's own, so the probe can be neither an amplifier nor a reflector. It needs no privilege, unlike ICMP, so a UDP target works in either probe mode.
+
+  The response-time breakdown stays TCP-only — there is no handshake to break down — and a peer double-check still accepts only ICMP and TCP, since an echo target is usually equipment on your own network that a peer could not reach anyway.
+
+  Asked for by @blakedot.
+
 ### Fixed
 
 - **A probe that stopped reporting declared its targets recovered.**
@@ -85,22 +103,6 @@ Versions are published as signed releases; servers with automatic updates instal
   This is the other half of the fix above. A target whose probe is gone keeps its incident open and stops being judged, which is honest but says nothing — without this, an operator would find a target frozen mid-incident with no indication that the probe, rather than the target, is the reason.
 
   A probe with nothing to measure is never called silent. Its last contact only moves when it has something to report, so an idle probe would otherwise look dead while being perfectly healthy.
-
-- **UDP echo targets, for equipment that answers from the forwarding hardware.**
-
-  ICMP and a TCP handshake both answer from the wrong place for some measurements. A router replies to an ICMP echo from its routing engine, so the round trip carries whatever the control plane was busy with, and those replies are rate-limited on most platforms. A datagram echoed by the forwarding hardware has neither problem — on Junos, a `probe-server` listening for RFC 862 echo answers with a hardware timestamp.
-
-  A UDP target measures a plain RFC 862 echo: the datagram goes out, the same bytes come back, and the round trip is timed here. Port 7 by default, settable, since a receiver can be told to use the 49160–65535 range instead.
-
-  Three outcomes rather than two. An echo is a round trip, silence is loss, and a host that answers with an ICMP port-unreachable is reported as exactly that — up, with nothing listening on the port — rather than as a path problem. A firewall that swallows the ICMP error leaves it reading as silence, which is the honest answer when nothing was said.
-
-  Each packet carries a sequence number and a nonce for the pass, so a reply that arrives late is recognised as belonging to an earlier packet and dropped instead of being timed against the current one. Without that, a straggler would report a latency far below the truth, and nothing about the resulting graph would look wrong.
-
-  The payload is 56 bytes, the same as an ICMP one, so the three protocols measure comparable datagrams. The reply is never larger than the request and the source address is always the instance's own, so the probe can be neither an amplifier nor a reflector. It needs no privilege, unlike ICMP, so a UDP target works in either probe mode.
-
-  The response-time breakdown stays TCP-only — there is no handshake to break down — and a peer double-check still accepts only ICMP and TCP, since an echo target is usually equipment on your own network that a peer could not reach anyway.
-
-  Asked for by @blakedot.
 
 - **A target could claim one protocol and be measured with another.**
 
