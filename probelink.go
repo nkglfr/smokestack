@@ -455,6 +455,91 @@ func (l *remoteLink) flush() error {
 	return nil
 }
 
+// The buffer, written down. A probe holds what it has measured in memory
+// until the service takes it, which is the right place for it while the
+// service is reachable — and exactly the wrong place when the probe is
+// restarted during an outage, because an hour of measurements from the one
+// vantage point that was working disappears with the process.
+//
+// Written as one file, replaced atomically, and read back once at startup.
+// Reported by @mayssa-bm in #93.
+const probeBufferFile = "probe-buffer.json"
+
+// How often the buffer is written down while the service is unreachable. Not
+// on every flush: at the ceiling this file is a few tens of megabytes, and
+// rewriting it every second would turn a service outage into a disk problem.
+const probePersistEvery = time.Minute
+
+type probeBufferFileFormat struct {
+	Version int           `json:"version"`
+	Written int64         `json:"written_at"`
+	Buf     []wireMeasure `json:"measurements"`
+	Traces  []*Traceroute `json:"traceroutes"`
+}
+
+func probeBufferPath(cfg Config) string {
+	return filepath.Join(cfg.DataDir, probeBufferFile)
+}
+
+// persist writes what has not been accepted yet. It is called while the
+// service is unreachable and once more on the way out, so that a restart at
+// the worst moment costs nothing.
+func (l *remoteLink) persist(path string) error {
+	l.bmu.Lock()
+	snapshot := probeBufferFileFormat{Version: 1, Written: time.Now().Unix(),
+		Buf: append([]wireMeasure(nil), l.buf...), Traces: append([]*Traceroute(nil), l.traces...)}
+	l.bmu.Unlock()
+	if len(snapshot.Buf) == 0 && len(snapshot.Traces) == 0 {
+		// Nothing pending: remove the file rather than leave a stale one that
+		// a later start would replay.
+		os.Remove(path)
+		return nil
+	}
+	body, err := json.Marshal(snapshot)
+	if err != nil {
+		return err
+	}
+	// Written beside the target and renamed, so that a crash halfway through
+	// leaves the previous file rather than a truncated one.
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, body, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}
+
+// restore reads a buffer left by an earlier run and puts it back in front of
+// whatever this one has measured, so that the oldest measurements are sent
+// first. The file is removed once read: a buffer that cannot be sent will be
+// written again on the next pass, and one that is sent should not come back.
+func (l *remoteLink) restore(path string) int {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	os.Remove(path)
+	var saved probeBufferFileFormat
+	if err := json.Unmarshal(body, &saved); err != nil {
+		log.Printf("the saved buffer could not be read, starting empty: %v", err)
+		return 0
+	}
+	l.bmu.Lock()
+	defer l.bmu.Unlock()
+	// Trimmed to the same ceiling the live buffer has, oldest first, so that
+	// a file written by a version with a larger limit cannot grow this one
+	// without bound.
+	l.buf = append(saved.Buf, l.buf...)
+	if len(l.buf) > probeBufferMax {
+		l.dropped += int64(len(l.buf) - probeBufferMax)
+		l.buf = l.buf[len(l.buf)-probeBufferMax:]
+	}
+	l.traces = append(saved.Traces, l.traces...)
+	if len(l.traces) > 1000 {
+		l.traces = l.traces[len(l.traces)-1000:]
+	}
+	return len(saved.Buf)
+}
+
 // currentBinary renvoie le binaire actif (<racine>/current/smokestack)
 // quand la sonde tourne depuis une installation geree.
 func currentBinary() string {
@@ -499,6 +584,12 @@ func runProbe(args []string) error {
 		link = newRemoteLink(sock)
 		log.Printf("smokestack probe %s, service on %s", Version, sock)
 	}
+	// Whatever an earlier run could not hand over. Read before the first
+	// pass, so the oldest measurements are the first ones offered.
+	bufPath := probeBufferPath(cfg)
+	if n := link.restore(bufPath); n > 0 {
+		log.Printf("%d measurements recovered from the previous run", n)
+	}
 
 	for i := 0; ; i++ {
 		if err := link.fetchTargets(); err == nil {
@@ -523,7 +614,7 @@ func runProbe(args []string) error {
 	flush := time.NewTicker(probeFlushEvery)
 	defer refresh.Stop()
 	defer flush.Stop()
-	var lastWarn time.Time
+	var lastWarn, lastPersist time.Time
 	for {
 		select {
 		case <-sig:
@@ -540,6 +631,12 @@ func runProbe(args []string) error {
 				if left == 0 {
 					break
 				}
+			}
+			// What the service would not take is written down rather than
+			// dropped on the floor: a restart during an outage is exactly
+			// when this buffer is worth the most.
+			if err := link.persist(bufPath); err != nil {
+				log.Printf("the pending buffer could not be saved: %v", err)
 			}
 			log.Printf("probe stopped")
 			return nil
@@ -569,12 +666,24 @@ func runProbe(args []string) error {
 				}
 			}
 		case <-flush.C:
-			if err := link.flush(); err != nil && time.Since(lastWarn) > time.Minute {
-				link.bmu.Lock()
-				n, d := len(link.buf), link.dropped
-				link.bmu.Unlock()
-				log.Printf("service unreachable (%v): %d measurements pending, %d dropped", err, n, d)
-				lastWarn = time.Now()
+			if err := link.flush(); err != nil {
+				if time.Since(lastWarn) > time.Minute {
+					link.bmu.Lock()
+					n, d := len(link.buf), link.dropped
+					link.bmu.Unlock()
+					log.Printf("service unreachable (%v): %d measurements pending, %d dropped", err, n, d)
+					lastWarn = time.Now()
+				}
+				// Written down while the service is away, not on every
+				// failed flush: at the ceiling this file is tens of
+				// megabytes, and rewriting it every second would turn an
+				// outage into a disk problem.
+				if time.Since(lastPersist) >= probePersistEvery {
+					if err := link.persist(bufPath); err != nil {
+						log.Printf("the pending buffer could not be saved: %v", err)
+					}
+					lastPersist = time.Now()
+				}
 			}
 		}
 	}

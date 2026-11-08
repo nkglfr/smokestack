@@ -25,6 +25,33 @@ Versions are published as signed releases; servers with automatic updates instal
   A traceroute only means something alongside the vantage point it was run from. Showing every probe's on one page invites comparing a path from one city with a path from another and concluding something about neither.
 
   A probe that is named but no longer exists is read as no choice rather than as an error, so an old bookmark shows the page instead of a refusal.
+## 0.8.1
+
+**Deploying a probe, rather than only running one.** 0.8.0 made a probe on another machine work; this is the part that makes one practical to put there.
+
+### New
+
+- **The installer can set up a probe on its own.**
+
+  `sudo ./install.sh --probe-only --server https://your-instance --token TOKEN` installs the probe and nothing else: no web service, no database, no admin account, and a single systemd unit. Until now the only way to get a probe onto a machine was to install a whole instance and turn most of it off.
+
+  A probe installed beside a service belongs to it, so stopping one stops the other. A probe installed alone has nothing to belong to, and its unit says so rather than naming a service that does not exist — which would have kept it from starting at all.
+
+  Re-running the installer on such a machine keeps it as it is. It reads what the machine is from its configuration rather than from the command line, so an upgrade run without the flag does not install a web service beside a probe that never asked for one.
+
+  Asked for by @mayssa-bm.
+
+### Fixed
+
+- **A probe restart threw away everything it had not sent.**
+
+  A probe holds what it has measured in memory until the service accepts it. That is the right place while the service is reachable, and exactly the wrong place when the probe is restarted during an outage — an hour of measurements from the one vantage point that was still working went with the process.
+
+  What is pending is now written down: while the service is unreachable, and once more when the probe is asked to stop. It is read back at the next start and sent oldest first, then the file is removed so that nothing is replayed twice.
+
+  It is written at most once a minute rather than on every failed send: at the buffer's ceiling the file is tens of megabytes, and rewriting it every second would turn a service outage into a disk problem. A file that cannot be read is discarded with a line in the log rather than stopping the probe, because measuring now matters more than recovering what was measured before.
+
+  Reported by @mayssa-bm.
 
 ## 0.8.0
 
