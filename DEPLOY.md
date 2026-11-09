@@ -20,6 +20,7 @@ probes a few hundred targets.
 11. [IPv6 and traceroutes](#11-ipv6-and-traceroutes)
 12. [Container image (tests)](#12-container-image-tests)
 13. [Federation: what protects what](#13-federation-what-protects-what)
+14. [Probes on other machines](#14-probes-on-other-machines)
 
 ---
 
@@ -1421,3 +1422,154 @@ a peer-controlled URL would otherwise offer.
   cannot speak for anyone else, cannot name a non-member, and cannot get a
   NOC mailed without you measuring the same thing — but within its own
   numbers, trust is what approving it meant.
+
+---
+
+## 14. Probes on other machines
+
+An instance measures from wherever it runs. One probe means one point of view:
+a loss of packets looks the same whether the target is down or the path from
+that single machine is. Putting probes elsewhere — another site, another city,
+another AS — is what tells the two apart.
+
+A remote probe speaks the same protocol as the local one, over HTTPS instead
+of a Unix socket, and authenticates with a token issued for it.
+
+### Enrolling the probe
+
+On the **instance**, in *Instance → Probes*, add a probe and issue its token.
+Or from the command line:
+
+```sh
+smokestack probe add -slug lyon-1 -name "Lyon" -location "Lyon, FR" -token
+```
+
+The token is printed once. Only its hash is stored, so it cannot be recovered
+afterwards — copy it now. Rotating issues a new one and the old one stops
+working immediately; revoking withdraws it without a replacement.
+
+`probe token` writes the token to standard output alone on its line and every
+word of prose to standard error, so this captures the token and nothing else:
+
+```sh
+smokestack probe token -slug lyon-1 > /run/secrets/lyon-1.token
+```
+
+### Installing the probe
+
+On the **other machine**:
+
+```sh
+curl -fsSLO https://github.com/nkglfr/smokestack/releases/latest/download/install.sh
+sudo sh install.sh --probe-only --server https://latency.example.net --token THE-TOKEN
+```
+
+That installs the probe and nothing else: no web service, no database, no
+admin account, one systemd unit. The machine needs outbound HTTPS to the
+instance and `CAP_NET_RAW` for ICMP, which the unit grants.
+
+The URL must be `https`. The token travels on every request and the target
+list comes back on the same connection, so the probe refuses to start on
+plain http rather than warning in a log nobody reads.
+
+Re-running the installer on that machine keeps it a probe. It reads what the
+machine is from its configuration rather than from the command line, so an
+upgrade run without `--probe-only` does not install a web service beside a
+probe that never asked for one.
+
+### Giving it something to measure
+
+**A newly enrolled probe measures nothing.** That is deliberate: a probe that
+measured everything the moment it existed would be a decision nobody made.
+
+In *Instance → Probes*, open *Targets* on the probe's line and tick what it
+should measure, or turn on *Measure every target* for the ordinary case — that
+one also covers targets added later, which an explicit list does not. From the
+command line:
+
+```sh
+smokestack probe targets -slug lyon-1 -all
+smokestack probe targets -slug lyon-1 -targets 3,7,12
+```
+
+A probe sees and writes only what it was assigned. A measurement naming any
+other target is refused rather than quietly filed.
+
+### Choosing which probe decides a target
+
+Several probes measuring one target produce several opinions, and something
+has to say which one the target's status follows. That is its **primary
+probe**, chosen in the target's own form under *Measured from*, among the
+probes assigned to it. Left unset, it is the instance's own probe, which is
+what every target has until you say otherwise.
+
+The primary also receives the traceroute and immediate-check requests made for
+that target, so an anomaly is traced from the vantage point it was seen from.
+
+Under it, *If it is silent, fall back to* names the probes that stand in while
+the primary says nothing. The first one still reporting takes over, and the
+primary takes its targets back once it has been reporting again for ten
+minutes. That delay is deliberate: coming back costs more than going away, so
+a probe flapping on a bad link cannot hand a target to and fro every few
+minutes.
+
+If the primary and every fallback are silent, the target stays with its
+primary and its incident stays open. Nobody is measuring it, which is the
+honest answer, and the probe's own alert says why.
+
+### What a probe token grants
+
+**A probe token is a read credential for the targets that probe is assigned**,
+including private ones, because a probe has to know what to measure. Enrolling
+a probe therefore means trusting the machine it runs on with that list.
+
+It grants nothing else: it cannot read measurements, cannot reach the
+back-office, and cannot write against a target it was not assigned.
+
+### When a probe goes quiet
+
+A probe that has not reported for five minutes raises an alert, and another
+when it comes back. Five minutes is far past the five seconds between two
+requests for work, so it means the probe is gone, its token was withdrawn, or
+it can no longer reach the instance.
+
+The targets it decides keep their open incidents rather than being announced
+as recovered. Missing data is not good news, and a probe that is not answering
+is itself worth looking at.
+
+Two probes are never called silent, because their silence says nothing: one
+with no target assigned, which has nothing to report, and one that has never
+reported at all, which is an enrolment waiting for its machine rather than a
+probe that stopped.
+
+### Restarts and outages
+
+A probe holds what it has measured until the instance accepts it. While the
+instance is unreachable, what is pending is written to
+`/var/lib/smokestack/probe-buffer.json`, at most once a minute, and once more
+when the probe is stopped. It is read back at the next start and sent oldest
+first, then the file is removed.
+
+So a probe restarted during an outage does not lose its backlog, and an
+instance restarted under it loses nothing either.
+
+### Upgrading a probe machine
+
+The same command as anywhere else, with one difference at the end:
+
+```sh
+sudo smokestack update smokestack-X.Y.Z-linux-amd64.zip
+sudo systemctl restart smokestack-probe
+```
+
+A probe-only machine runs `smokestack-probe` and no `smokestack` unit, so
+`update` verifies the package, installs it and then tells you to restart the
+service rather than restarting it itself. The restart above is what puts the
+new binary to work; until you run it, the probe keeps measuring with the old
+one, which is harmless but not what you asked for.
+
+A remote probe does **not** follow the instance's version. It has its own
+release tree on its own cadence, so it stays where it is rather than
+restarting itself to chase a number it cannot reach. A probe one version
+behind the instance keeps working; the probe protocol does not change between
+patch releases.
