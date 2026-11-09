@@ -10,6 +10,7 @@ between operators who measure each other.
 
 - 📈 **Latency, jitter and loss** to your transits, exchanges, DNS resolvers and clouds
 - 🔍 **Zoom from one year down to 30 seconds**, percentiles stay exact at every level
+- 📍 **Measure from several places**: probes on your other sites report to one instance, and a target says which of them decides its status
 - 🧭 **Traceroute on anomalies**, compared with the last healthy path, over IPv4 and IPv6
 - 🌍 **Public status page in 10 languages**, with a private back-office
 - 🤝 **Federation**: pair with other operators, measure each other, get notified of incidents
@@ -65,6 +66,19 @@ latency.example.net {
 Then open `https://latency.example.net/admin`, set your AS number and add
 your targets.
 
+**To add a probe on another machine**, issue it a token on the instance
+(*Instance → Probes*, or `smokestack probe add -slug lyon-1 -token`), then on
+that machine:
+
+```sh
+curl -fsSLO https://github.com/nkglfr/smokestack/releases/latest/download/install.sh
+sudo sh install.sh --probe-only --server https://latency.example.net --token THE-TOKEN
+```
+
+That installs the probe and nothing else: no web service, no database, no
+admin account. It measures nothing until you assign it targets:
+[DEPLOY.md § 14](DEPLOY.md#14-probes-on-other-machines).
+
 📘 Full guide: **[DEPLOY.md](DEPLOY.md)** · What's new: **[CHANGELOG.md](CHANGELOG.md)** (HTTPS, updates, backups, troubleshooting).
 
 ---
@@ -110,6 +124,7 @@ your targets.
 | Percentiles over long periods | Averaged (inaccurate) | Merged histograms (exact) |
 | Measurements under server load | Skewed | Kernel timestamps, isolated probe process |
 | Storage | RRD files | SQLite + optional S3 archive of raw data |
+| Measuring from several places | Master/slave, shared secret, slaves listed in the config file | Probes enrolled from the back-office, one token each, targets assigned per probe |
 | Deployment | Perl, fping, rrdtool, web server | One binary |
 | Updates | Manual | Signed packages, one click, automatic rollback |
 
@@ -118,20 +133,29 @@ your targets.
 ## How it works
 
 ```
-                 Unix socket                    HTTPS
- ┌──────────────┐  targets  ┌──────────────────┐  ┌──────────────────┐
- │ smokestack   │◄──────────│ smokestack       │─►│ reverse proxy    │─► visitors
- │ probe        │──────────►│ web service      │  │ (Caddy, nginx)   │
- │ ICMP / TCP   │ results   │ API · UI · SQLite│  └──────────────────┘
- └──────────────┘           └────────┬─────────┘
-  CAP_NET_RAW only                   │ hourly raw archive
-  high CPU priority                  ▼
-                               S3 (optional)
+                  Unix socket                    HTTPS
+ ┌───────────────┐  targets  ┌──────────────────┐  ┌──────────────────┐
+ │ smokestack    │◄──────────│ smokestack       │─►│ reverse proxy    │─► visitors
+ │ probe (local) │──────────►│ web service      │  │ (Caddy, nginx)   │
+ │ ICMP/TCP/UDP  │ results   │ API · UI · SQLite│  └──────────────────┘
+ └───────────────┘           └───┬─────────┬────┘
+  CAP_NET_RAW only               │         │ hourly raw archive
+  high CPU priority              │         ▼
+                                 │       S3 (optional)
+          HTTPS + probe token    │
+ ┌───────────────┐               │
+ │ smokestack    │◄──────────────┘   another site, another city, another AS
+ │ probe (remote)│  the targets it was assigned, and the results it measured
+ └───────────────┘
 ```
 
 - **The probe runs in its own process.** It is the only one allowed raw
   sockets, it has CPU priority, and replies are timestamped by the kernel.
   Heavy traffic on the website cannot distort a measurement.
+- **Probes can run anywhere.** A probe on another machine speaks the same
+  protocol over HTTPS, authenticated by a token it is issued, and is given
+  only the targets it was assigned. Each target names the probe that decides
+  its status, and the probes to fall back to while that one is silent.
 - **Percentiles are exact at every zoom level.** Each measurement is stored
   as a small mergeable histogram (DDSketch, 1 % relative error), rolled up
   into 1 min, 5 min, 1 h and 1 day buckets.
@@ -153,6 +177,8 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 - Status overview: faults first, critical targets, all categories
 - 24-hour status bar and sparkline per target
 - Detail view with drag-to-zoom, 1-year navigator, event annotations, permalinks
+- A choice of vantage point where the instance has several probes: the graph, the availability figure,
+  the traceroutes and the AS path all follow it, and the choice travels in the link you share
 - Anomaly traceroutes marked on the graph (optional, off by default)
 - Availability over 24 h, 7 d, 30 d and 1 y, counted in measurement passes rather than packets, with
   the definition and the "this is not an SLA" caveat next to the figure rather than in a footnote
@@ -162,7 +188,7 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 
 **Back-office**
 - Accounts with four roles (viewer, editor, admin, master) and an audit log
-- Targets and categories, ICMP or TCP, IPv4 or IPv6, every 30 s, 1, 5 or 10 min
+- Targets and categories, ICMP, TCP or UDP echo, IPv4 or IPv6, every 30 s, 1, 5 or 10 min
 - A catalogue of ready-made targets to enable in one click, plus per-country
   suggestions in the [wiki](https://github.com/nkglfr/smokestack/wiki)
 - A contact form on the public pages, so your address stays off spam lists
@@ -180,6 +206,20 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 - Traceroutes: automatic on anomalies, daily reference path, on demand, with path comparison
 - Storage settings (local quota or S3), publisher page, languages
 - One-click updates with rollback
+
+**Probes**
+- Enrol a probe on another machine and issue it a token, shown once and stored only as a hash
+- Give it an explicit list of targets, or every target including the ones added later
+- Each target names the probe that decides its status, chosen among those that measure it
+- An ordered list of probes to fall back to while that one is silent, with a ten-minute delay before
+  it takes its targets back — coming back costs more than going away, so a flapping link cannot hand
+  a target to and fro every few minutes
+- A probe that stops reporting raises its own alert, and the targets it decides keep their incidents
+  open rather than being announced as recovered
+- When a target is in trouble, the other probes measuring it are asked what they see, and the alert
+  says whether everyone sees it (the target) or only the deciding probe does (the path from there)
+- Where each probe measures from: the address it connects from, or one you state when that would be
+  wrong, and the AS it falls in
 
 **Federation**
 - Pairing between instances, approved by a human on both sides
@@ -239,6 +279,22 @@ Edit it, then `systemctl restart smokestack`. The same settings exist as
 flags (`-ip`, `-port`) and in `config.json` (`listen_ip`, `listen_port`);
 flags win over environment variables, which win over `config.json`.
 
+On a machine installed with `--probe-only`, the same file carries where to
+report and the token to prove it is the probe it says it is, and nothing
+else:
+
+```json
+{
+  "data_dir": "/var/lib/smokestack",
+  "probe": { "enabled": true, "mode": "external", "slug": "lyon-1", "name": "lyon-1",
+             "server": "https://latency.example.net", "token": "..." }
+}
+```
+
+The URL must be `https`: the token travels on every request and the target
+list comes back on the same connection, so the probe refuses to start on
+plain http rather than warning in a log nobody reads.
+
 Everything else (targets, storage, S3, languages, federation, users) is set
 from the back-office.
 
@@ -292,12 +348,17 @@ Public, read-only, JSON:
 |---|---|
 | `GET /api/v1/overview` | Status of every public target |
 | `GET /api/v1/tree` | Categories and targets |
+| `GET /api/v1/probes` | Where this instance measures from (masked addresses) |
 | `GET /api/v1/series?target=ID&from=-30h&points=600` | Percentiles and loss over time |
 | `GET /api/v1/events` | Annotated events |
 | `GET /api/v1/live` | Server-sent events, latest measurements |
 | `GET /api/v1/asn` | Host network (RIPEstat, PeeringDB) |
 | `GET /api/v1/fed/peers` | Public federation peers |
 | `GET /api/v1/traceroutes?target=ID` | Traceroutes, if made public by the operator |
+
+`series`, `availability`, `traceroutes` and the AS path take an optional
+`&probe=ID` to answer from one vantage point. Without it they answer from the
+instance's own probe, as they always have.
 
 Private targets never appear in these endpoints. An authenticated call (session
 cookie or `Authorization: Bearer <admin token>`) sees them, and
@@ -392,7 +453,9 @@ Working and tested, not yet 1.0. Known gaps:
 
 - IPv6 has been tested with crafted packets only so far; feedback from dual-stack hosts is welcome
 - Latency-triggered traceroutes are covered by unit tests; loss-triggered ones were tested on a multi-hop lab network
-- Remote probes on another machine (same-host isolation is done)
+- Remote probes have been exercised against a loopback service and in unit tests, not yet across a real network at scale
+- With many probes, the home page and the alerting loop each build one view per probe; fine for a handful, not yet measured beyond that
+- The public pages show one vantage point at a time: there is no side-by-side comparison and no map of where the probes are
 
 Design notes: [docs/DESIGN.md](docs/DESIGN.md) (French version: [DESIGN.fr.md](docs/DESIGN.fr.md)).
 
