@@ -62,11 +62,14 @@ func TestAShortWindowOverAnOldPeriodLeavesSamples(t *testing.T) {
 			wantTable: "roll_5m", wantStep: 300,
 		},
 		{
-			// Nothing is kept longer than roll_1d, so an absurdly old window
-			// lands there and the walk terminates.
+			// The walk stops at the first tier kept for ever rather than
+			// running to the coarsest: roll_1h holds a fifty-year-old window
+			// as surely as roll_1d does, at a finer resolution. This case
+			// exists to pin that the loop terminates there and does not fall
+			// through to roll_1d for want of a stopping condition.
 			name: "a day, fifty years ago",
 			from: now - 18250*86400, to: now - 18249*86400,
-			wantTable: "roll_1d", wantStep: 86400,
+			wantTable: "roll_1h", wantStep: 3600,
 		},
 	}
 
