@@ -385,10 +385,15 @@ func (a *API) series(w http.ResponseWriter, r *http.Request) {
 	if points < 0 || points > 5000 {
 		points = 0
 	}
-	// Arrondi de la fenetre au pas de la resolution : deux visiteurs qui
-	// regardent le meme graphe a quelques secondes d'ecart partagent la
-	// meme entree de cache.
-	_, step := pickTable(to - from)
+	// Rounding the window to the resolution's step: two visitors looking at
+	// the same graph a few seconds apart share one cache entry.
+	//
+	// The same decision as the one Series will make, age included. Rounding
+	// to a step finer than the tier actually served would quantise to 30 s a
+	// window answered from hourly buckets, which costs nothing in
+	// correctness — the key carries from and to — and quietly spends the
+	// cache on entries nobody hits twice.
+	_, step := pickTableFrom(from, to, now)
 	quant := step
 	if quant < 30 {
 		quant = 30

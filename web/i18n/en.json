@@ -83,6 +83,7 @@
     "hosted_by": "Measured from",
     "see_network": "About this network",
     "no_data": "No measurement yet for this target.",
+    "no_data_window": "No measurement for this period.",
     "refresh": "Refreshed every 30 seconds",
     "once": "Unique targets",
     "once_hint": "Show each target only once: a faulty target stays in the faults section and is left out of the critical targets and of its category."

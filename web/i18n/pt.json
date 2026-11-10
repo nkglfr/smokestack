@@ -83,6 +83,7 @@
     "hosted_by": "Medido a partir de",
     "see_network": "Sobre esta rede",
     "no_data": "Ainda não há medições para este destino.",
+    "no_data_window": "Não há medições para este período.",
     "refresh": "Atualizado a cada 30 segundos",
     "once": "Destinos únicos",
     "once_hint": "Mostrar cada destino apenas uma vez: um destino com falha fica na secção das falhas e desaparece dos destinos críticos e da sua categoria."

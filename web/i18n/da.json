@@ -83,6 +83,7 @@
     "hosted_by": "Målt fra",
     "see_network": "Om dette net",
     "no_data": "Endnu ingen målinger for dette mål.",
+    "no_data_window": "Ingen målinger for denne periode.",
     "refresh": "Opdateres hvert 30. sekund",
     "once": "Unikke mål",
     "once_hint": "Vis hvert mål kun én gang: et mål med fejl bliver i fejlafsnittet og forsvinder fra de kritiske mål og fra sin kategori."
