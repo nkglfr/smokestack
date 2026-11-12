@@ -54,12 +54,12 @@ func TestATraceroutePageDoesNotPublishADisabledProbe(t *testing.T) {
 		add(off.ID, now-int64(i*60))
 	}
 
-	enabled, err := store.EnabledProbeIDs()
+	hidden, err := store.DisabledProbeIDs()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(enabled) != 1 || enabled[0] != on.ID {
-		t.Fatalf("EnabledProbeIDs = %v, want just the enabled probe %d", enabled, on.ID)
+	if len(hidden) != 1 || hidden[0] != off.ID {
+		t.Fatalf("DisabledProbeIDs = %v, want just the disabled probe %d", hidden, off.ID)
 	}
 
 	// An operator reads everything: nil is no restriction.
@@ -71,9 +71,9 @@ func TestATraceroutePageDoesNotPublishADisabledProbe(t *testing.T) {
 		t.Errorf("unrestricted: %d paths, want 10", len(all))
 	}
 
-	// A visitor reads only the enabled probe's, and gets all five of them
-	// rather than whatever survived a post-filter.
-	vis, err := store.TraceroutesOf(target, 0, nil, 40, enabled)
+	// A visitor reads everything except the disabled probe's, and gets all
+	// five of the rest rather than whatever survived a post-filter.
+	vis, err := store.TraceroutesOf(target, 0, nil, 40, hidden)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestATraceroutePageDoesNotPublishADisabledProbe(t *testing.T) {
 
 	// The limit still means what it says. Asking for three of the enabled
 	// probe's paths returns three, not three-minus-the-filtered.
-	three, err := store.TraceroutesOf(target, 0, nil, 3, enabled)
+	three, err := store.TraceroutesOf(target, 0, nil, 3, hidden)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,15 +97,17 @@ func TestATraceroutePageDoesNotPublishADisabledProbe(t *testing.T) {
 			len(three))
 	}
 
-	// An instance with no enabled probe publishes no path. That is not the
-	// same question as "any probe", which is what an empty list used to mean
-	// if it were handled like nil.
+	// An empty deny list hides nothing. This is the case my first version got
+	// backwards: it allow-listed the enabled probes, so an instance that had
+	// never enrolled one — where the probes table is empty and every path
+	// carries the local probe — published nothing at all. Two existing tests
+	// caught it, and this asserts it directly.
 	none, err := store.TraceroutesOf(target, 0, nil, 40, []int64{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(none) != 0 {
-		t.Errorf("an empty allow list returned %d paths, want none", len(none))
+	if len(none) != 10 {
+		t.Errorf("an empty deny list returned %d paths, want all 10", len(none))
 	}
 
 	// And the old entry point is unchanged for every existing caller.
@@ -115,5 +117,50 @@ func TestATraceroutePageDoesNotPublishADisabledProbe(t *testing.T) {
 	}
 	if len(same) != 10 {
 		t.Errorf("TraceroutesFrom returned %d paths, want the unrestricted 10", len(same))
+	}
+}
+
+// The case that broke two existing tests: an instance with no row in the
+// probes table at all. Every traceroute there belongs to the local probe,
+// which is deliberately absent from that table, so a filter built from the
+// enabled set hides the lot. A visitor must see them.
+func TestAnInstanceWithNoEnrolledProbeStillPublishesItsPaths(t *testing.T) {
+	store, err := OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	cat, _ := store.CreateCategory("c", "C", "C", true)
+	target, err := store.CreateTarget(&Target{CategoryID: cat, Slug: "x", Title: "X",
+		Host: "192.0.2.1", Proto: "icmp", IntervalS: 60, Packets: 5,
+		SpacingMs: 100, TimeoutMs: 1000, Public: true, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now().Unix()
+	// probe_id 0 is the instance's own local probe, and what a traceroute
+	// recorded before probes existed carries.
+	for _, pid := range []int64{0, 1} {
+		if _, err := store.mxw.Exec(
+			`INSERT INTO traceroutes(target_id,probe_id,ts,kind,reason,family,dest,reached,hops)
+			 VALUES(?,?,?,'reference','',4,'192.0.2.1',1,'[]')`, target, pid, now-pid-1); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	hidden, err := store.DisabledProbeIDs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hidden) != 0 {
+		t.Fatalf("a store with no probe row reports %v as disabled", hidden)
+	}
+	got, err := store.TraceroutesOf(target, 0, nil, 40, hidden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Errorf("a visitor sees %d paths on an instance with no enrolled probe, want 2", len(got))
 	}
 }
