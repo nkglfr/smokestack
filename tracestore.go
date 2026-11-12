@@ -614,7 +614,9 @@ func (a *API) asPathView(w http.ResponseWriter, r *http.Request) {
 
 	// The middle comes from the last healthy traceroute, or the last one of
 	// any kind if none is healthy yet.
-	probe := probeParam(r)
+	// 0 keeps today's meaning here: the reference path from whichever probe
+	// recorded one, when the caller named none.
+	probe := a.resolveProbe(r, 0)
 	trs, err := a.store.TraceroutesFrom(id, probe, []string{"reference"}, 1)
 	if err != nil || len(trs) == 0 {
 		trs, _ = a.store.TraceroutesFrom(id, probe, nil, 1)
@@ -678,6 +680,10 @@ func (a *API) TracerouteRoutes(mux *http.ServeMux) {
 // probeParam reads an optional ?probe=. Anything unparseable is no choice at
 // all rather than an error: a stale bookmark naming a probe that has since
 // gone should show the page, not a refusal.
+//
+// It does not say whether the caller may read that probe. Use resolveProbe,
+// which applies the same rule to a probe that exists but is not theirs to
+// read, so one function decides it for every endpoint that takes ?probe=.
 func probeParam(r *http.Request) int64 {
 	if v := r.URL.Query().Get("probe"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
@@ -685,6 +691,29 @@ func probeParam(r *http.Request) int64 {
 		}
 	}
 	return 0
+}
+
+// resolveProbe turns an optional ?probe= into the probe to read from, and
+// returns fallback when the parameter names no probe this caller may read.
+//
+// A probe the caller may not read is treated exactly as no parameter at all,
+// which is the rule probeParam already applied to a malformed one. Falling
+// back rather than refusing keeps a stale link working, and makes a request
+// for an unreadable id indistinguishable from one that named no probe: there
+// is nothing to learn by walking the ids that the public probes endpoint does
+// not already say.
+//
+// The fallback is the caller's because it is not the same everywhere. A
+// series and an availability figure are read from one probe, so theirs is the
+// instance's own. A traceroute list reads from every probe when none is
+// named, and 0 is what says so — handing it a probe id there would silently
+// narrow a page that has always shown the lot.
+func (a *API) resolveProbe(r *http.Request, fallback int64) int64 {
+	n := probeParam(r)
+	if n == 0 || !a.store.ProbeReadable(n, a.authenticated(r)) {
+		return fallback
+	}
+	return n
 }
 
 func (a *API) listTraceroutes(w http.ResponseWriter, r *http.Request, public bool) {
@@ -706,7 +735,7 @@ func (a *API) listTraceroutes(w http.ResponseWriter, r *http.Request, public boo
 	if k := r.URL.Query().Get("kind"); k != "" {
 		kinds = []string{k}
 	}
-	list, err := a.store.TraceroutesFrom(id, probeParam(r), kinds, limit)
+	list, err := a.store.TraceroutesFrom(id, a.resolveProbe(r, 0), kinds, limit)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return

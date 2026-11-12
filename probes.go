@@ -584,6 +584,27 @@ func (s *Store) SetProbeAddress(id int64, addr string) error {
 // A disabled probe resolves to nothing, which is what makes disabling it stop
 // the measurements rather than merely hide it. So does the local probe, which
 // has no token and must stay reachable through the socket alone.
+// ProbeReadable says whether a caller may read measurements attributed to
+// this probe.
+//
+// The public probes endpoint lists enabled probes only, so an operator who
+// disables a probe has said it is no longer part of what this instance shows.
+// The data endpoints took ?probe= on trust and would keep answering for it,
+// which made the listing's filter decorative. The back-office is a different
+// matter: a disabled probe's history is exactly what someone looks at to
+// decide whether to enable it again.
+func (s *Store) ProbeReadable(id int64, authenticated bool) bool {
+	if id <= 0 {
+		return false
+	}
+	var enabled int
+	err := s.cfg.QueryRow(`SELECT enabled FROM probes WHERE id=?`, id).Scan(&enabled)
+	if err != nil {
+		return false
+	}
+	return authenticated || enabled == 1
+}
+
 func (s *Store) ProbeByToken(tok string) (int64, bool) {
 	if len(tok) < 16 {
 		return 0, false

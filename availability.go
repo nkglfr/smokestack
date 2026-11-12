@@ -182,12 +182,7 @@ func (a *API) availability(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "availability is not published")
 		return
 	}
-	probeID := a.probeID
-	if v := q.Get("probe"); v != "" {
-		if p, err := strconv.ParseInt(v, 10, 64); err == nil {
-			probeID = p
-		}
-	}
+	probeID := a.resolveProbe(r, a.probeID)
 	shared, hasShare := a.shareGrant(r)
 	t, terr := a.store.TargetByID(targetID)
 	if terr != nil ||

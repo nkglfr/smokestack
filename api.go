@@ -356,12 +356,7 @@ func (a *API) series(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "missing target parameter")
 		return
 	}
-	probeID := a.probeID
-	if v := q.Get("probe"); v != "" {
-		if p, err := strconv.ParseInt(v, 10, 64); err == nil {
-			probeID = p
-		}
-	}
+	probeID := a.resolveProbe(r, a.probeID)
 	now := time.Now().Unix()
 	from := parseTime(q.Get("from"), now-3*3600)
 	to := parseTime(q.Get("to"), now)

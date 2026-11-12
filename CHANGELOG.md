@@ -4,6 +4,18 @@ Versions are published as signed releases; servers with automatic updates instal
 
 ## Unreleased
 
+- **Disabling a probe hid it from the listing and left its measurements readable by id.**
+
+  The public endpoint that says where an instance measures from lists enabled probes only, so turning a probe off is how an operator says it is no longer part of what the instance shows. The endpoints that serve the data took `?probe=` on trust: a graph, an availability figure, a traceroute list or an AS path would keep answering for a probe that had been turned off, and the ids are small integers. The listing's filter was decorative.
+
+  One function now decides it for every endpoint that takes the parameter. A probe the caller may not read is treated exactly as no parameter at all — the rule already applied to a malformed one — so a stale link still shows the page, and a request naming an id nobody may read is indistinguishable from one naming no probe at all. There is nothing to learn by walking the ids that the public listing does not already say.
+
+  The back-office is unaffected: a disabled probe's history is exactly what someone looks at to decide whether to turn it back on, so an authenticated caller still reads it. The selector on the public pages is built from the listing and never offered a disabled probe in the first place.
+
+  Two smaller things fell out of unifying it. A graph and an availability figure accepted `?probe=0` and `?probe=-3`, where the traceroute endpoints had always refused them. And the fallback is now the caller's rather than a constant, because it is not the same everywhere: a series reads from one probe, a traceroute list reads from every probe when none is named, and handing the second a probe id would have silently narrowed a page that has always shown the lot.
+
+  Low severity, and worth being plain about it: what was reachable is latency measurements for targets the operator had already made public, from a probe they had turned off. No private target, no credential, no setting. It is an inconsistency between two halves of the same feature rather than a way in.
+
 - **A short window over an old period said the target had never been measured.**
 
   The resolution to read was chosen from the length of the window and nothing else. Three hours is a window the raw samples serve, and the raw samples are kept 48 hours, so zooming into a few hours from three days ago read a table that no longer held them. The graph came back empty, the median, p95, jitter and uptime figures came back blank, and the page announced "No measurement yet for this target." on a target measured for weeks. The same happened to a window of up to four days more than a year old, and up to 45 days more than three years old.
