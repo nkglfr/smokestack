@@ -356,12 +356,7 @@ func (a *API) series(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 400, "missing target parameter")
 		return
 	}
-	probeID := a.probeID
-	if v := q.Get("probe"); v != "" {
-		if p, err := strconv.ParseInt(v, 10, 64); err == nil {
-			probeID = p
-		}
-	}
+	probeID, probePriv := a.resolveProbe(r, a.probeID)
 	now := time.Now().Unix()
 	from := parseTime(q.Get("from"), now-3*3600)
 	to := parseTime(q.Get("to"), now)
@@ -430,7 +425,9 @@ func (a *API) series(w http.ResponseWriter, r *http.Request) {
 	// share link, and this line used to announce its measurements as
 	// publicly cacheable with no Vary — so a shared cache could keep them
 	// and hand them to the next visitor who asked for the same URL.
-	if t.Public {
+	// probePriv: the answer used a privilege the next visitor does not have,
+	// so this URL's one shared cache entry must not be filled with it.
+	if t.Public && !probePriv {
 		w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", maxAge))
 	} else {
 		cachePrivate(w)

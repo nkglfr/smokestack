@@ -11,6 +11,19 @@ Versions are published as signed releases; servers with automatic updates instal
   Nothing in smokestack caused it and nothing in smokestack can work around it: the fix is the toolchain the binaries are compiled with. 0.8.3 and earlier are built with 1.26.10 and are affected. An instance behind a reverse proxy that terminates the connection itself is reached only through whatever that proxy forwards, which is a mitigation and not a fix.
 
   Both workflows now name the patch they compile with instead of taking whatever `setup-go` hands out. The runner image's manifest trails a security release by days — the audit run that caught this was handed a cached 1.26.10 while asking for the newest — so naming it is what puts the fix in the build on the day it exists. Bumping only the audit's own pin would have turned the job green over a binary still built on the affected patch, which is worse than the red that found it.
+- **Disabling a probe hid it from the listing and left its measurements readable by id.**
+
+  The public endpoint that says where an instance measures from lists enabled probes only, so turning a probe off is how an operator says it is no longer part of what the instance shows. The endpoints that serve the data took `?probe=` on trust: a graph, an availability figure, a traceroute list or an AS path would keep answering for a probe that had been turned off, and the ids are small integers. The listing's filter was decorative.
+
+  One function now decides it for every endpoint that takes the parameter. A probe the caller may not read is treated exactly as no parameter at all — the rule already applied to a malformed one — so a stale link still shows the page, and a request naming an id nobody may read is indistinguishable from one naming no probe at all. There is nothing to learn by walking the ids that the public listing does not already say.
+
+  The back-office is unaffected: a disabled probe's history is exactly what someone looks at to decide whether to turn it back on, so an authenticated caller still reads it. The selector on the public pages is built from the listing and never offered a disabled probe in the first place.
+
+  Two smaller things fell out of unifying it. A graph and an availability figure accepted `?probe=0` and `?probe=-3`, where the traceroute endpoints had always refused them. And the fallback is now the caller's rather than a constant, because it is not the same everywhere: a series reads from one probe, a traceroute list reads from every probe when none is named, and handing the second a probe id would have silently narrowed a page that has always shown the lot.
+
+  Threading the caller's authentication into that decision opened a second hole, and this entry would be dishonest without it. A series and an availability figure carry no `Vary`, deliberately: one shared cache entry per URL, because one entry per visitor is not a cache. Their cache directive was decided by the target's visibility alone, so an operator reading a disabled probe on a public target would have had that answer announced as publicly cacheable — and a CDN would have handed it to every visitor who asked for the same URL. Exactly the leak being closed, arriving by the back door. The resolution now reports when it used a privilege, and those two endpoints mark the response private when it did. The traceroute list already set `Vary: Cookie, Authorization` and needed nothing; the AS path view already varied by viewer.
+
+  Low severity, and worth being plain about it: what was reachable is latency measurements for targets the operator had already made public, from a probe they had turned off. No private target, no credential, no setting. It is an inconsistency between two halves of the same feature rather than a way in.
 
 - **A short window over an old period said the target had never been measured.**
 
