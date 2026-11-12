@@ -316,7 +316,10 @@ function draw(cv, s, o) {
   for (let i = 0; i < T.length; i++) { const a = (s.p05 || s.p25)[i], b = (s.p95 || s.p75)[i]; if (a != null) lo = Math.min(lo, a); if (b != null) hi = Math.max(hi, b); }
   const x0 = o.from != null ? o.from : T[0], x1 = o.to != null ? o.to : T[T.length - 1];
   const X = v => pl + (v - x0) / ((x1 - x0) || 1) * pw;
-  if (lo > hi) { if (!o.bare) { c.fillStyle = cssv("--ink-3"); c.font = "12px system-ui,sans-serif"; c.textAlign = "center"; c.fillText(t("home.no_data"), w / 2, h / 2); } return { X, x0, x1, pw, ph, w, h, pl, Y: () => 0 }; }
+  // Two kinds of nothing (#114). Buckets in the window, or any measurement
+  // anywhere, mean the target has been measured and this period simply holds
+  // none; only a target nothing ever measured gets the "not yet" wording.
+  if (lo > hi) { if (!o.bare) { const measured = s.ever_measured || T.length > 0; c.fillStyle = cssv("--ink-3"); c.font = "12px system-ui,sans-serif"; c.textAlign = "center"; c.fillText(t(measured ? "home.no_data_window" : "home.no_data"), w / 2, h / 2); } return { X, x0, x1, pw, ph, w, h, pl, Y: () => 0 }; }
   const mg = (hi - lo) * .12 || .05; lo = Math.max(0, lo - mg); hi += mg;
   const Y = v => pt + ph - (v - lo) / ((hi - lo) || 1) * ph, acc = o.accent, crit = cssv("--crit");
   if (!o.bare) {

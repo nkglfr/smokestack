@@ -106,11 +106,34 @@ func TestReadEndpointsTellSharedCachesTheTruth(t *testing.T) {
 			!strings.Contains(cc, "private") && !strings.Contains(cc, "no-cache"))
 	}
 
+	// Whether the answer depends on WHO ASKED, which is the question this
+	// whole test exists to answer. Comparing one visitor response to one
+	// operator response does not answer it: a body carrying the clock differs
+	// from itself between two calls, and /api/v1/instance reports uptime in
+	// whole seconds, so two successive requests either side of a second
+	// boundary looked exactly like a caller-dependent answer. That is what
+	// made this test fail at random on branches that had changed nothing near
+	// it.
+	//
+	// A caller-dependent difference is deterministic and survives every
+	// attempt; a clock-driven one does not. So the pair is taken again when
+	// it differs, and only a difference that persists counts. This cannot
+	// hide a real one, which is the property that matters.
+	callerDependent := func(c call) (bool, *httptest.ResponseRecorder, *httptest.ResponseRecorder) {
+		var anon, authed *httptest.ResponseRecorder
+		for attempt := 0; attempt < 3; attempt++ {
+			anon, authed = hit(c, false), hit(c, true)
+			if anon.Body.String() == authed.Body.String() {
+				return false, anon, authed
+			}
+		}
+		return true, anon, authed
+	}
+
 	for _, c := range calls {
-		anon, authed := hit(c, false), hit(c, true)
+		differs, anon, authed := callerDependent(c)
 		aCC, aVary := anon.Header().Get("Cache-Control"), anon.Header().Get("Vary")
 		uCC := authed.Header().Get("Cache-Control")
-		differs := anon.Body.String() != authed.Body.String()
 
 		// Vary is only owed on an answer a cache may actually store. Where
 		// the visitor's answer is no-store there is nothing to vary on, and

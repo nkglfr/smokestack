@@ -182,12 +182,7 @@ func (a *API) availability(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, 404, "availability is not published")
 		return
 	}
-	probeID := a.probeID
-	if v := q.Get("probe"); v != "" {
-		if p, err := strconv.ParseInt(v, 10, 64); err == nil {
-			probeID = p
-		}
-	}
+	probeID, probePriv := a.resolveProbe(r, a.probeID)
 	shared, hasShare := a.shareGrant(r)
 	t, terr := a.store.TargetByID(targetID)
 	if terr != nil ||
@@ -200,7 +195,12 @@ func (a *API) availability(w http.ResponseWriter, r *http.Request) {
 	// to see it, so the target's visibility decides and no Vary is needed.
 	// This endpoint set no directive at all, which left a private target's
 	// availability cacheable by heuristic.
-	if t.Public {
+	//
+	// Unless ?probe= resolved through a privilege, which is the one case
+	// where the figure does not read the same for everyone. With no Vary
+	// here, this URL has one shared cache entry, and the authenticated
+	// answer must not be what fills it.
+	if t.Public && !probePriv {
 		w.Header().Set("Cache-Control", "public, max-age=60")
 	} else {
 		cachePrivate(w)

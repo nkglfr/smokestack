@@ -2,6 +2,49 @@
 
 Versions are published as signed releases; servers with automatic updates install the newest one directly, whatever versions came in between. The release workflow reads a section straight out of this file and publishes it as the release notes, so how an entry is written matters — see [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
+## Unreleased
+
+- **`update` and `rollback` left a probe-only machine running the old binary.**
+
+  They staged and installed the new release correctly, then looked for a `smokestack` unit to restart. A machine installed with `--probe-only` deliberately has no such unit — the installer removes it and leaves `smokestack-probe` — so the command ended on "restart the service to run the new version", naming no service, on a machine whose only service it had just declined to name. The probe kept measuring with the old binary until someone worked it out.
+
+  Both units are now tried, and the message names what it restarted or what to restart. The service is asked for first because on a full install the probe unit is `PartOf=smokestack.service`, so restarting the service restarts the probe with it; the second name is only reached on a machine that has no service at all. Reported in #111.
+
+## 0.8.4
+
+**Install this one.** It is built with the Go patch that fixes a crash a stranger can trigger in the HTTP server every instance runs, and every release up to 0.8.3 is built without it. The rest of this version is two things that were telling you something untrue: a graph that announced a target had never been measured when it had, and a probe you had turned off still answering for itself.
+
+- **The published binaries are built with the Go patch that fixes GO-2026-6859.**
+
+  The Monday audit's whole purpose is to say that a released version became vulnerable without a line of it changing, and this is it saying so. `GO-2026-6859` is an HTTP/1 server crash in `net/http`, from a race on the headers while a request body is being limited. It is reachable from this code — a public status page is an HTTP/1 server that strangers send requests to — and it is fixed in Go 1.26.11.
+
+  Nothing in smokestack caused it and nothing in smokestack can work around it: the fix is the toolchain the binaries are compiled with. 0.8.3 and earlier are built with 1.26.10 and are affected. An instance behind a reverse proxy that terminates the connection itself is reached only through whatever that proxy forwards, which is a mitigation and not a fix.
+
+  Both workflows now name the patch they compile with instead of taking whatever `setup-go` hands out. The runner image's manifest trails a security release by days — the audit run that caught this was handed a cached 1.26.10 while asking for the newest — so naming it is what puts the fix in the build on the day it exists. Bumping only the audit's own pin would have turned the job green over a binary still built on the affected patch, which is worse than the red that found it.
+- **Disabling a probe hid it from the listing and left its measurements readable by id.**
+
+  The public endpoint that says where an instance measures from lists enabled probes only, so turning a probe off is how an operator says it is no longer part of what the instance shows. The endpoints that serve the data took `?probe=` on trust: a graph, an availability figure, a traceroute list or an AS path would keep answering for a probe that had been turned off, and the ids are small integers. The listing's filter was decorative.
+
+  One function now decides it for every endpoint that takes the parameter. A probe the caller may not read is treated exactly as no parameter at all — the rule already applied to a malformed one — so a stale link still shows the page, and a request naming an id nobody may read is indistinguishable from one naming no probe at all. There is nothing to learn by walking the ids that the public listing does not already say.
+
+  The back-office is unaffected: a disabled probe's history is exactly what someone looks at to decide whether to turn it back on, so an authenticated caller still reads it. The selector on the public pages is built from the listing and never offered a disabled probe in the first place.
+
+  Two smaller things fell out of unifying it. A graph and an availability figure accepted `?probe=0` and `?probe=-3`, where the traceroute endpoints had always refused them. And the fallback is now the caller's rather than a constant, because it is not the same everywhere: a series reads from one probe, a traceroute list reads from every probe when none is named, and handing the second a probe id would have silently narrowed a page that has always shown the lot.
+
+  Threading the caller's authentication into that decision opened a second hole, and this entry would be dishonest without it. A series and an availability figure carry no `Vary`, deliberately: one shared cache entry per URL, because one entry per visitor is not a cache. Their cache directive was decided by the target's visibility alone, so an operator reading a disabled probe on a public target would have had that answer announced as publicly cacheable — and a CDN would have handed it to every visitor who asked for the same URL. Exactly the leak being closed, arriving by the back door. The resolution now reports when it used a privilege, and those two endpoints mark the response private when it did. The traceroute list already set `Vary: Cookie, Authorization` and needed nothing; the AS path view already varied by viewer.
+
+  Low severity, and worth being plain about it: what was reachable is latency measurements for targets the operator had already made public, from a probe they had turned off. No private target, no credential, no setting. It is an inconsistency between two halves of the same feature rather than a way in.
+
+- **A short window over an old period said the target had never been measured.**
+
+  The resolution to read was chosen from the length of the window and nothing else. Three hours is a window the raw samples serve, and the raw samples are kept 48 hours, so zooming into a few hours from three days ago read a table that no longer held them. The graph came back empty, the median, p95, jitter and uptime figures came back blank, and the page announced "No measurement yet for this target." on a target measured for weeks. The same happened to a window of up to four days more than a year old, and up to 45 days more than three years old.
+
+  The choice now accounts for how far back the window reaches, not only how long it is: the finest resolution that still holds the start of the window. A window ending now reads exactly what it read before. One reaching further back than its resolution is kept moves to the next, so three hours from three days ago is drawn from the 1-minute buckets instead of nothing.
+
+  A target with its own retention can leave that resolution empty while a coarser one still holds the period, which no amount of arithmetic on the clock can know. When the chosen table comes back empty the next one is read, so the view falls back to whatever the instance actually kept.
+
+  And the empty state no longer lies. A target nothing has ever measured still reads "No measurement yet for this target."; a target measured outside the window being looked at now reads "No measurement for this period." The first was being shown for both, which turned a question about a date range into a false statement about the target. Reported in #114.
+
 ## 0.8.3
 
 **A target does not stop being judged because its probe went away.** 0.8.0 gave a target a probe that decides it and 0.8.2 stopped a silent probe from being read as good news. Between the two, a target whose probe disappeared kept its incident open and was judged by nobody — honest, and useless when another probe was standing right there able to judge it.

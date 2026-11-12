@@ -83,6 +83,7 @@
     "hosted_by": "Mesuré depuis",
     "see_network": "À propos de ce réseau",
     "no_data": "Aucune mesure pour l'instant sur cette cible.",
+    "no_data_window": "Aucune mesure sur cette période.",
     "refresh": "Actualisé toutes les 30 secondes",
     "once": "Cible unique",
     "once_hint": "N'afficher chaque cible qu'une seule fois : une cible en défaut reste dans les défauts et disparaît des cibles critiques et de sa catégorie."
