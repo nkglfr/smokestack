@@ -21,6 +21,7 @@ probes a few hundred targets.
 12. [Container image (tests)](#12-container-image-tests)
 13. [Federation: what protects what](#13-federation-what-protects-what)
 14. [Probes on other machines](#14-probes-on-other-machines)
+15. [Retention per resolution](#15-retention-per-resolution)
 
 ---
 
@@ -924,8 +925,9 @@ measured every 30 minutes is handled correctly: the "current" window used for
 its status follows its interval instead of being stuck at 15 minutes.
 
 The **retention** can be set per target, in days, in *Keep measurements for*.
-Left at 0, the instance tiers apply: raw passes 48 h, one-minute buckets one
-year, five-minute buckets three years, hourly and daily buckets without
+Left at 0, the instance tiers apply. Those are a setting of their own, in
+*Instance → Storage*, and their defaults are raw passes 48 h, one-minute
+buckets one year, five-minute buckets three years, hourly and daily without
 limit. A test target has no business keeping ten years of daily aggregates,
 and only the operator can decide that. The purge runs every six hours and
 covers the raw passes, every rollup tier and the traceroutes of that target.
@@ -1576,3 +1578,85 @@ release tree on its own cadence, so it stays where it is rather than
 restarting itself to chase a number it cannot reach. A probe one version
 behind the instance keeps working; the probe protocol does not change between
 patch releases.
+
+---
+
+## 15. Retention per resolution
+
+Every measurement is stored five times over, at falling resolution: one row
+per pass, then per minute, per five minutes, per hour, per day. How long each
+of those is kept is an instance setting, in *Instance → Storage*, or from the
+command line.
+
+```sh
+smokestack retention
+# samples=2 days  roll_1m=365 days  roll_5m=1095 days  roll_1h=unlimited  roll_1d=unlimited
+```
+
+The defaults are what the instance has always done, so an upgrade changes
+nothing until you change it.
+
+### Why you would change it
+
+A single probe writes one row per target per minute. Fifty probes write
+fifty, and at twelve hundred targets the 1-minute tier is most of the
+database — the great majority of the rows after a year. A year of history
+from every vantage point is affordable at one point per hour and not at one
+point per minute.
+
+So the setting exists to be asymmetric. Keep the hour and the day for ever,
+and keep the minute for a week:
+
+```sh
+smokestack retention -samples 2 -roll-1m 7 -roll-5m 90
+```
+
+It also goes the other way. An instance with the disk for it can keep the
+minute for two years, which the compiled-in year used to forbid.
+
+### What it refuses, and why
+
+**A tier may not be kept for less time than the window that rolls it up.**
+The 1-minute tier is rebuilt from the raw samples over the last 2 hours, the
+5-minute tier from the minute over 6 hours, the hour from the five minutes
+over 3 days, the day from the hour over 3 days. A tier purged before it has
+been rolled up loses measurements rather than merely shortening history, so
+the floors are one day, one day, three days, three days and one day.
+
+**A coarser tier may not be kept for less time than a finer one.** Not
+because anything would vanish — a read only ever falls back to a coarser
+resolution, never to a finer one — but because it inverts the point of the
+cascade. Every row in the minute tier stands for sixty raw ones, so keeping
+the expensive detail longer than the cheap summary is almost always a
+transposed pair of numbers, and it costs disk for months before anyone
+notices.
+
+A value that breaks either rule is refused and the previous one kept. There
+is no half-applied retention, because the damage would be done by the next
+purge rather than by the save.
+
+### Two things are deleted, not one
+
+Shortening a tier deletes its old rows at the next purge, within six hours.
+That cannot be undone.
+
+It also takes away the only source for rebuilding the tier above it over that
+period. `RollupBackfill` is what recovers the long views after a stop, or
+after an upgrade from a version where the cascade leaked — it rebuilds a
+coarse tier from the fine one. With the minute kept 7 days, the 5-minute tier
+can never again be rebuilt beyond 7 days, whatever happens later.
+
+The back-office says both before saving, and counts the rows. The command
+line prints the same and saves nothing without `-apply`:
+
+```sh
+smokestack retention -roll-1m 7            # shows what it would delete
+smokestack retention -roll-1m 7 -apply     # deletes it at the next purge
+```
+
+### The per-target setting is unchanged
+
+*Keep measurements for*, on a target or a category, still cuts every tier for
+that target at the same date, and still applies on top of these. A target
+asking for 30 days keeps 30 days at every resolution, whatever the instance
+keeps.

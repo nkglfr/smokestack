@@ -4,6 +4,17 @@ Versions are published as signed releases; servers with automatic updates instal
 
 ## Unreleased
 
+- **How long each resolution is kept is now an instance setting.**
+
+  Every measurement is stored five times over at falling resolution, and how long each of those was kept was compiled in: raw passes 48 hours, one-minute buckets a year, five-minute buckets three years, hourly and daily for ever. The only setting near it was *Keep measurements for* on a target, which cuts every resolution at the same date. So an instance could not drop the minute while keeping the hour, and an instance with the disk for it could not keep the minute beyond a year.
+
+  That stopped being a detail when an instance started measuring from several places. One probe writes one row per target per minute; fifty probes write fifty. At twelve hundred targets the one-minute tier is the great majority of the rows after a year, and a year of history from every vantage point is affordable at one point per hour and not at one per minute. The setting exists to be asymmetric — keep the hour and the day for ever, keep the minute for a week.
+
+  The defaults are exactly what the cascade did, so an upgrade deletes nothing until you change something. It is in *Instance → Storage*, and on the command line as `smokestack retention`.
+
+  Two rules are enforced rather than advised, because breaking either loses measurements instead of history. A tier may not be kept for less than the window that rolls it up: the minute is rebuilt from the raw samples over two hours, the hour from the five minutes over three days, and a tier purged before it has been rolled up is gone rather than coarse. And a coarser tier may not be kept for less than a finer one, which inverts the point of the cascade: every row in the minute tier stands for sixty raw ones, so keeping the expensive detail longer than the cheap summary is almost always a transposed pair of numbers, and it costs disk for months before anyone notices. A value breaking either is refused and the previous one kept — there is no half-applied retention, since the damage would arrive with the next purge rather than with the save.
+
+  **Shortening a tier deletes two things, and the second is the one nobody expects.** The old rows go at the next purge, within six hours, and that cannot be undone. It also removes the only source for rebuilding the tier above it over that period: with the minute kept seven days, the five-minute tier can never again be recovered beyond seven days, whatever happens later. That is the mechanism that brings the long views back after a stop. So both are stated before anything is saved — the back-office counts the rows and names the tier that stops being recoverable, and the command line prints the same and saves nothing without `-apply`. Reported in #115.
 - **A disabled probe's traceroutes were still published, with its id on them.**
 
   `/api/v1/probes` lists enabled probes only, so turning a probe off is how an operator says it is no longer part of what the instance shows. The traceroute list answered from every probe when none was named, and every entry carries its `probe_id`, so one endpoint published the existence of a probe the other deliberately hid — the same inconsistency as the one fixed in 0.8.4 for `?probe=`, one layer down.

@@ -33,6 +33,8 @@ Usage:
   smokestack probe token -slug S                issue or rotate its token (shown once)
   smokestack probe revoke -slug S               withdraw its token
   smokestack languages [-default CODE] [-names]  list languages, set the public default
+  smokestack retention [-samples D -roll-1m D -roll-5m D -roll-1h D -roll-1d D] [-apply]
+                                                show or change retention per resolution (0 = unlimited)
   smokestack version                            print version
   smokestack selftest                           check the binary is sound
   smokestack user add -email E -name N [-role master|admin|editor|viewer] [-password P]
@@ -60,6 +62,8 @@ func runCLI(args []string) bool {
 		err = cmdSelftest()
 	case "languages":
 		err = cmdLanguages(args[1:])
+	case "retention":
+		err = cmdRetention(args[1:])
 	case "probe":
 		// Bare "probe", and "probe -config F", still run the isolated probe:
 		// that is what every existing unit file invokes. A bare word after it
