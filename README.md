@@ -162,7 +162,8 @@ admin account. It measures nothing until you assign it targets:
 - **The right resolution is picked automatically** from the time window you
   look at: raw samples for a few hours, daily buckets for years.
 - **Disk usage is bounded.** Raw data is archived hourly to S3 or kept
-  locally with a quota; long-term aggregates are never evicted.
+  locally with a quota. How long each resolution is kept is an instance
+  setting, and the defaults keep the hourly and daily aggregates for ever.
 
 Benchmark on one saturated CPU core, loopback targets (true RTT ≈ 0.03 ms):
 under web load the probe measures **0.016 ms median, 0.041 ms worst**,

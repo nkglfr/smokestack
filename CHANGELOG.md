@@ -2,6 +2,20 @@
 
 Versions are published as signed releases; servers with automatic updates install the newest one directly, whatever versions came in between. The release workflow reads a section straight out of this file and publishes it as the release notes, so how an entry is written matters — see [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
+## Unreleased
+
+- **How long each resolution is kept is now an instance setting.**
+
+  Every measurement is stored five times over at falling resolution, and how long each of those was kept was compiled in: raw passes 48 hours, one-minute buckets a year, five-minute buckets three years, hourly and daily for ever. The only setting near it was *Keep measurements for* on a target, which cuts every resolution at the same date. So an instance could not drop the minute while keeping the hour, and an instance with the disk for it could not keep the minute beyond a year.
+
+  That stopped being a detail when an instance started measuring from several places. One probe writes one row per target per minute; fifty probes write fifty. At twelve hundred targets the one-minute tier is the great majority of the rows after a year, and a year of history from every vantage point is affordable at one point per hour and not at one per minute. The setting exists to be asymmetric — keep the hour and the day for ever, keep the minute for a week.
+
+  The defaults are exactly what the cascade did, so an upgrade deletes nothing until you change something. It is in *Instance → Storage*, and on the command line as `smokestack retention`.
+
+  Two rules are enforced rather than advised, because breaking either loses measurements instead of history. A tier may not be kept for less than the window that rolls it up: the minute is rebuilt from the raw samples over two hours, the hour from the five minutes over three days, and a tier purged before it has been rolled up is gone rather than coarse. And a coarser tier may not be kept for less than a finer one, which would leave last week detailed, last month empty and last year detailed again. A value breaking either is refused and the previous one kept — there is no half-applied retention, since the damage would arrive with the next purge rather than with the save.
+
+  **Shortening a tier deletes two things, and the second is the one nobody expects.** The old rows go at the next purge, within six hours, and that cannot be undone. It also removes the only source for rebuilding the tier above it over that period: with the minute kept seven days, the five-minute tier can never again be recovered beyond seven days, whatever happens later. That is the mechanism that brings the long views back after a stop. So both are stated before anything is saved — the back-office counts the rows and names the tier that stops being recoverable, and the command line prints the same and saves nothing without `-apply`. Reported in #115.
+
 ## 0.8.4
 
 **Install this one.** It is built with the Go patch that fixes a crash a stranger can trigger in the HTTP server every instance runs, and every release up to 0.8.3 is built without it. The rest of this version is two things that were telling you something untrue: a graph that announced a target had never been measured when it had, and a probe you had turned off still answering for itself.

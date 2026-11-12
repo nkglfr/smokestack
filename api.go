@@ -119,6 +119,9 @@ func (a *API) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/admin/channels", a.need(RoleAdmin, a.channelsGet))
 	mux.HandleFunc("PUT /api/v1/admin/channels", a.need(RoleAdmin, a.channelsPut))
 	mux.HandleFunc("POST /api/v1/admin/channels/test", a.need(RoleAdmin, a.channelsTest))
+	mux.HandleFunc("GET /api/v1/admin/retention", a.need(RoleAdmin, a.retentionGet))
+	mux.HandleFunc("POST /api/v1/admin/retention/preview", a.need(RoleAdmin, a.retentionPreview))
+	mux.HandleFunc("PUT /api/v1/admin/retention", a.need(RoleAdmin, a.retentionPut))
 	mux.HandleFunc("GET /api/v1/admin/alerts", a.need(RoleAdmin, a.alertsGet))
 	mux.HandleFunc("PUT /api/v1/admin/alerts", a.need(RoleAdmin, a.alertsPut))
 	// Enrolling a probe hands out a credential that may write into the

@@ -1892,12 +1892,19 @@ func (s *Store) oldestBucket(table string) (int64, bool) {
 
 func (s *Store) Purge(now int64) error {
 	s.PurgeTraceroutes(now)
-	for _, g := range cascade {
-		if g.keep == 0 {
-			continue
+	// Per resolution, from the instance setting rather than from the
+	// cascade's compiled `keep` (#115). The setting defaults to exactly those
+	// values, so an instance that has never touched it purges what it always
+	// purged; cascade.keep stays as the documentation of that default and is
+	// no longer what decides.
+	days := s.RetentionConfig().Days()
+	for i, g := range cascade {
+		if days[i] == 0 {
+			continue // unlimited
 		}
 		if _, err := s.mxw.Exec(fmt.Sprintf(
-			`DELETE FROM %s WHERE bucket < ?`, g.table), now-g.keep); err != nil {
+			`DELETE FROM %s WHERE bucket < ?`, g.table),
+			now-int64(days[i])*86400); err != nil {
 			return err
 		}
 	}

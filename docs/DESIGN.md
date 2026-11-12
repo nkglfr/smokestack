@@ -118,8 +118,10 @@ window; the resolution follows. The optional `points` parameter merges
 consecutive buckets so that a one-year navigator stays light, with exact
 percentiles.
 
-Retention: raw samples 48 h, 1-minute buckets 1 year, 5-minute buckets 3
-years, hourly and daily buckets forever.
+Default retention, settable per tier by the operator: raw samples 48 h,
+1-minute buckets 1 year, 5-minute buckets 3 years, hourly and daily buckets
+forever. A tier may not be kept for less than the window that rolls it up,
+nor for less than the tier below it.
 
 ## 5. Storage
 
@@ -142,7 +144,9 @@ Three archive modes, changeable at runtime from the back-office:
 
 Rotation evicts chunks already on S3 first (they remain retrievable), then the
 oldest ones, until usage is back below the low watermark. Hourly and daily
-aggregates are never evicted: they weigh a few hundred megabytes for ten years.
+aggregates are kept for ever by default: they weigh a few hundred megabytes
+for ten years. An operator with fifty probes can shorten the fine tiers, which
+is where the rows actually are.
 
 The S3 upload is signed with SigV4 by hand (about 70 lines) rather than
 through an SDK, which keeps the dependency tree to a single module. It works
