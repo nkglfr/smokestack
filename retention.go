@@ -106,10 +106,13 @@ func (c RetentionConfig) Validate() error {
 				retentionTiers[i], v, retentionFloors[i])
 		}
 	}
-	// A coarser tier kept for less time than a finer one is a hole in the
-	// middle of the history: the fine tier answers recent windows, the coarse
-	// one answers old ones, and an old window would find nothing while a
-	// recent one found plenty.
+	// A coarser tier kept for less time than a finer one inverts the point of
+	// the cascade. It is not a hole — tierFrom only ever walks coarser, so
+	// nothing vanishes from the display — it is paying more to keep the
+	// expensive detail longer than the cheap summary. Every row in roll_1m
+	// stands for sixty in samples, so this is almost always a transposed
+	// pair of numbers, and refusing it costs an operator one error message
+	// where accepting it costs them disk for months.
 	for i := 1; i < len(d); i++ {
 		if effectiveDays(d[i]) < effectiveDays(d[i-1]) {
 			return fmt.Errorf(

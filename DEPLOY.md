@@ -1620,10 +1620,13 @@ over 3 days, the day from the hour over 3 days. A tier purged before it has
 been rolled up loses measurements rather than merely shortening history, so
 the floors are one day, one day, three days, three days and one day.
 
-**A coarser tier may not be kept for less time than a finer one.** The fine
-tier answers recent windows and the coarse one answers old windows, so the
-reverse would leave a hole in the middle: last week full of detail, last
-month empty, last year full again.
+**A coarser tier may not be kept for less time than a finer one.** Not
+because anything would vanish — a read only ever falls back to a coarser
+resolution, never to a finer one — but because it inverts the point of the
+cascade. Every row in the minute tier stands for sixty raw ones, so keeping
+the expensive detail longer than the cheap summary is almost always a
+transposed pair of numbers, and it costs disk for months before anyone
+notices.
 
 A value that breaks either rule is refused and the previous one kept. There
 is no half-applied retention, because the damage would be done by the next
