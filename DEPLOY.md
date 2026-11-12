@@ -1557,18 +1557,21 @@ instance restarted under it loses nothing either.
 
 ### Upgrading a probe machine
 
-The same command as anywhere else, with one difference at the end:
+The same command as anywhere else:
 
 ```sh
 sudo smokestack update smokestack-X.Y.Z-linux-amd64.zip
-sudo systemctl restart smokestack-probe
 ```
 
-A probe-only machine runs `smokestack-probe` and no `smokestack` unit, so
-`update` verifies the package, installs it and then tells you to restart the
-service rather than restarting it itself. The restart above is what puts the
-new binary to work; until you run it, the probe keeps measuring with the old
-one, which is harmless but not what you asked for.
+It restarts `smokestack-probe` itself and says so. Before 0.8.5 it looked for
+a `smokestack` unit, which a probe-only machine deliberately does not have,
+and printed "restart the service" without naming one — so the probe kept
+measuring with the old binary until someone worked out which service was
+meant. On a version earlier than that, finish the upgrade by hand:
+
+```sh
+sudo systemctl restart smokestack-probe
+```
 
 A remote probe does **not** follow the instance's version. It has its own
 release tree on its own cadence, so it stays where it is rather than

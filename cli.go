@@ -184,16 +184,38 @@ func cmdUser(args []string) error {
 	return nil
 }
 
+// restartService puts a freshly installed binary to work.
+//
+// It used to look only at "smokestack", which a machine installed with
+// --probe-only deliberately does not have: install.sh removes that unit and
+// leaves "smokestack-probe" alone. So update and rollback staged the new
+// binary correctly there and then printed "restart the service", naming no
+// service, on a machine whose only service they had just declined to name
+// (#111). The probe kept measuring with the old binary until someone worked
+// it out.
+//
+// Both units are tried, in this order, because a full install has
+// smokestack-probe as PartOf=smokestack.service: restarting the service
+// restarts the probe with it, so asking for the service first does the whole
+// job in one call and the second name is only reached on a probe-only
+// machine. The message names what it restarted, or what to restart, since
+// "the service" is the one thing it cannot assume.
 func restartService() {
 	if _, err := exec.LookPath("systemctl"); err == nil {
-		if exec.Command("systemctl", "is-active", "--quiet", "smokestack").Run() == nil {
-			if exec.Command("systemctl", "restart", "smokestack").Run() == nil {
-				fmt.Println("service restarted")
+		for _, unit := range []string{"smokestack", "smokestack-probe"} {
+			if exec.Command("systemctl", "is-active", "--quiet", unit).Run() != nil {
+				continue
+			}
+			if exec.Command("systemctl", "restart", unit).Run() == nil {
+				fmt.Printf("%s restarted\n", unit)
 				return
 			}
+			fmt.Printf("%s could not be restarted: run `systemctl restart %s`\n", unit, unit)
+			return
 		}
 	}
-	fmt.Println("restart the service to run the new version")
+	fmt.Println("restart the service to run the new version " +
+		"(`systemctl restart smokestack`, or `smokestack-probe` on a probe-only machine)")
 }
 
 func cmdUpdate(args []string) error {
