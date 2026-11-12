@@ -12,6 +12,17 @@ name: release
 # ways then run exactly the same build, so nothing can drift between them.
 #
 # Instances with automatic updates enabled pick the release up within hours.
+# Every job here compiles with the patch named in GOTOOLCHAIN below, not with
+# whatever setup-go hands out. setup-go reads a manifest the runner image
+# trails by days after a security release, and the point of naming it is that
+# a standard library fix should reach what we build on the day it exists, not
+# when the image catches up. The Go toolchain fetches a named patch itself,
+# which is the mechanism the audit has always used (AUDIT_TOOLCHAIN in the
+# Makefile); this makes the build and the audit agree on one version instead
+# of judging a different binary from the one that ships.
+env:
+  GOTOOLCHAIN: go1.26.11
+
 on:
   push:
     tags: ["v*"]

@@ -4,6 +4,14 @@ Versions are published as signed releases; servers with automatic updates instal
 
 ## Unreleased
 
+- **The published binaries are built with the Go patch that fixes GO-2026-6859.**
+
+  The Monday audit's whole purpose is to say that a released version became vulnerable without a line of it changing, and this is it saying so. `GO-2026-6859` is an HTTP/1 server crash in `net/http`, from a race on the headers while a request body is being limited. It is reachable from this code — a public status page is an HTTP/1 server that strangers send requests to — and it is fixed in Go 1.26.11.
+
+  Nothing in smokestack caused it and nothing in smokestack can work around it: the fix is the toolchain the binaries are compiled with. 0.8.3 and earlier are built with 1.26.10 and are affected. An instance behind a reverse proxy that terminates the connection itself is reached only through whatever that proxy forwards, which is a mitigation and not a fix.
+
+  Both workflows now name the patch they compile with instead of taking whatever `setup-go` hands out. The runner image's manifest trails a security release by days — the audit run that caught this was handed a cached 1.26.10 while asking for the newest — so naming it is what puts the fix in the build on the day it exists. Bumping only the audit's own pin would have turned the job green over a binary still built on the affected patch, which is worse than the red that found it.
+
 - **A short window over an old period said the target had never been measured.**
 
   The resolution to read was chosen from the length of the window and nothing else. Three hours is a window the raw samples serve, and the raw samples are kept 48 hours, so zooming into a few hours from three days ago read a table that no longer held them. The graph came back empty, the median, p95, jitter and uptime figures came back blank, and the page announced "No measurement yet for this target." on a target measured for weeks. The same happened to a window of up to four days more than a year old, and up to 45 days more than three years old.
