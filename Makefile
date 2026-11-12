@@ -47,7 +47,15 @@ STATICCHECK_VERSION ?= v0.8.1
 # carries the fix. That gap between what ships and what the audit judges is
 # the whole reason this is a named version rather than whatever `go` the
 # machine has.
-AUDIT_TOOLCHAIN ?= go1.26.10
+#
+# 1.26.10 -> 1.26.11 on GO-2026-6859, an HTTP/1 server crash from a
+# MaxBytesReader header race in net/http. This one is not a false alarm and
+# the gap ran the other way: the runner resolved "1.26" to a cached 1.26.10,
+# so what ships was the affected version while only the audit would have been
+# judged on a newer one. Bumping this alone would have turned the job green
+# over a vulnerable build, which is worse than the red that found it. So the
+# workflows now name the patch too — see the note in ci.yml.
+AUDIT_TOOLCHAIN ?= go1.26.11
 
 LDFLAGS := -s -w -X main.Version=$(VERSION) -X main.BuildDate=$(DATE) \
            -X main.OfficialURL=$(OFFICIAL_URL) -X main.RepoURL=$(REPO_URL)

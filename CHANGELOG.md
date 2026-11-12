@@ -4,6 +4,13 @@ Versions are published as signed releases; servers with automatic updates instal
 
 ## Unreleased
 
+- **The published binaries are built with the Go patch that fixes GO-2026-6859.**
+
+  The Monday audit's whole purpose is to say that a released version became vulnerable without a line of it changing, and this is it saying so. `GO-2026-6859` is an HTTP/1 server crash in `net/http`, from a race on the headers while a request body is being limited. It is reachable from this code — a public status page is an HTTP/1 server that strangers send requests to — and it is fixed in Go 1.26.11.
+
+  Nothing in smokestack caused it and nothing in smokestack can work around it: the fix is the toolchain the binaries are compiled with. 0.8.3 and earlier are built with 1.26.10 and are affected. An instance behind a reverse proxy that terminates the connection itself is reached only through whatever that proxy forwards, which is a mitigation and not a fix.
+
+  Both workflows now name the patch they compile with instead of taking whatever `setup-go` hands out. The runner image's manifest trails a security release by days — the audit run that caught this was handed a cached 1.26.10 while asking for the newest — so naming it is what puts the fix in the build on the day it exists. Bumping only the audit's own pin would have turned the job green over a binary still built on the affected patch, which is worse than the red that found it.
 - **Disabling a probe hid it from the listing and left its measurements readable by id.**
 
   The public endpoint that says where an instance measures from lists enabled probes only, so turning a probe off is how an operator says it is no longer part of what the instance shows. The endpoints that serve the data took `?probe=` on trust: a graph, an availability figure, a traceroute list or an AS path would keep answering for a probe that had been turned off, and the ids are small integers. The listing's filter was decorative.
