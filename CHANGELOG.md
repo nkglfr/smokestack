@@ -14,6 +14,8 @@ Versions are published as signed releases; servers with automatic updates instal
 
   Two smaller things fell out of unifying it. A graph and an availability figure accepted `?probe=0` and `?probe=-3`, where the traceroute endpoints had always refused them. And the fallback is now the caller's rather than a constant, because it is not the same everywhere: a series reads from one probe, a traceroute list reads from every probe when none is named, and handing the second a probe id would have silently narrowed a page that has always shown the lot.
 
+  Threading the caller's authentication into that decision opened a second hole, and this entry would be dishonest without it. A series and an availability figure carry no `Vary`, deliberately: one shared cache entry per URL, because one entry per visitor is not a cache. Their cache directive was decided by the target's visibility alone, so an operator reading a disabled probe on a public target would have had that answer announced as publicly cacheable — and a CDN would have handed it to every visitor who asked for the same URL. Exactly the leak being closed, arriving by the back door. The resolution now reports when it used a privilege, and those two endpoints mark the response private when it did. The traceroute list already set `Vary: Cookie, Authorization` and needed nothing; the AS path view already varied by viewer.
+
   Low severity, and worth being plain about it: what was reachable is latency measurements for targets the operator had already made public, from a probe they had turned off. No private target, no credential, no setting. It is an inconsistency between two halves of the same feature rather than a way in.
 
 - **A short window over an old period said the target had never been measured.**

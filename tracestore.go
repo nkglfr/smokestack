@@ -616,7 +616,7 @@ func (a *API) asPathView(w http.ResponseWriter, r *http.Request) {
 	// any kind if none is healthy yet.
 	// 0 keeps today's meaning here: the reference path from whichever probe
 	// recorded one, when the caller named none.
-	probe := a.resolveProbe(r, 0)
+	probe, _ := a.resolveProbe(r, 0)
 	trs, err := a.store.TraceroutesFrom(id, probe, []string{"reference"}, 1)
 	if err != nil || len(trs) == 0 {
 		trs, _ = a.store.TraceroutesFrom(id, probe, nil, 1)
@@ -708,12 +708,26 @@ func probeParam(r *http.Request) int64 {
 // instance's own. A traceroute list reads from every probe when none is
 // named, and 0 is what says so — handing it a probe id there would silently
 // narrow a page that has always shown the lot.
-func (a *API) resolveProbe(r *http.Request, fallback int64) int64 {
+//
+// The second return says the answer used a privilege an anonymous caller does
+// not have, which is to say that the same URL would answer differently to the
+// next visitor. A caller that may cache its response publicly must not do so
+// when this is true: the headers here carry no Vary, deliberately, so one
+// shared cache entry per URL is all there is, and storing the authenticated
+// answer in it would hand a disabled probe's measurements to everyone. That
+// is the leak this function exists to close, arriving by the back door.
+func (a *API) resolveProbe(r *http.Request, fallback int64) (int64, bool) {
 	n := probeParam(r)
-	if n == 0 || !a.store.ProbeReadable(n, a.authenticated(r)) {
-		return fallback
+	if n == 0 {
+		return fallback, false
 	}
-	return n
+	if a.store.ProbeReadable(n, false) {
+		return n, false
+	}
+	if a.store.ProbeReadable(n, true) && a.authenticated(r) {
+		return n, true
+	}
+	return fallback, false
 }
 
 func (a *API) listTraceroutes(w http.ResponseWriter, r *http.Request, public bool) {
@@ -735,7 +749,11 @@ func (a *API) listTraceroutes(w http.ResponseWriter, r *http.Request, public boo
 	if k := r.URL.Query().Get("kind"); k != "" {
 		kinds = []string{k}
 	}
-	list, err := a.store.TraceroutesFrom(id, a.resolveProbe(r, 0), kinds, limit)
+	// The privilege flag is not needed here: this handler sets
+	// Vary: Cookie, Authorization below, so its public entry already varies
+	// by caller rather than being one entry for every visitor.
+	probe, _ := a.resolveProbe(r, 0)
+	list, err := a.store.TraceroutesFrom(id, probe, kinds, limit)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
