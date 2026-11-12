@@ -1298,3 +1298,24 @@ func (s *Store) EffectivePrimaries(localProbeID, now int64) (map[int64]int64, er
 	}
 	return out, nil
 }
+
+// EnabledProbeIDs is the set of probes a visitor is allowed to be told about:
+// the same set /api/v1/probes lists. Read once per request that needs it, so
+// that the traceroute endpoints can filter on it without joining config.db to
+// metrics.db, which they cannot.
+func (s *Store) EnabledProbeIDs() ([]int64, error) {
+	rows, err := s.cfg.Query(`SELECT id FROM probes WHERE enabled=1 ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
