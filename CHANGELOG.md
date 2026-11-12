@@ -2,7 +2,9 @@
 
 Versions are published as signed releases; servers with automatic updates install the newest one directly, whatever versions came in between. The release workflow reads a section straight out of this file and publishes it as the release notes, so how an entry is written matters — see [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
-## Unreleased
+## 0.8.4
+
+**Install this one.** It is built with the Go patch that fixes a crash a stranger can trigger in the HTTP server every instance runs, and every release up to 0.8.3 is built without it. The rest of this version is two things that were telling you something untrue: a graph that announced a target had never been measured when it had, and a probe you had turned off still answering for itself.
 
 - **The published binaries are built with the Go patch that fixes GO-2026-6859.**
 
