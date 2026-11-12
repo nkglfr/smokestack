@@ -83,6 +83,7 @@
     "hosted_by": "Misurato da",
     "see_network": "Informazioni su questa rete",
     "no_data": "Ancora nessuna misura per questa destinazione.",
+    "no_data_window": "Nessuna misura per questo periodo.",
     "refresh": "Aggiornato ogni 30 secondi",
     "once": "Destinazioni uniche",
     "once_hint": "Mostra ogni destinazione una sola volta: una destinazione in errore resta nella sezione dei guasti e sparisce dalle destinazioni critiche e dalla sua categoria."

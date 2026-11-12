@@ -2,6 +2,18 @@
 
 Versions are published as signed releases; servers with automatic updates install the newest one directly, whatever versions came in between. The release workflow reads a section straight out of this file and publishes it as the release notes, so how an entry is written matters — see [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
+## Unreleased
+
+- **A short window over an old period said the target had never been measured.**
+
+  The resolution to read was chosen from the length of the window and nothing else. Three hours is a window the raw samples serve, and the raw samples are kept 48 hours, so zooming into a few hours from three days ago read a table that no longer held them. The graph came back empty, the median, p95, jitter and uptime figures came back blank, and the page announced "No measurement yet for this target." on a target measured for weeks. The same happened to a window of up to four days more than a year old, and up to 45 days more than three years old.
+
+  The choice now accounts for how far back the window reaches, not only how long it is: the finest resolution that still holds the start of the window. A window ending now reads exactly what it read before. One reaching further back than its resolution is kept moves to the next, so three hours from three days ago is drawn from the 1-minute buckets instead of nothing.
+
+  A target with its own retention can leave that resolution empty while a coarser one still holds the period, which no amount of arithmetic on the clock can know. When the chosen table comes back empty the next one is read, so the view falls back to whatever the instance actually kept.
+
+  And the empty state no longer lies. A target nothing has ever measured still reads "No measurement yet for this target."; a target measured outside the window being looked at now reads "No measurement for this period." The first was being shown for both, which turned a question about a date range into a false statement about the target. Reported in #114.
+
 ## 0.8.3
 
 **A target does not stop being judged because its probe went away.** 0.8.0 gave a target a probe that decides it and 0.8.2 stopped a silent probe from being read as good news. Between the two, a target whose probe disappeared kept its incident open and was judged by nobody — honest, and useless when another probe was standing right there able to judge it.

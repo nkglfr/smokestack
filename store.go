@@ -1951,11 +1951,21 @@ type Series struct {
 	P75      []*float64 `json:"p75"`
 	P95      []*float64 `json:"p95"`
 	Loss     []*float64 `json:"loss"`
+	// EverMeasured distinguishes the two reasons a series comes back empty:
+	// a target nothing has ever measured, and one measured outside the window
+	// being looked at. Announcing the first when the second is true is what
+	// made #114 report a target measured for weeks as never measured. Only
+	// set when the series is empty, because that is the only time it decides
+	// anything.
+	EverMeasured bool `json:"ever_measured,omitempty"`
 }
 
-// pickTable choisit la resolution la plus fine qui produit un nombre
-// de points raisonnable pour la fenetre demandee. C'est ce qui rend
-// le zoom transparent : l'appelant ne connait que from et to.
+// pickTable chooses the finest resolution that yields a reasonable number of
+// points for the requested span. This is what makes zooming transparent: the
+// caller knows only from and to.
+//
+// It answers on the span alone, which is right for a window that ends now and
+// wrong for one that does not: see pickTableFrom.
 func pickTable(span int64) (string, int64) {
 	switch {
 	case span <= 6*3600:
@@ -1971,20 +1981,71 @@ func pickTable(span int64) (string, int64) {
 	}
 }
 
+// tierOf returns the index in cascade of a table named by pickTable.
+func tierOf(table string) int {
+	for i, g := range cascade {
+		if g.table == table {
+			return i
+		}
+	}
+	return 0
+}
+
+// tierFrom returns the index in cascade of the finest tier the span justifies
+// that still holds the start of the window.
+//
+// The span alone cannot say this. Three hours is a samples-sized window, but
+// samples is kept 48 h, so three hours taken three days ago reads an empty
+// table and the page announces a target that has never been measured (#114).
+// A window ending now keeps reading exactly the table it reads today; only
+// one reaching further back than its tier's retention moves to the next.
+//
+// Retention is nominal here: the instance tiers and the clock, no query. A
+// target with its own keep_days may hold nothing that old in any table, which
+// this cannot know and Series handles when the read comes back empty.
+func tierFrom(from, to, now int64) int {
+	table, _ := pickTable(to - from)
+	i := tierOf(table)
+	// Walk coarser while the tier no longer reaches back to `from`. The last
+	// tier is kept for ever, so this always terminates on it at the latest.
+	for i+1 < len(cascade) && cascade[i].keep > 0 && from < now-cascade[i].keep {
+		i++
+	}
+	return i
+}
+
+// pickTableFrom is tierFrom named by table and step, for callers that want
+// the resolution rather than the tier.
+func pickTableFrom(from, to, now int64) (string, int64) {
+	g := cascade[tierFrom(from, to, now)]
+	return g.table, g.secs
+}
+
 type seriesRow struct {
 	bucket, sent, lost, cnt int64
 	sk                      *Sketch
 }
 
-// Series lit une serie a la resolution adaptee a la fenetre. maxPoints
-// (0 = sans limite) fusionne les points consecutifs pour alleger la
-// reponse, sans fausser les percentiles.
-func (s *Store) Series(targetID, probeID, from, to int64, maxPoints int) (*Series, error) {
-	table, step := pickTable(to - from)
-	out := &Series{TargetID: targetID, ProbeID: probeID, Table: table, StepS: step,
-		T: []int64{}, Med: []*float64{}, P05: []*float64{}, P25: []*float64{},
-		P75: []*float64{}, P95: []*float64{}, Loss: []*float64{}}
+// hasAnyMeasurement answers whether this probe ever measured this target, at
+// any resolution and at any date. roll_1d is asked first and roll_1h second
+// because they are kept for ever, so one of them holds a row whenever any
+// table does, and they are the two smallest.
+func (s *Store) hasAnyMeasurement(targetID, probeID int64) bool {
+	for _, tbl := range []string{"roll_1d", "roll_1h", "roll_5m", "roll_1m", "samples"} {
+		var one int64
+		err := s.mx.QueryRow(fmt.Sprintf(
+			`SELECT 1 FROM %s WHERE target_id=? AND probe_id=? LIMIT 1`, tbl),
+			targetID, probeID).Scan(&one)
+		if err == nil {
+			return true
+		}
+	}
+	return false
+}
 
+// seriesRows reads one tier over a window. Split out of Series so that the
+// tier it reads can be decided by a loop rather than once at the top.
+func (s *Store) seriesRows(table string, targetID, probeID, from, to int64) ([]seriesRow, error) {
 	rows, err := s.mx.Query(fmt.Sprintf(
 		`SELECT bucket,sent,lost,cnt,sketch FROM %s
 		  WHERE target_id=? AND probe_id=? AND bucket>=? AND bucket<=?
@@ -1992,21 +2053,53 @@ func (s *Store) Series(targetID, probeID, from, to int64, maxPoints int) (*Serie
 	if err != nil {
 		return nil, err
 	}
+	defer rows.Close()
 	var list []seriesRow
 	for rows.Next() {
 		var r seriesRow
 		var blob []byte
 		if err := rows.Scan(&r.bucket, &r.sent, &r.lost, &r.cnt, &blob); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		r.sk = UnmarshalSketch(blob)
 		list = append(list, r)
 	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		return nil, err
+	return list, rows.Err()
+}
+
+// Series lit une serie a la resolution adaptee a la fenetre. maxPoints
+// (0 = sans limite) fusionne les points consecutifs pour alleger la
+// reponse, sans fausser les percentiles.
+func (s *Store) Series(targetID, probeID, from, to int64, maxPoints int) (*Series, error) {
+	// The nominal tier can still come back empty when the target carries its
+	// own keep_days, which tierFrom cannot see. Walking on costs one indexed
+	// query per coarser tier, and only in that case: a window that holds
+	// anything stops on the first read.
+	var table string
+	var step int64
+	var list []seriesRow
+	for i := tierFrom(from, to, time.Now().Unix()); ; i++ {
+		table, step = cascade[i].table, cascade[i].secs
+		rows, err := s.seriesRows(table, targetID, probeID, from, to)
+		if err != nil {
+			return nil, err
+		}
+		list = rows
+		if len(list) > 0 || i+1 >= len(cascade) {
+			break
+		}
 	}
+
+	out := &Series{TargetID: targetID, ProbeID: probeID, Table: table, StepS: step,
+		T: []int64{}, Med: []*float64{}, P05: []*float64{}, P25: []*float64{},
+		P75: []*float64{}, P95: []*float64{}, Loss: []*float64{}}
+
+	// One extra query, and only when there is nothing to draw: the page has
+	// to say which kind of nothing this is.
+	if len(list) == 0 {
+		out.EverMeasured = s.hasAnyMeasurement(targetID, probeID)
+	}
+
 	list, factor := downsample(list, maxPoints)
 	if factor > 1 && out.StepS > 0 {
 		out.StepS *= int64(factor)

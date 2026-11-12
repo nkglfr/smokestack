@@ -83,6 +83,7 @@
     "hosted_by": "Gemeten vanaf",
     "see_network": "Over dit netwerk",
     "no_data": "Nog geen metingen voor dit doel.",
+    "no_data_window": "Geen metingen voor deze periode.",
     "refresh": "Elke 30 seconden vernieuwd",
     "once": "Doelen één keer",
     "once_hint": "Elk doel maar één keer tonen: een doel met een storing blijft in het storingsoverzicht en verdwijnt uit de kritieke doelen en uit zijn categorie."
