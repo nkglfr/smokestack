@@ -204,12 +204,44 @@ func (s *Store) Traceroutes(targetID int64, kinds []string, limit int) ([]*Trace
 // ever stopped being true, and this comment is here so that the next person
 // measuring a slow page knows where to look.
 func (s *Store) TraceroutesFrom(targetID, probeID int64, kinds []string, limit int) ([]*Traceroute, error) {
+	return s.TraceroutesOf(targetID, probeID, kinds, limit, nil)
+}
+
+// TraceroutesOf is TraceroutesFrom with the probes this caller must not be
+// shown. Empty or nil hides nothing, which is what the back-office gets and
+// what every call meant before this existed.
+//
+// A deny list rather than an allow list, which is the whole of the design
+// here: the local probe is absent from the probes table on purpose and a
+// traceroute from before probes existed carries probe_id 0, so allowing only
+// the enabled ones would publish nothing on an instance that never enrolled a
+// probe. Closed for what the operator disabled, open for what the table does
+// not know about.
+//
+// The two databases cannot be joined — traceroutes live in metrics.db and
+// probes in config.db — so the set is read first and passed in as a list.
+// It is applied before the LIMIT on purpose: filtering the rows afterwards
+// would return fewer than asked whenever the newest paths belong to a probe
+// the caller may not see, and a short page is a worse answer than a slower
+// query.
+func (s *Store) TraceroutesOf(targetID, probeID int64, kinds []string, limit int, deny []int64) ([]*Traceroute, error) {
 	q := `SELECT id,target_id,probe_id,ts,kind,reason,family,dest,reached,hops
 	        FROM traceroutes WHERE target_id=?`
 	args := []any{targetID}
 	if probeID > 0 {
 		q += ` AND probe_id=?`
 		args = append(args, probeID)
+	}
+	if len(deny) > 0 {
+		q += ` AND probe_id NOT IN (`
+		for i, id := range deny {
+			if i > 0 {
+				q += ","
+			}
+			q += "?"
+			args = append(args, id)
+		}
+		q += `)`
 	}
 	if len(kinds) > 0 {
 		q += ` AND kind IN (`
@@ -617,9 +649,12 @@ func (a *API) asPathView(w http.ResponseWriter, r *http.Request) {
 	// 0 keeps today's meaning here: the reference path from whichever probe
 	// recorded one, when the caller named none.
 	probe, _ := a.resolveProbe(r, 0)
-	trs, err := a.store.TraceroutesFrom(id, probe, []string{"reference"}, 1)
+	// Same rule as the traceroute list: a visitor is shown paths from the
+	// probes the public listing admits to, and nothing else.
+	hidden, _ := a.hiddenProbes(r)
+	trs, err := a.store.TraceroutesOf(id, probe, []string{"reference"}, 1, hidden)
 	if err != nil || len(trs) == 0 {
-		trs, _ = a.store.TraceroutesFrom(id, probe, nil, 1)
+		trs, _ = a.store.TraceroutesOf(id, probe, nil, 1, hidden)
 	}
 	if len(trs) == 0 {
 		// Nothing was recorded yet. A reference path is taken once a day by
@@ -753,7 +788,12 @@ func (a *API) listTraceroutes(w http.ResponseWriter, r *http.Request, public boo
 	// Vary: Cookie, Authorization below, so its public entry already varies
 	// by caller rather than being one entry for every visitor.
 	probe, _ := a.resolveProbe(r, 0)
-	list, err := a.store.TraceroutesFrom(id, probe, kinds, limit)
+	hidden, err := a.hiddenProbes(r)
+	if err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	}
+	list, err := a.store.TraceroutesOf(id, probe, kinds, limit, hidden)
 	if err != nil {
 		writeErr(w, 500, err.Error())
 		return
@@ -1039,4 +1079,25 @@ func (s *Store) BuildASGraph(targetID int64, originASN, destASN string, limit in
 	}
 	sort.Slice(g.Edges, func(i, j int) bool { return g.Edges[i].Seen > g.Edges[j].Seen })
 	return g
+}
+
+// hiddenProbes is what a request must not be shown: nothing for an operator,
+// who may read every probe, and the disabled ones for a visitor.
+//
+// Disabling a probe is how an operator says it is no longer part of what this
+// instance shows, and /api/v1/probes has always honoured that. The traceroute
+// list did not: it answered from every probe when none was named, and every
+// entry carries its probe_id, so a disabled probe's existence was published
+// by one endpoint while being hidden by the other.
+//
+// The history is not lost to the operator, and an operator who wants it shown
+// publicly has a better way to say so than leaving the probe enabled while it
+// measures: a probe with no target assigned measures nothing and is never
+// called silent, so "keep the paths visible, stop measuring" is said by
+// clearing its targets.
+func (a *API) hiddenProbes(r *http.Request) ([]int64, error) {
+	if a.authenticated(r) {
+		return nil, nil
+	}
+	return a.store.DisabledProbeIDs()
 }

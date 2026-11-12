@@ -484,8 +484,44 @@ func (s *Store) MarkProbeBack(id, at int64) {
 }
 
 // EnabledProbeIDs lists the probes worth asking for an opinion.
+//
+// It is not the set a visitor may be told about, which is the complement of
+// DisabledProbeIDs below and not the same thing: the local probe is
+// deliberately absent from this table, and so is anything recorded before
+// probes existed. Asking "which are enabled" and hiding the rest would hide
+// those too.
 func (s *Store) EnabledProbeIDs() ([]int64, error) {
 	rows, err := s.cfg.Query(`SELECT id FROM probes WHERE enabled=1 ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+// DisabledProbeIDs lists the probes an operator has turned off.
+//
+// The traceroute endpoints filter on this rather than on the enabled set,
+// and the difference matters more than it looks. The local probe is
+// deliberately absent from this table — it reaches the service over a Unix
+// socket and restricting it would stop every existing instance measuring —
+// and a traceroute recorded before probes existed carries probe_id 0, which
+// means that same local probe. An allow list of enabled probes excludes both,
+// so on an instance that has never enrolled a probe it would publish nothing
+// at all. I wrote that version first and it took two existing tests down.
+//
+// So: closed for what the operator actually disabled, open for everything the
+// table does not know about.
+func (s *Store) DisabledProbeIDs() ([]int64, error) {
+	rows, err := s.cfg.Query(`SELECT id FROM probes WHERE enabled=0 ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,14 @@ Versions are published as signed releases; servers with automatic updates instal
 
 ## Unreleased
 
+- **A disabled probe's traceroutes were still published, with its id on them.**
+
+  `/api/v1/probes` lists enabled probes only, so turning a probe off is how an operator says it is no longer part of what the instance shows. The traceroute list answered from every probe when none was named, and every entry carries its `probe_id`, so one endpoint published the existence of a probe the other deliberately hid — the same inconsistency as the one fixed in 0.8.4 for `?probe=`, one layer down.
+
+  A visitor is no longer shown paths from a probe the operator turned off, on the traceroute list or on the AS path. An operator reads all of them, which is what the back-office is for. The filter names what to hide rather than what to show, because the local probe is deliberately absent from the probes table and a path recorded before probes existed carries its id as 0: listing only the enabled ones would have published nothing at all on an instance that never enrolled a probe. And it is applied inside the query rather than to its results, so asking for forty paths still returns forty rather than however many survived.
+
+  This does hide history an operator chose to publish, which is why it is worth saying where the line is: a probe with no target assigned measures nothing and is never reported silent, so "keep the paths visible, stop measuring" is said by clearing a probe's targets rather than by disabling it. Disabling now means the same thing everywhere.
+
 - **`update` and `rollback` left a probe-only machine running the old binary.**
 
   They staged and installed the new release correctly, then looked for a `smokestack` unit to restart. A machine installed with `--probe-only` deliberately has no such unit — the installer removes it and leaves `smokestack-probe` — so the command ended on "restart the service to run the new version", naming no service, on a machine whose only service it had just declined to name. The probe kept measuring with the old binary until someone worked it out.
