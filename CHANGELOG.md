@@ -2,6 +2,14 @@
 
 Versions are published as signed releases; servers with automatic updates install the newest one directly, whatever versions came in between. The release workflow reads a section straight out of this file and publishes it as the release notes, so how an entry is written matters — see [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
+## Unreleased
+
+- **`update` and `rollback` left a probe-only machine running the old binary.**
+
+  They staged and installed the new release correctly, then looked for a `smokestack` unit to restart. A machine installed with `--probe-only` deliberately has no such unit — the installer removes it and leaves `smokestack-probe` — so the command ended on "restart the service to run the new version", naming no service, on a machine whose only service it had just declined to name. The probe kept measuring with the old binary until someone worked it out.
+
+  Both units are now tried, and the message names what it restarted or what to restart. The service is asked for first because on a full install the probe unit is `PartOf=smokestack.service`, so restarting the service restarts the probe with it; the second name is only reached on a machine that has no service at all. Reported in #111.
+
 ## 0.8.4
 
 **Install this one.** It is built with the Go patch that fixes a crash a stranger can trigger in the HTTP server every instance runs, and every release up to 0.8.3 is built without it. The rest of this version is two things that were telling you something untrue: a graph that announced a target had never been measured when it had, and a probe you had turned off still answering for itself.
