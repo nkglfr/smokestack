@@ -429,7 +429,9 @@ async function viewTargets(m){
     const F=new Set(feat||[]);
     // Host and category sit under the title: fewer columns, and the table
     // turns into one card per target on a phone.
-    const cname={}; (tree||[]).forEach(c=>cname[c.id]=c.menu_en||c.menu_fr);
+    const cname={}, cpub={}; (tree||[]).forEach(c=>{cname[c.id]=c.menu_en||c.menu_fr; cpub[c.id]=c.public;});
+    // Only a target the public overview lists has a badge; any other answers 404.
+    const onOverview=t=>t.public&&t.enabled&&cpub[t.category_id];
     H.render($("#tlist"),(list&&list.length)?html`<table class="resp">
       <thead><tr><th title="Critical target: always shown at the top of the home page">★</th><th>Target</th>
       <th>Family</th><th>Check</th><th>Interval</th><th>Alerts</th><th>Visibility</th><th></th></tr></thead><tbody>${list.map(t=>html`<tr><td data-l=""><button class="btn s" data-star="${t.id}" title="Critical target"
@@ -469,6 +471,8 @@ async function viewTargets(m){
           <button class="btn s" data-edit="${t.id}">Edit</button>
           <button class="btn s" data-now="${t.id}" title="Measure right away">Check now</button>
           <button class="btn s" data-share="${t.id}">Share</button>
+          ${onOverview(t)&&html`<button class="btn s" data-badge="${t.id}"
+            title="An image of this target's status, for your website, a README or a PeeringDB note">Badge</button>`}
           <button class="btn s" data-advice="${t.id}" title="Look at the shape of the loss">Why this loss?</button>
           <button class="btn s" data-trace="${t.id}">Traceroute</button>
           <button class="btn s" data-twin="${t.id}" data-fam="${t.family||0}"
@@ -538,6 +542,51 @@ async function viewTargets(m){
         box.querySelector("#cpy").onclick=()=>{navigator.clipboard?.writeText(l.url);toast("Link copied");};
         box.querySelectorAll("[data-goto]").forEach(a=>a.onclick=e=>{e.preventDefault();go(a.dataset.goto);});
       }catch(e){toast(e.message,true);}
+    });
+    // The snippets name the instance's public address, not the one this
+    // back-office happens to be reached at through a tunnel or a LAN.
+    document.querySelectorAll("[data-badge]").forEach(b=>b.onclick=async()=>{
+      const row=b.closest("tr"), open=row.nextElementSibling;
+      if(open&&open.dataset.badgeOf===b.dataset.badge){open.remove();return;}
+      const t=list.find(x=>x.id==b.dataset.badge);
+      const own=((await api("GET","/api/v1/fed/profile").catch(()=>null))?.url||"").replace(/\/+$/,"");
+      const base=/^https?:\/\/[^/]/.test(own)?own:location.origin;
+      if(row.nextElementSibling?.dataset.badgeOf===b.dataset.badge) return;
+      const box=document.createElement("tr"); box.dataset.badgeOf=b.dataset.badge;
+      H.render(box,html`<td colspan="8"><div class="note" style="margin:0">
+        <strong>Status badge</strong> — this target as an image, refreshed within a minute. Anyone can
+        load it, so only targets shown on the public pages have one, and a share link does not unlock it:
+        a token in an image address is published to every reader of the page.
+        ${base===location.origin&&own!==location.origin&&html`<div class="twarn" style="margin-top:6px">No usable
+          public address is set for this instance, so these links use the one you are browsing from,
+          <span class="mono">${location.origin}</span>. Check that readers can reach it, or set
+          <a href="${pathOf("site")}" data-goto="site">Publisher page → Address of this instance</a>.</div>`}
+        <div class="row2" style="margin:8px 0">
+          <select data-bm><option value="">Status</option><option value="uptime">Availability</option>
+            <option value="latency">Median latency</option></select>
+          <select data-bw>${["24h","7d","30d","1y"].map(w=>html`<option ${w==="30d"?"selected":""}>${w}</option>`)}</select>
+        </div>
+        <img data-bimg alt="Badge preview" style="display:block;margin:0 0 8px">
+        ${["Markdown","HTML"].map(k=>html`<div class="field"><label>${k}</label>
+          <div style="display:flex;gap:6px"><input class="mono" readonly data-bs="${k}" style="font-size:12px">
+          <button class="btn s" data-bc="${k}">Copy</button></div></div>`)}
+      </div></td>`);
+      row.after(box);
+      const bm=box.querySelector("[data-bm]"), bw=box.querySelector("[data-bw]");
+      const draw=()=>{
+        bw.hidden=bm.value!=="uptime";
+        const q=bm.value?"?metric="+bm.value+(bm.value==="uptime"?"&window="+bw.value:""):"";
+        const page=base+"/t/"+encodeURIComponent(t.slug);
+        const src=base+"/badge/"+encodeURIComponent(t.slug)+".svg"+q;
+        box.querySelector("[data-bimg]").src=src;
+        box.querySelector('[data-bs="Markdown"]').value=`[![${t.title.replace(/[[\]\\]/g,"\\$&")}](${src})](${page})`;
+        box.querySelector('[data-bs="HTML"]').value=`<a href="${H.esc(page)}"><img src="${H.esc(src)}" alt="${H.esc(t.title)}"></a>`;
+      };
+      bm.onchange=bw.onchange=draw; draw();
+      box.querySelectorAll("[data-goto]").forEach(a=>a.onclick=e=>{e.preventDefault();go(a.dataset.goto);});
+      box.querySelectorAll("[data-bc]").forEach(c=>c.onclick=()=>{
+        navigator.clipboard?.writeText(box.querySelector(`[data-bs="${c.dataset.bc}"]`).value);toast("Copied");
+      });
     });
     document.querySelectorAll("[data-advice]").forEach(b=>b.onclick=async()=>{
       const id=b.dataset.advice, host=b.closest("tr");

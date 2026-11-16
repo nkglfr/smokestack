@@ -239,10 +239,41 @@ GET  /api/v1/charts?from=now-24h
 GET  /api/v1/events?from=now-7d
 GET  /api/v1/live                      (SSE)
 GET  /healthz
+GET  /badge/<slug>.svg                 badge d'état, image SVG (ci-dessous)
 ```
 
 `from` et `to` acceptent un epoch, une date RFC3339 ou une expression
 relative (`now-3h` ou sa forme courte `-3h`).
+
+**Un badge est le même pour tout le monde.** `GET /badge/<slug>.svg` est une
+image à deux cases pour le site de l'exploitant, un README ou une note
+PeeringDB : le titre de la cible, puis son état tel que les pages publiques le
+classent, dans les mêmes couleurs. `?metric=uptime&window=30d` (`24h`, `7d`,
+`30d`, `1y`) affiche la disponibilité, `?metric=latency` la médiane courante,
+et `?label=` remplace le titre, coupé à 40 caractères. Rien de l'appelant ne
+change la réponse : une cible privée répond 404 exactement comme un slug qui
+n'existe pas, une session n'en montre pas davantage, et **un jeton de partage
+n'ouvre pas de badge** — un jeton dans un `<img src>` est un identifiant
+publié à chaque lecteur de la page qui l'embarque. C'est ce qui permet aux
+proxys d'images, celui de GitHub compris, de le garder une minute. La route
+n'est pas limitée en débit, elle lit donc ce qui est déjà calculé : l'état et
+la médiane dans la vue d'ensemble construite en tâche de fond — un badge ne la
+construit jamais, et répond 503 jusqu'à la première construction — et la
+disponibilité dans le cache d'une minute de la page cible, qu'une seule
+requête remplit par cible pendant que les autres l'attendent : une page
+chargée coûte au plus un calcul de disponibilité par minute. Le chiffre est
+écrit comme la page cible l'écrit, une décimale (deux sous 1 %) avec le
+séparateur décimal de la langue, de sorte que le badge et la page vers
+laquelle il pointe ne se contredisent jamais ; une fenêtre que la cible n'a
+pas couverte en entier affiche *depuis le <date>* au lieu de son nom, pour
+qu'une cible créée la semaine dernière n'affiche pas un chiffre annuel. Quand
+la disponibilité n'est pas publiée, le badge de disponibilité le dit en gris
+plutôt que de répondre 404 : une image cassée sur une page que l'exploitant ne
+maîtrise pas se lit comme une instance en panne. Les mots sont dans la langue
+par défaut de l'instance. Le back-office donne le Markdown et le HTML à
+coller, sous *Badge* à côté de chaque cible que la vue d'ensemble publique
+affiche, construits sur l'adresse publique de l'instance (*Address of this
+instance*).
 
 Administration, avec `Authorization: Bearer <admin_token>` :
 

@@ -258,6 +258,17 @@ func (i *I18n) Dict(code string) (map[string]string, bool) {
 	return out, true
 }
 
+// Text is one string with the same English fallback as Dict, for a caller
+// on the server that needs a word rather than a whole dictionary.
+func (i *I18n) Text(code, key string) string {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+	if v := i.dicts[code][key]; v != "" {
+		return v
+	}
+	return i.dicts[baseLang][key]
+}
+
 func (i *I18n) Languages() []LangInfo {
 	i.mu.RLock()
 	defer i.mu.RUnlock()

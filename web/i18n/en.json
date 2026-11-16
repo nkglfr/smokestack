@@ -314,5 +314,10 @@
   "share": {
     "banner": "Read-only graph shared by {org}, measured from {loc}. One target, from this network's point of view: latency and loss towards it, with the percentile bands and the traceroutes taken when it left its baseline.",
     "who": "Shared by"
+  },
+  "badge": {
+    "uptime_not_published": "availability not published",
+    "decimal_mark": ".",
+    "since": "since {date}"
   }
 }

@@ -128,8 +128,9 @@ func availTable(span int64) string {
 // minute de retard sur une disponibilite annuelle n'interesse personne,
 // alors que quatre agregations par visiteur, si.
 type availCacheT struct {
-	mu    sync.Mutex
-	items map[string]availEntry
+	mu      sync.Mutex
+	items   map[string]availEntry
+	filling map[string]chan struct{}
 }
 
 type availEntry struct {
@@ -137,7 +138,7 @@ type availEntry struct {
 	exp  time.Time
 }
 
-var availCache = &availCacheT{items: map[string]availEntry{}}
+var availCache = &availCacheT{items: map[string]availEntry{}, filling: map[string]chan struct{}{}}
 
 func (c *availCacheT) get(k string) map[string]any {
 	c.mu.Lock()
@@ -159,6 +160,38 @@ func (c *availCacheT) put(k string, v map[string]any, ttl time.Duration) {
 		c.items = map[string]availEntry{}
 	}
 	c.items[k] = availEntry{data: v, exp: time.Now().Add(ttl)}
+}
+
+// fill returns the entry for k, computing it once however many callers miss
+// it together: the others wait for that one result instead of each running
+// the same aggregation.
+func (c *availCacheT) fill(k string, ttl time.Duration, compute func() map[string]any) map[string]any {
+	c.mu.Lock()
+	for {
+		if e, ok := c.items[k]; ok && time.Now().Before(e.exp) {
+			c.mu.Unlock()
+			return e.data
+		}
+		busy, ok := c.filling[k]
+		if !ok {
+			break
+		}
+		c.mu.Unlock()
+		<-busy
+		c.mu.Lock()
+	}
+	done := make(chan struct{})
+	c.filling[k] = done
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		delete(c.filling, k)
+		c.mu.Unlock()
+		close(done)
+	}()
+	v := compute()
+	c.put(k, v, ttl)
+	return v
 }
 
 // availability sert le chiffre sur les pages publiques, avec la meme
@@ -205,20 +238,23 @@ func (a *API) availability(w http.ResponseWriter, r *http.Request) {
 	} else {
 		cachePrivate(w)
 	}
-	key := fmt.Sprintf("avail|%d|%d", targetID, probeID)
-	if v := availCache.get(key); v != nil {
-		writeJSON(w, v)
-		return
-	}
-	out := map[string]any{
-		"target_id": targetID,
-		"windows":   a.store.Availability(targetID, probeID, time.Now()),
-		// Dit avec le chiffre, pas dans une note de bas de page : le
-		// malentendu qu'on veut eviter est precisement celui-la.
-		"disclaimer": "measured from a single vantage point; not a contractual SLA",
-	}
-	availCache.put(key, out, 60*time.Second)
-	writeJSON(w, out)
+	writeJSON(w, a.availabilityOf(targetID, probeID))
+}
+
+// availabilityOf is the endpoint's answer through the short cache the badges
+// share. A badge is not rate-limited, so a missing entry is computed by one
+// request while the others wait for it: at most one aggregation per target
+// and probe a minute, whatever the request rate.
+func (a *API) availabilityOf(targetID, probeID int64) map[string]any {
+	return availCache.fill(fmt.Sprintf("avail|%d|%d", targetID, probeID), 60*time.Second, func() map[string]any {
+		return map[string]any{
+			"target_id": targetID,
+			"windows":   a.store.Availability(targetID, probeID, time.Now()),
+			// Dit avec le chiffre, pas dans une note de bas de page : le
+			// malentendu qu'on veut eviter est precisement celui-la.
+			"disclaimer": "measured from a single vantage point; not a contractual SLA",
+		}
+	})
 }
 
 func maxInt64(a, b int64) int64 {

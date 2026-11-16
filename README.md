@@ -356,6 +356,7 @@ Public, read-only, JSON:
 | `GET /api/v1/asn` | Host network (RIPEstat, PeeringDB) |
 | `GET /api/v1/fed/peers` | Public federation peers |
 | `GET /api/v1/traceroutes?target=ID` | Traceroutes, if made public by the operator |
+| `GET /badge/<slug>.svg` | Status badge (SVG) of a target on the public overview, the same answer for every caller; `?metric=uptime&window=24h\|7d\|30d\|1y`, `?metric=latency`, `?label=` |
 
 `series`, `availability`, `traceroutes` and the AS path take an optional
 `&probe=ID` to answer from one vantage point. Without it they answer from the
@@ -363,10 +364,12 @@ instance's own probe, as they always have.
 
 Private targets never appear in these endpoints. An authenticated call (session
 cookie or `Authorization: Bearer <admin token>`) sees them, and
-`/api/v1/overview?all=1` returns them too.
+`/api/v1/overview?all=1` returns them too. The badge is the exception: it is
+embedded in pages anyone reads, so a private target has none, whoever asks and
+whatever share link they hold.
 | `GET /healthz` | Health check |
 
-Rate limit: 20 requests/s per client IP, bursts of 80.
+Rate limit on `/api/`: 20 requests/s per client IP, bursts of 80.
 
 ---
 

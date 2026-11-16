@@ -247,3 +247,26 @@ waste an evening: finding who to write to, and explaining the context.
 note, so you know months later who holds which link. And give the link an
 expiry — 30 days covers an incident; a link without one outlives the reason
 it was created.
+
+---
+
+## Showing a target's status on your own pages
+
+Press **Badge** next to a target shown on the public pages (public, enabled,
+in a public category): you get a small image of its status — nominal,
+degraded, incident, maintenance — for your website, a README or your
+PeeringDB notes, with the Markdown and the HTML ready to paste. It can show
+the availability over a period or the current median instead, and `?label=`
+changes the text on the left. The figures read exactly as on the target's
+page; a period the target has not been measured across shows *since <date>*
+rather than the period's name.
+
+The snippets use the instance's public address, set under **Publisher page →
+Address of this instance** (or `federation.base_url`). Without one they fall
+back to the address you are browsing from, and the panel says so: check it is
+one your readers can reach.
+
+A badge is public by construction. A private target has none, and a share
+link does not unlock one: whatever sits in an image address is published to
+everyone who reads the page, so a share link belongs in a ticket, never in an
+`<img>`.

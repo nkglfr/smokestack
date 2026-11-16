@@ -478,6 +478,7 @@ type overviewCache struct {
 	mu     sync.Mutex // serialise les calculs
 	data   atomic.Pointer[[]byte]
 	gz     atomic.Pointer[[]byte]
+	ov     atomic.Pointer[Overview] // the same build, decoded, for the badges
 	probe  int64
 	store  *Store
 	builds atomic.Int64
@@ -508,6 +509,7 @@ func (c *overviewCache) build() error {
 	zw.Write(b)
 	zw.Close()
 	z := zb.Bytes()
+	c.ov.Store(ov)
 	c.data.Store(&b)
 	c.gz.Store(&z)
 	c.builds.Add(1)
