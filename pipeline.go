@@ -36,6 +36,7 @@ type Writer struct {
 
 	written atomic.Int64
 	dropped atomic.Int64
+	failed  atomic.Int64 // measurements in batches that failed to commit
 	lastLag atomic.Int64 // duree de la derniere ecriture de lot, en microsecondes
 }
 
@@ -90,6 +91,7 @@ func (w *Writer) Loop(stop <-chan struct{}) {
 		}
 		start := time.Now()
 		if err := w.store.RecordBatch(batch); err != nil {
+			w.failed.Add(int64(len(batch)))
 			log.Printf("writing measurements: %v", err)
 		} else {
 			w.written.Add(int64(len(batch)))

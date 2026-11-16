@@ -206,6 +206,11 @@ func TestCertTargets(t *testing.T) {
 	mk("https", "tcp", 443, false)
 	mk("bgp", "tcp", 179, true)
 	mk("ping", "icmp", 0, false)
+	if _, err := store.CreateTarget(&Target{CategoryID: cat, Slug: "peer-check", Title: "peer-check",
+		Host: "example.net", Proto: "tcp", Port: 443, Family: 4, IntervalS: 60, Packets: 5,
+		SpacingMs: 500, TimeoutMs: 2000, Enabled: true, DCCheck: "c1"}); err != nil {
+		t.Fatal(err)
+	}
 
 	got := map[string]bool{}
 	for _, tg := range store.certTargets() {
@@ -219,6 +224,9 @@ func TestCertTargets(t *testing.T) {
 	}
 	if got["ping"] {
 		t.Error("an ICMP target has no certificate")
+	}
+	if got["peer-check"] {
+		t.Error("a target measured for a peer's double-check is not this instance's to inspect")
 	}
 	// The threshold is validated rather than accepted blindly.
 	if err := store.SetCertConfig(CertConfig{Enabled: true, WarnDays: 0}); err == nil {

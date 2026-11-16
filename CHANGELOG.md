@@ -4,6 +4,18 @@ Versions are published as signed releases; servers with automatic updates instal
 
 ## Unreleased
 
+- **Prometheus and Grafana can scrape the instance at `/metrics`.**
+
+  An operator who already graphs and alerts on the rest of the network from Prometheus no longer needs a separate tab for smokestack. `GET /metrics` serves the standard text format. For each target and probe it gives the last pass's median and 95th percentile round trip, its loss and its status. Each target also says whether it is in maintenance, whether an incident is open and when its certificate expires. Each enabled probe says when it last reported. The instance reports its write queue, the measurements it dropped or failed to commit, its archive backlog and its database sizes. `DEPLOY.md` has the `scrape_config` and a few ready-made alert expressions.
+
+  It asks for the same credentials as the API, from the viewer role up, and includes private targets. No host, port or address is exported, whatever the caller may read elsewhere: what Prometheus keeps is not bound by this instance's visibility settings, so the series carry names and figures and never the addressing. It shares the API's rate limit of 20 requests per second per address, which no scrape interval comes near.
+
+  A scrape reads what the instance already holds in memory and in the small tables, never the measurement history, so a thousand targets seen from three probes cost a few milliseconds every fifteen seconds. The price is that a target's status is the one the alerter worked out on its last round, at most a minute old, and appears a minute after the service starts.
+
+  A round trip or a loss disappears once its pass is older than both three of the target's intervals and five minutes, so a probe that dies during an outage does not report its last loss forever. Its last pass stays as a timestamp, and dates in general are exported as timestamps rather than ages, as Prometheus recommends: a probe's silence and a certificate's remaining days are computed in the query.
+
+  A batch of measurements the writer fails to commit, on a full disk for instance, was only logged until now. It is now counted in `smokestack_measurements_write_failed_total`.
+
 - **How long each resolution is kept is now an instance setting.**
 
   Every measurement is stored five times over at falling resolution, and how long each of those was kept was compiled in: raw passes 48 hours, one-minute buckets a year, five-minute buckets three years, hourly and daily for ever. The only setting near it was *Keep measurements for* on a target, which cuts every resolution at the same date. So an instance could not drop the minute while keeping the hour, and an instance with the disk for it could not keep the minute beyond a year.
