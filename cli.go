@@ -38,6 +38,10 @@ Usage:
   smokestack version                            print version
   smokestack selftest                           check the binary is sound
   smokestack user add -email E -name N [-role master|admin|editor|viewer] [-password P]
+  smokestack apikey list                        list the API keys of every account
+  smokestack apikey create -email E -name N [-role viewer|editor|admin] [-days D]
+                                                issue an API key acting as that account (shown once)
+  smokestack apikey revoke -id N                withdraw an API key
   smokestack update [-force] PACKAGE.zip        install a release package
   smokestack rollback                           return to the previous release
   smokestack release keygen -out DIR            create a release signing key pair
@@ -75,6 +79,8 @@ func runCLI(args []string) bool {
 		}
 	case "user":
 		err = cmdUser(args[1:])
+	case "apikey":
+		err = cmdAPIKey(args[1:])
 	case "update":
 		err = cmdUpdate(args[1:])
 	case "rollback":

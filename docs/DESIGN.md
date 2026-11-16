@@ -279,6 +279,34 @@ curl -s -X PUT localhost:8080/api/v1/admin/storage \
                 "low_watermark":0.70,"keep_local_hours":48}}'
 ```
 
+**An API key, so that a script does not hold everything.** The admin token
+acts as master and belongs to nobody. An API key belongs to an account, is
+made in *Accounts → API keys* or with `smokestack apikey create` on the host,
+and is sent the same way, `Authorization: Bearer ssk_…`:
+
+```
+GET    /api/v1/admin/apikeys        own keys; an admin sees every account's
+POST   /api/v1/admin/apikeys        {"name":"ansible","role":"admin","days":90}
+DELETE /api/v1/admin/apikeys/{id}   revoke, effective immediately
+```
+
+The target and category routes currently need admin, which is why the
+Ansible key above is an admin one.
+
+A key acts as its account, with the lower of two roles: the one it was given —
+never above the creator's, never master — and the account's current one.
+Demoting the account demotes its keys; disabling or deleting it deletes them.
+A key cannot create accounts or keys (the admin token cannot create keys
+either, owning no account) nor change its account's password, needs no CSRF
+token, and reads private targets on the public endpoints as a session does.
+What it can create otherwise — share links, probe tokens, federation peers —
+outlives its revocation, and is where to look after a leak. It is shown once
+and stored as a SHA-256 hash: a slow hash protects guessable passwords, and
+256 random bits are not guessable. The `ssk_` prefix is for secret scanners
+and log filters, `ssk_[0-9a-f]{64}` matching a key and nothing else. Its last
+use is written at most once a minute, and every audit entry made with it
+names the account and the key.
+
 **A share link is a credential.** It is a random token, kept hashed like a
 session, that grants read access to exactly one target — series, events and
 traceroutes of that target, nothing else, whatever its visibility. It
@@ -296,10 +324,13 @@ The operator keeps seeing all of it.
 **Private targets.** Each target is public or private. A private target is
 measured, stored and graphed exactly like the others, but it is left out of
 every public endpoint: tree, overview, series, charts, live stream and
-traceroutes. The visibility check accepts the API token or a back-office
-session, so an operator sees everything while a visitor sees only the public
-targets. The set of public target ids is cached and rebuilt whenever a target
-or a category changes, so switching a target takes effect immediately.
+traceroutes. The visibility check accepts the API token, an API key or a
+back-office session, so an operator sees everything while a visitor sees only
+the public targets. The set of public target ids is cached and rebuilt
+whenever a target or a category changes, so switching a target takes effect
+immediately. A live stream opened by an authenticated caller checks the
+credential again every 5 seconds, and falls back to the public targets once
+the key is revoked or the session closed.
 `/api/v1/overview?all=1` returns private targets to an authenticated caller;
 the cached public payload never contains them.
 
@@ -470,11 +501,20 @@ demoted or disabled.
   stored hashed, valid 12 hours.
 - CSRF token required on every state-changing request made with the cookie.
 - 8 sign-in attempts per IP per 10 minutes, with the same error message
-  whether the account exists or not. `X-Forwarded-For` is trusted only when
-  the connection comes from a local reverse proxy, so it cannot be forged to
-  bypass the limit.
+  whether the account exists or not. Checking the current password on a
+  password change counts as an attempt. `X-Forwarded-For` is trusted only
+  when the connection comes from a local reverse proxy, so it cannot be
+  forged to bypass the limit.
 - Changing a password or disabling an account closes all its sessions.
-- Audit log: sign-ins, failures, creations, pairing decisions, updates.
+  Disabling it also deletes its API keys, so that an account taken over and
+  later re-enabled does not get the intruder's keys back. A password change
+  leaves them: they are separate credentials, listed with their creation date
+  and last use, and revoking them on every routine change would break every
+  script that holds one.
+- Audit log: sign-ins, failures, creations, pairing decisions, updates, and
+  on each entry written for a request made with an API key, the key. Changes
+  to targets, categories, events, site settings, storage and federation peers,
+  among others, are not written to it yet.
 
 **Before exposing an instance.** Put a TLS reverse proxy in front, with
 `proxy_pass` only, never `root` or `alias`. The cookie only becomes `Secure`

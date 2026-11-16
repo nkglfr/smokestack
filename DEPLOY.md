@@ -398,6 +398,43 @@ If you skipped the installer's account creation, the service prints a one-time
 setup code: `journalctl -u smokestack | grep setup` — or run
 `sudo smokestack user add -email you@example.net`.
 
+### Scripts and automation: an API key, not the admin token
+
+The `admin_token` of `config.json` still works as a bearer token, but it acts
+as master and belongs to nobody. Give Ansible, Terraform, a CI job or a
+Prometheus scraper a key of its own instead, with the least role it needs —
+from *Accounts → API keys*, signed in as the account the script acts for, or
+on the host:
+
+```sh
+sudo smokestack apikey create -email noc@example.net -name ansible -role admin -days 365
+sudo smokestack apikey list
+sudo smokestack apikey revoke -id 3
+```
+
+The target and category routes currently need admin, so a playbook that
+manages them needs an admin key. A scraper that only reads the public
+endpoints, private targets included, does with viewer.
+
+The key is printed once, alone on standard output, and only its hash is
+stored. Send it as `Authorization: Bearer ssk_…`. It acts with the lower of
+its own role and the account's current one, never as master, cannot create
+accounts or keys or change the account's password, and it is deleted with
+the account when that is disabled or deleted. One key per script is what
+keeps revocation cheap and the audit log readable: every entry the audit log
+writes for a request made with a key — shares, probes and their tokens,
+pairing, updates — names the account and the key. Changes to targets,
+categories, events, site settings, storage and federation peers, among
+others, are not written to the audit log, with a key or without.
+
+Revoking a key does not withdraw what was made with it. After a leak, look
+for share links, probe tokens and federation peers created while it was out,
+and revoke those too.
+
+`ssk_` followed by 64 hexadecimal digits is the pattern to give a secret
+scanner or a log filter. A key found where it should not be is matched in the
+list by its first characters, then revoked.
+
 ## 5. Updating
 
 Every update is a signed `.zip` package. Whatever the method, smokestack:
