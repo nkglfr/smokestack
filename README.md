@@ -8,7 +8,7 @@
 SmokePing: one binary, fast graphs, exact percentiles, and a federation
 between operators who measure each other.
 
-- 📈 **Latency, jitter and loss** to your transits, exchanges, DNS resolvers and clouds
+- 📈 **Latency, jitter and loss** to your transits, exchanges, DNS resolvers and clouds — resolvers timed on real queries, not pings
 - 🔍 **Zoom from one year down to 30 seconds**, percentiles stay exact at every level
 - 📍 **Measure from several places**: probes on your other sites report to one instance, and a target says which of them decides its status
 - 🧭 **Traceroute on anomalies**, compared with the last healthy path, over IPv4 and IPv6
@@ -189,7 +189,7 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 
 **Back-office**
 - Accounts with four roles (viewer, editor, admin, master) and an audit log
-- Targets and categories, ICMP, TCP or UDP echo, IPv4 or IPv6, every 30 s, 1, 5 or 10 min
+- Targets and categories, ICMP, TCP, UDP echo or DNS queries, IPv4 or IPv6, every 30 s, 1, 5 or 10 min
 - A catalogue of ready-made targets to enable in one click, plus per-country
   suggestions in the [wiki](https://github.com/nkglfr/smokestack/wiki)
 - A contact form on the public pages, so your address stays off spam lists

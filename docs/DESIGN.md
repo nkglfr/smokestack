@@ -167,7 +167,7 @@ What makes the difference:
 - **Kernel timestamps.** ICMP replies are timestamped by the kernel on arrival
   (`SO_TIMESTAMPNS`); the send time is written into the packet right before
   the system call. TCP handshake times are read from `TCP_INFO`, measured by
-  the TCP stack itself.
+  the TCP stack itself. DNS answers carry the kernel's arrival time too.
 - **The probe never waits.** It reads targets from memory and hands results to
   a non-blocking queue. If the queue is full (database stuck for minutes), the
   measurement is counted as dropped and reported, but the probe keeps
@@ -268,6 +268,11 @@ curl -s -X POST localhost:8080/api/v1/admin/targets \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"category_id":2,"title":"Example transit","host":"192.0.2.1","family":4,
        "interval_s":30,"packets":10,"spacing_ms":200,"timeout_ms":1500}'
+
+curl -s -X POST localhost:8080/api/v1/admin/targets \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"category_id":2,"title":"Example resolver","host":"192.0.2.53","family":4,
+       "proto":"dns","dns_name":".","dns_type":"NS"}'
 
 curl -s -X PUT localhost:8080/api/v1/admin/storage \
   -H "Authorization: Bearer $TOKEN" \
@@ -418,6 +423,36 @@ with the reason.
 **TCP targets.** The host and the port are stored separately, so a target can
 move between ICMP and TCP without rewriting its address; older targets stored
 as `host:port` are migrated on start.
+
+**DNS targets.** A resolver can keep answering ICMP from its kernel while
+every query waits out the client's timeout, so a ping says nothing about
+whether it resolves; on a production instance, one failing for over an hour
+showed only as loss on the targets that depended on it. A `dns` target sends one query per packet over UDP,
+recursion desired, for the `dns_name` and `dns_type` it states — `. NS` by
+default, the priming query every recursive resolver answers from its cache,
+so the figure is the resolver's and no third party's name is looked up. The
+type is one of `A`, `AAAA`, `NS`, `SOA`, `MX`, `TXT`; the port defaults to 53.
+NOERROR and NXDOMAIN are answers, a truncated one included, since the
+resolver is what is timed. SERVFAIL is loss. REFUSED is loss reported as a
+configuration to fix, the way a UDP echo reports a port nobody listens on.
+
+The queries of a burst go out at the target's spacing without waiting for each
+other, as ICMP echoes do, so a resolver that says nothing holds a pass for the
+burst plus the timeout, inside the `packets × spacing_ms + timeout_ms` the
+interval is checked against. An answer counts only if it arrives on the socket
+connected to the address and port queried, within the timeout of its own
+query, and repeats that query's random ID and its question: an answer is never
+timed against another query, and one that comes after its timeout is lost
+wherever its query sat in the burst. The one reply taken without the question
+is a bare error header carrying the right ID, which is how Unbound refuses a
+client its access control leaves out; it counts as the loss it names, never as
+an answer. Only the header and the question are read, at fixed offsets:
+nothing in an answer is followed. The query carries no EDNS record, so the
+answer fits 512 bytes. The query is cleared on any other protocol rather than
+refused, so that changing only a target's protocol is never turned down over a
+field the caller did not send, and a target hiding its address hides its query
+name from the public tree as well. A double-check request has no room for a
+query, so DNS targets are refused there, and the breakdown stays TCP-only.
 
 **Interval and retention.** The interval is free between 10 s and a day: the
 list of four values was a restriction, not a measurement constraint, and the

@@ -3,6 +3,10 @@
  * portee globale, comme app.js et i18n.js du site public. */
 /* ----------------------------------------------------------- targets */
 const FAMILY={0:"auto",4:"IPv4",6:"IPv6"};
+const DNS_TYPES=["NS","SOA","A","AAAA","MX","TXT"];
+// The port each protocol starts from. One left over from the previous protocol is replaced on a switch, so
+// a UDP echo target turned into a DNS one does not go on querying port 7.
+const DEFAULT_PORT={udp:"7",dns:"53"};
 const COMMON_PORTS=[[443,"HTTPS"],[80,"HTTP"],[22,"SSH"],[53,"DNS"],[25,"SMTP"],[587,"SMTP submission"],[179,"BGP"],[3306,"MySQL"],[5432,"PostgreSQL"],[8080,"HTTP alt"]];
 let EDIT=null;   // target being edited, null when creating
 
@@ -39,11 +43,21 @@ async function viewTargets(m){
         <div class="field"><label>Host or IP address</label><input id="thost" placeholder="192.0.2.1 or 2001:db8::1"></div>
         <div class="field"><label>Protocol</label><select id="tproto">
           <option value="icmp">ICMP</option><option value="tcp">TCP connect</option>
-          <option value="udp">UDP echo</option></select></div>
+          <option value="udp">UDP echo</option><option value="dns">DNS query</option></select></div>
         <div class="field" id="portfield" hidden><label id="portlabel">TCP port</label>
           <input id="tport" list="ports" placeholder="443">
           <datalist id="ports">${COMMON_PORTS.map(([p,l])=>html`<option value="${p}">${p} — ${l}</option>`)}</datalist>
           <div id="portnote" style="font-size:11px;color:var(--ink3);margin-top:3px" hidden>Port 7 is the RFC 862 echo port, which a Junos probe-server listens on. A receiver can be told to use the 49160–65535 range instead.</div></div>
+        <div class="field" id="dnsnamefield" hidden><label>Query name</label>
+          <input id="tdnsname" class="mono" placeholder=".">
+          <div style="font-size:11px;color:var(--ink3);margin-top:3px">One query per packet, recursion desired.
+            The root, “.”, is in every recursive resolver's cache, so its answer times the resolver rather than
+            whatever it would have to ask. For an authoritative server, ask for a name in a zone it serves.</div></div>
+        <div class="field" id="dnstypefield" hidden><label>Query type</label>
+          <select id="tdnstype">${DNS_TYPES.map(x=>html`<option value="${x}">${x}</option>`)}</select>
+          <div style="font-size:11px;color:var(--ink3);margin-top:3px">NOERROR and NXDOMAIN are answers.
+            SERVFAIL counts as loss, and so does REFUSED, which the reason under the target names as a
+            configuration to fix.</div></div>
         <div class="note" style="grid-column:1/-1">Prefer a name over a public IP address.
           Publishing the address of a machine you do not own exposes it, and that stays the
           responsibility of whoever runs this instance — not of the tool. Public pages show only
@@ -243,17 +257,22 @@ async function viewTargets(m){
   });
   // A UDP echo target needs a port as much as a TCP one does. Leaving this on "tcp" alone was the
   // one-line gap that would have shipped a protocol with no way to set the port it measures.
+  let lastProto=null;
   const syncProto=()=>{
-    const p=$("#tproto").value, needsPort=p==="tcp"||p==="udp";
+    const p=$("#tproto").value, needsPort=p==="tcp"||p==="udp"||p==="dns";
     $("#portfield").hidden=!needsPort;
-    $("#portlabel").textContent=p==="udp"?"UDP port":"TCP port";
+    $("#portlabel").textContent={udp:"UDP port",dns:"DNS port"}[p]||"TCP port";
     $("#portnote").hidden=p!=="udp";
-    if(p==="udp"&&!$("#tport").value) $("#tport").value="7";
+    $("#dnsnamefield").hidden=$("#dnstypefield").hidden=p!=="dns";
+    const port=$("#tport").value;
+    if(DEFAULT_PORT[p]&&(!port||port===DEFAULT_PORT[lastProto])) $("#tport").value=DEFAULT_PORT[p];
+    lastProto=p;
   };
   $("#tproto").onchange=syncProto;
   if(EDIT){
     $("#tcat").value=EDIT.category_id; $("#ttitle").value=EDIT.title; $("#thost").value=EDIT.host;
     $("#tproto").value=EDIT.proto; $("#tport").value=EDIT.port||""; $("#tfam").value=String(EDIT.family||0);
+    $("#tdnsname").value=EDIT.dns_name||""; $("#tdnstype").value=EDIT.dns_type||"NS";
     $("#tlw").value=EDIT.loss_warn||0; $("#tlc").value=EDIT.loss_crit||0; $("#tlf").value=EDIT.lat_factor||0;
     // Auto is no longer offered for a new target; a target that already has
     // it keeps it visible, so editing something else does not silently
@@ -353,7 +372,9 @@ async function viewTargets(m){
     }
     const body={category_id:parseInt($("#tcat").value,10),title:$("#ttitle").value,
       host:cleanHost($("#thost").value),family:parseInt($("#tfam").value,10),proto:$("#tproto").value,
-      port:($("#tproto").value==="tcp"||$("#tproto").value==="udp")?parseInt($("#tport").value||"0",10):0,
+      port:$("#portfield").hidden?0:parseInt($("#tport").value||"0",10),
+      dns_name:$("#tproto").value==="dns"?$("#tdnsname").value.trim():"",
+      dns_type:$("#tproto").value==="dns"?$("#tdnstype").value:"",
       interval_s:num0($("#tiv").value), keep_days:parseInt($("#tkeep").value||"0",10),
       packets:num0($("#tpk").value), spacing_ms:num0($("#tsp").value), timeout_ms:num0($("#tto").value),
       pin_ip:$("#tpin").value.trim(), alerts_off:!$("#talert").checked,
@@ -458,7 +479,7 @@ async function viewTargets(m){
             <button class="btn s" data-fam6="${t.id}">Set IPv6</button></div>`:""}
           ${t.last_error?html`<div class="terr" title="Last failure: ${new Date(t.last_error_ts*1000).toLocaleString()}">
             ⚠ ${t.last_error}</div>`:""}</td>
-        <td data-l="Family">${FAMILY[t.family||0]}</td><td data-l="Check">${t.proto}</td>
+        <td data-l="Family">${FAMILY[t.family||0]}</td><td data-l="Check">${t.proto}${t.proto==="dns"?html` <span class="mono">${t.dns_name} ${t.dns_type}</span>`:""}</td>
         <td data-l="Interval">${t.interval_s} s</td>
         <td data-l="Alerts"><button class="btn s" data-alert="${t.id}" data-off="${t.alerts_off?1:0}"
           title="Alert when this target stays in incident">${t.alerts_off?

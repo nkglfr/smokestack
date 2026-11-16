@@ -477,6 +477,70 @@ func TestDCCannotAskAboutAPrivateTarget(t *testing.T) {
 	}
 }
 
+// The protocol guard stops what a request cannot describe and nothing else:
+// an ICMP or TCP target still reaches the peer with its protocol and port,
+// while UDP echo and DNS targets are refused before anything is sent.
+func TestDCRequestReachesThePeerForICMPAndTCPOnly(t *testing.T) {
+	asked := make(chan dcRequest, 4)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" || r.URL.Path != "/api/v1/fed/dc/request" {
+			http.NotFound(w, r)
+			return
+		}
+		var req dcRequest
+		json.NewDecoder(r.Body).Decode(&req)
+		asked <- req
+		json.NewEncoder(w).Encode(map[string]any{"id": "check-" + req.Proto,
+			"expires_at": time.Now().Unix() + 900})
+	}))
+	t.Cleanup(srv.Close)
+	f := newFed(t, "AS64500", "Requester", "https://requester.example.net")
+	pub, _, _ := ed25519.GenerateKey(nil)
+	f.store.cfg.Exec(
+		`INSERT INTO fed_peers(asn,org,url,pubkey,fingerprint,anchors,state,created_at)
+		 VALUES('AS64501','Measurer',?,?,?,'[]','trusted',?)`,
+		srv.URL, base64.StdEncoding.EncodeToString(pub), fingerprintOf(pub), time.Now().Unix())
+	f.store.cfg.Exec(dcSchema)
+	fedAllowPrivateForTests = true
+	t.Cleanup(func() { fedAllowPrivateForTests = false })
+
+	cat, _ := f.store.CreateCategory("c", "C", "C", true)
+	for _, c := range []struct {
+		proto   string
+		port    int
+		reaches bool
+	}{{"icmp", 0, true}, {"tcp", 443, true}, {"udp", 7, false}, {"dns", 53, false}} {
+		id, err := f.store.CreateTarget(&Target{CategoryID: cat, Slug: c.proto, Title: c.proto,
+			Host: "198.51.100.10", Proto: c.proto, Port: c.port, IntervalS: 60, Packets: 5,
+			SpacingMs: 100, TimeoutMs: 1000, Public: true, Enabled: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		check, err := f.RequestDoubleCheck(id, "AS64501", 15)
+		var req *dcRequest
+		select {
+		case r := <-asked:
+			req = &r
+		default:
+		}
+		if !c.reaches {
+			if err == nil || req != nil {
+				t.Errorf("%s: a double-check was requested (%v, sent: %v)", c.proto, err, req != nil)
+			}
+			continue
+		}
+		if err != nil {
+			t.Fatalf("%s: %v", c.proto, err)
+		}
+		if req == nil || req.Proto != c.proto || req.Port != c.port || req.Host != "198.51.100.10" {
+			t.Errorf("%s: the peer was asked %+v", c.proto, req)
+		}
+		if check.ID != "check-"+c.proto || check.LocalTargetID != id || check.State != "running" {
+			t.Errorf("%s: the check was recorded as %+v", c.proto, check)
+		}
+	}
+}
+
 // The corroboration stays in the back-office until an operator decides
 // otherwise: it publishes a fact about a third party's reachability
 // measured by somebody who never agreed to have it published.
