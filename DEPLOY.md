@@ -309,6 +309,21 @@ The canonical addresses use the **Website** field of the publisher page. Set
 it to the address visitors use, otherwise they fall back to the host of the
 request.
 
+### Atom feed
+
+`/feed.atom`, and `/t/<name>/feed.atom` for one target, let anyone subscribe
+to planned maintenance and the events you publish, with no account and no
+e-mail address. Every public page advertises them and the footer links to the
+first. The incidents the instance detects are **not** in them until you tick
+*Publish detected incidents in the Atom feed* in *Instance → Publisher page*:
+that turns the live state already on the home page into a dated 30-day record
+pushed to every subscriber, which is your call to make. Even then, an
+incident stays out if it is shorter than the alert delay, opened during a
+maintenance window that stops alerts or measurement, belongs to a target
+with alerts off, or was decided by a probe you have since disabled. The
+entry ids are built from the **Website** field, so set it before the feed is
+shared — a reader that sees the host change sees every entry as new.
+
 ### Being reachable without publishing your address
 
 By default the public *About* page carries a **contact form** instead of your

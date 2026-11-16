@@ -82,6 +82,17 @@ Mastodon | https://mastodon.example/@noc">${(s.contact_links||[]).map(l=>`${l.la
           <span class="mono">/api/v1/availability</span> answering public callers; the measurements
           are still taken and still counted.</small></span></label>
     </div></div>
+    <div class="card"><h3>Incident feed</h3><div class="body">
+      <label class="chk"><input type="checkbox" id="public_incidents" ${s.public_incidents?"checked":""}>
+        <span>Publish detected incidents in the Atom feed<small>Off by default. The feed at
+          <span class="mono">/feed.atom</span>, and <span class="mono">/t/name/feed.atom</span> for one
+          target, always carries planned maintenance and the events you publish. On, it also lists
+          the incidents detected on public targets over the last 30 days, with their start and end,
+          once they have lasted the alert delay. An incident that opens during a window stopping
+          alerts or measurement, on a target left out of alerting, or seen by a disabled probe stays
+          out. The current state is on the home page already; this turns it into a dated record that
+          every subscriber receives.</small></span></label>
+    </div></div>
     <div class="card"><h3>Addresses on public pages</h3><div class="body">
       <label class="chk"><input type="checkbox" id="mask_addresses" ${s.mask_addresses?"checked":""}>
         <span>Show only the network of an IP address<small>On by default. Masking reduces the
@@ -133,6 +144,7 @@ Mastodon | https://mastodon.example/@noc">${(s.contact_links||[]).map(l=>`${l.la
         return (label&&url)?{label,url}:null;}).filter(Boolean);
       body.search_index=$("#search_index").checked;
       body.public_availability=$("#public_availability").checked;
+      body.public_incidents=$("#public_incidents").checked;
       body.mask_addresses=$("#mask_addresses").checked;
       body.thresholds={loss_warn:parseFloat($("#th_lw").value||"0"),
                        loss_crit:parseFloat($("#th_lc").value||"0"),

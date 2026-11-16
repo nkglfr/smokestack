@@ -572,6 +572,7 @@ func (s *Store) dcDropTarget(id int64) {
 	} {
 		s.mxw.Exec(q, id)
 	}
+	s.cfg.Exec(`DELETE FROM local_incidents WHERE target_id=?`, id)
 	s.cfg.Exec(`DELETE FROM targets WHERE id=?`, id)
 	s.notifyTargets()
 }

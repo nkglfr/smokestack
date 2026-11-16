@@ -143,6 +143,20 @@
     "until": "até {until}",
     "measure_paused": "medição suspensa"
   },
+  "feed": {
+    "subscribe": "Subscrever as atualizações de estado (Atom)",
+    "title": "{name}: atualizações de estado",
+    "incident_open": "Incidente em {target}",
+    "incident_closed": "Resolvido: incidente em {target}",
+    "incident_open_text": "Há um incidente aberto em {target} desde {since}.",
+    "incident_closed_text": "Foi registado um incidente em {target} de {from} a {until} ({duration}).",
+    "maint_title": "Manutenção programada em {target}: {title}",
+    "maint_planned": "Prevista de {from} a {until}.",
+    "maint_live": "Em curso até {until}.",
+    "maint_done": "Concluída, de {from} a {until}.",
+    "maint_paused": "A medição fica suspensa durante a janela.",
+    "event_span": "De {from} a {until}."
+  },
   "corr": {
     "title": "Verificado a partir de outra rede",
     "hint": "Uma instância par situada noutro AS mediu este alvo a pedido. Um único ponto de observação não distingue um alvo em baixo de um caminho quebrado; dois pontos em redes diferentes sim. Os números são desse par, sobre uma janela curta, e são publicados porque o operador desta instância escolheu publicá-los.",

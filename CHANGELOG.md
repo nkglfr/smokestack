@@ -4,6 +4,18 @@ Versions are published as signed releases; servers with automatic updates instal
 
 ## Unreleased
 
+- **Anyone can now follow an instance's status through an Atom feed, with no account and no e-mail address.**
+
+  `/feed.atom` covers the whole instance and `/t/<name>/feed.atom` covers one target. Every public page advertises them to feed readers, and the footer links to the first. Each entry links to the page it concerns and keeps the same id from start to end, so a reader updates the entry when an incident closes instead of showing a second one.
+
+  The feed publishes nothing the public pages do not already show. A target without a public page (private, disabled, or in a private category) appears in no feed and has none of its own; its address returns the same 404 as a target that does not exist. A host is masked or hidden exactly as on the target page. Planned maintenance appears when the banner would announce it, seven days ahead. The events are the ones already drawn on the graphs, minus route changes. No traceroute, probe or alert detail is ever included.
+
+  Detected incidents are the exception, and they stay out until you choose otherwise. The home page already shows the current state, but a dated 30-day list of other people's outages, pushed to every subscriber, is a publication of its own. Tick *Publish detected incidents in the Atom feed* in *Instance → Publisher page* to add them. Even then, an incident stays out if it is shorter than the alert delay, opened during a maintenance window that stops alerts or measurement, belongs to a target with alerts off, or was decided by a probe you have since disabled. Each entry says when an incident was recorded, not what was measured.
+
+  Purging a target now also deletes the incidents recorded for it. They used to stay behind, and a target created later could be given the purged target's id and inherit them. The feed also ignores any incident older than its target, so rows left by earlier purges are never published.
+
+  Entry ids are built from the **Website** address and one date fixed when the first feed is built, so set the Website before sharing the feed: a reader that sees the host change treats every entry as new. Entries cover the last 30 days, at most 50, in the instance's default language, with times in UTC. Each feed is rebuilt at most every 30 seconds and can be revalidated with an ETag.
+
 - **How long each resolution is kept is now an instance setting.**
 
   Every measurement is stored five times over at falling resolution, and how long each of those was kept was compiled in: raw passes 48 hours, one-minute buckets a year, five-minute buckets three years, hourly and daily for ever. The only setting near it was *Keep measurements for* on a target, which cuts every resolution at the same date. So an instance could not drop the minute while keeping the hour, and an instance with the disk for it could not keep the minute beyond a year.

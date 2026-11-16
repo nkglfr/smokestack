@@ -36,6 +36,7 @@ type API struct {
 	setupFile string
 
 	streams liveStreams
+	feeds   feedCache
 }
 
 // liveStreams bounds the SSE endpoint. Each stream holds a goroutine and a

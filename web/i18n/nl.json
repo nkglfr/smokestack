@@ -143,6 +143,20 @@
     "until": "tot {until}",
     "measure_paused": "meting opgeschort"
   },
+  "feed": {
+    "subscribe": "Abonneren op statusupdates (Atom)",
+    "title": "{name}: statusupdates",
+    "incident_open": "Storing bij {target}",
+    "incident_closed": "Opgelost: storing bij {target}",
+    "incident_open_text": "Sinds {since} staat er een storing open bij {target}.",
+    "incident_closed_text": "Van {from} tot {until} ({duration}) is er een storing bij {target} geregistreerd.",
+    "maint_title": "Gepland onderhoud op {target}: {title}",
+    "maint_planned": "Gepland van {from} tot {until}.",
+    "maint_live": "Bezig tot {until}.",
+    "maint_done": "Afgerond, van {from} tot {until}.",
+    "maint_paused": "De meting is tijdens het venster opgeschort.",
+    "event_span": "Van {from} tot {until}."
+  },
   "corr": {
     "title": "Gecontroleerd vanuit een ander netwerk",
     "hint": "Een peer-instantie in een ander AS heeft dit doel op verzoek gemeten. Eén observatiepunt kan een uitgevallen doel niet onderscheiden van een gebroken pad; twee punten in verschillende netwerken wel. De cijfers zijn van die peer, over een kort tijdvenster, en worden gepubliceerd omdat de beheerder van deze instantie daarvoor koos.",

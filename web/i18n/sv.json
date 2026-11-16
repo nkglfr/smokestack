@@ -143,6 +143,20 @@
     "until": "till {until}",
     "measure_paused": "mätning pausad"
   },
+  "feed": {
+    "subscribe": "Prenumerera på statusuppdateringar (Atom)",
+    "title": "{name}: statusuppdateringar",
+    "incident_open": "Störning på {target}",
+    "incident_closed": "Löst: störning på {target}",
+    "incident_open_text": "En störning har varit öppen på {target} sedan {since}.",
+    "incident_closed_text": "En störning registrerades på {target} från {from} till {until} ({duration}).",
+    "maint_title": "Planerat underhåll på {target}: {title}",
+    "maint_planned": "Planerat från {from} till {until}.",
+    "maint_live": "Pågår till {until}.",
+    "maint_done": "Avslutat, från {from} till {until}.",
+    "maint_paused": "Mätningen är pausad under fönstret.",
+    "event_span": "Från {from} till {until}."
+  },
   "corr": {
     "title": "Kontrollerat från ett annat nät",
     "hint": "En motpartsinstans i ett annat AS har mätt detta mål på begäran. En enda observationspunkt kan inte skilja ett nedsläckt mål från en bruten väg; två punkter i olika nät kan det. Talen kommer från den motparten, över ett kort fönster, och publiceras eftersom den som driver denna instans valde att publicera dem.",

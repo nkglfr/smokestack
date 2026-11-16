@@ -36,7 +36,8 @@ type gzipWriter struct {
 }
 
 func compressible(ct string) bool {
-	for _, p := range []string{"application/json", "text/", "application/javascript", "image/svg+xml"} {
+	for _, p := range []string{"application/json", "text/", "application/javascript", "image/svg+xml",
+		"application/atom+xml"} {
 		if strings.HasPrefix(ct, p) {
 			return true
 		}
