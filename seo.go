@@ -312,6 +312,9 @@ func (a *API) sitemapXML(w http.ResponseWriter, r *http.Request) {
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
 	b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
 	add := func(path, freq, prio string) {
+		if site.Hides(pageAt(path)) {
+			return
+		}
 		fmt.Fprintf(&b, "<url><loc>%s%s</loc><lastmod>%s</lastmod>"+
 			"<changefreq>%s</changefreq><priority>%s</priority></url>\n",
 			esc(base), esc(path), day, freq, prio)

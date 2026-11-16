@@ -25,11 +25,23 @@
 
   let SITE = {}, VERSION = null;
 
-  // Pages the instance says are relevant: no Federation tab leading to an
-  // empty page on an instance that does not federate.
+  // Whether the menu lists a page: no Federation tab leading to an empty
+  // page on an instance that does not federate, and none at all for a page
+  // the operator chose to hide.
+  function shows(id) {
+    const on = SITE.pages || {};
+    return on[id] === undefined || !!on[id];
+  }
+
+  // Whether the operator took a page off the site. Links from other pages
+  // follow this alone: the menu ignores an AS number set only in the
+  // federation configuration, and the page answers all the same.
+  function hides(id) {
+    return (SITE.hidden_pages || []).includes(id);
+  }
+
   function pages() {
-    const on = (SITE.pages || {});
-    return PAGES.filter(p => on[p.id] === undefined || on[p.id]);
+    return PAGES.filter(p => shows(p.id));
   }
 
   function header(active) {
@@ -211,5 +223,5 @@
 
   // esc reste exporte tant qu'une page assemble encore ses chaines a la
   // main ; escURL n'avait plus d'appelant.
-  window.App = { boot, getJSON, esc: H.esc, get site() { return SITE; } };
+  window.App = { boot, getJSON, shows, hides, esc: H.esc, get site() { return SITE; } };
 })();

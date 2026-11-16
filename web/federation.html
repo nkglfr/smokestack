@@ -52,7 +52,9 @@ function peerCard(p, t) {
     <div class="card"><div class="card-b">
       <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
         <strong style="font-size:15px">${p.org}</strong>
-        <a class="mono" href="/network#AS${String(p.asn).replace(/\D/g, "")}">${p.asn}</a>
+        ${!App.hides("network")
+          ? html`<a class="mono" href="/network#AS${String(p.asn).replace(/\D/g, "")}">${p.asn}</a>`
+          : html`<span class="mono">${p.asn}</span>`}
       </div>
       <div class="faint" style="font-size:12px;margin-top:2px">
         ${t("fed.since")} ${p.since ? I18N.date(p.since, { day: "2-digit", month: "short", year: "numeric" }) : "\u2014"}

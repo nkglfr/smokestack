@@ -578,6 +578,21 @@ curl https://smokestack.exemple.fr/api/v1/asn/64501    # un pair approuvé
 
 Toutes partagent `app.css` (thème sombre automatique), `i18n.js` et `app.js`.
 
+**Masquer une page relève de la présentation, pas de la politique.** La
+navigation omet déjà une page que la configuration rend vide — Fédération et
+Appairage sans fédération, Réseau hôte sans numéro d'AS — et l'exploitant peut
+en plus masquer n'importe laquelle de ces trois (`hidden_pages` dans
+`PUT /api/v1/admin/site`). Une page masquée disparaît du menu, des liens des
+autres pages et du sitemap, et son adresse, fichier `.html` compris, répond 404
+plutôt que de rediriger, pour qu'un moteur de recherche l'oublie. Les API
+derrière elle continuent de répondre : les pairs appellent `/api/v1/fed/*` quoi
+que publie cette instance, et l'appairage ne passe jamais par la page HTML, si
+bien que masquer Appairage ne peut pas le casser en silence. La fédération se
+coupe dans le fichier de configuration. Accueil et À propos ne se masquent pas :
+À propos est l'endroit où l'exploitant est identifiable et joignable. Le
+réglage nomme ce qui est masqué, donc une instance mise à jour depuis une
+version antérieure ne masque rien.
+
 ## IPv6 et traceroute sur anomalie
 
 Chaque cible porte une famille d'adresses (auto, IPv4, IPv6) ; la sonde ouvre

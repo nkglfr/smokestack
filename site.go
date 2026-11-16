@@ -64,6 +64,10 @@ type Site struct {
 	// to it say, so an operator who does not want to be read that way can
 	// stop publishing it rather than explain it.
 	PublicAvailability bool `json:"public_availability"`
+	// HiddenPages lists the optional public pages the operator took off the
+	// site (pages.go). It names what is hidden rather than what is shown, so
+	// an instance configured before it existed hides nothing.
+	HiddenPages []string `json:"hidden_pages,omitempty"`
 	// Thresholds applied to every target that does not set its own.
 	Thresholds Thresholds `json:"thresholds,omitempty"`
 	// MaskAddresses : sur les pages publiques, une adresse IP n'est montree
@@ -163,13 +167,14 @@ func (a *API) siteGet(w http.ResponseWriter, r *http.Request) {
 	// Which public pages make sense on this instance. An operator running
 	// no federation should not see Federation and Pairing tabs leading to
 	// empty pages, and a network page without an AS number says nothing.
+	// Beyond that, the operator may hide any of the three (pages.go).
 	out := map[string]any{}
 	b, _ := json.Marshal(site)
 	json.Unmarshal(b, &out)
 	out["pages"] = map[string]bool{
-		"federation": a.fed != nil && a.fed.Enabled(),
-		"pairing":    a.fed != nil && a.fed.Enabled() && site.ASN != "",
-		"network":    site.ASN != "",
+		"federation": a.fed != nil && a.fed.Enabled() && !site.Hides("federation"),
+		"pairing":    a.fed != nil && a.fed.Enabled() && site.ASN != "" && !site.Hides("pairing"),
+		"network":    site.ASN != "" && !site.Hides("network"),
 	}
 	// Who asks changes the answer: an authenticated caller gets the NOC
 	// phone, the address that receives contact notifications and the
@@ -213,6 +218,12 @@ func (a *API) sitePut(w http.ResponseWriter, r *http.Request) {
 		}
 		v.FedURL = clean
 	}
+	hidden, err := cleanHiddenPages(v.HiddenPages)
+	if err != nil {
+		writeErr(w, 400, err.Error())
+		return
+	}
+	v.HiddenPages = hidden
 	if err := a.store.SetSite(v); err != nil {
 		writeErr(w, 500, err.Error())
 		return

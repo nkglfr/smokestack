@@ -4,6 +4,16 @@ Versions are published as signed releases; servers with automatic updates instal
 
 ## Unreleased
 
+- **The Federation, Host network and Pairing pages can be taken off the public site.**
+
+  In *Instance → Publisher page → Public pages*, untick a page and it leaves the menu, the links the other pages make to it and the sitemap, and its address answers 404 — a 404 rather than a redirect, so a search engine drops it instead of following it somewhere else. The navigation already left out a page the configuration made empty; this is for the instance that has no use for one anyway.
+
+  Hiding is presentation, not policy. The federation and pairing APIs other instances call keep answering, so hiding *Pairing* does not break a pairing in progress and hiding *Federation* does not stop federating — `federation.enabled` in the configuration file does that. *Home* and *About* cannot be hidden: *About* is where visitors find who runs the instance and how to reach it.
+
+  Nothing changes on upgrade. The setting records what is hidden, so an instance hides nothing until somebody says otherwise, and no page somebody links to disappears with an update.
+
+  Asked for in #11.
+
 - **How long each resolution is kept is now an instance setting.**
 
   Every measurement is stored five times over at falling resolution, and how long each of those was kept was compiled in: raw passes 48 hours, one-minute buckets a year, five-minute buckets three years, hourly and daily for ever. The only setting near it was *Keep measurements for* on a target, which cuts every resolution at the same date. So an instance could not drop the minute while keeping the hour, and an instance with the disk for it could not keep the minute beyond a year.

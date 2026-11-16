@@ -451,7 +451,7 @@ func main() {
 	go certs.Loop(stop)
 
 	// Compression et limite de debit devant toutes les routes.
-	handler := withRateLimit(newRateLimiter(20, 80), withGzip(mux))
+	handler := withRateLimit(newRateLimiter(20, 80), api.frontHandler(mux))
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,

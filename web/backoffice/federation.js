@@ -18,12 +18,17 @@ async function viewFed(m){
     </div>
     <div id="f">Loading…</div>`);
   try{
-    const [id,pairings,peers,info]=await Promise.all([
+    const [id,pairings,peers,info,site]=await Promise.all([
       api("GET","/api/v1/admin/fed/identity"),
       api("GET","/api/v1/admin/fed/pairing"),
       api("GET","/api/v1/admin/fed/peers"),
-      api("GET","/api/v1/fed/pairing/info").catch(()=>({min_justification:20}))
+      api("GET","/api/v1/fed/pairing/info").catch(()=>({min_justification:20})),
+      api("GET","/api/v1/site").catch(()=>({}))
     ]);
+    // A hidden pairing page answers 404 to a person, and a peer's back-office
+    // takes the bare address just as well.
+    const share=(site.hidden_pages||[]).includes("pairing")
+      ?["Address to share",id.profile.url||""]:["Pairing page to share",(id.profile.url||"")+"/pairing"];
     const MINJ=info.min_justification||20;
     const inbound=(pairings||[]).filter(p=>p.direction==="in"&&p.state==="pending");
     const outbound=(pairings||[]).filter(p=>p.direction==="out");
@@ -32,7 +37,7 @@ async function viewFed(m){
     const out=[html`<div class="card"><h3>Our identity</h3><div class="body"><table><tbody>
         <tr><td style="width:210px">AS number</td><td class="mono">${id.profile.asn||"— not set —"}</td></tr>
         <tr><td>Organisation</td><td>${id.profile.org||"—"}</td></tr>
-        <tr><td>Pairing page to share</td><td class="mono">${(id.profile.url||"")+"/pairing"}</td></tr>
+        <tr><td>${share[0]}</td><td class="mono">${share[1]}</td></tr>
         <tr><td>Fingerprint</td><td class="mono fp">${id.fingerprint}</td></tr>
         <tr><td>Declared anchors</td><td class="mono">${(id.profile.anchors||[]).join(", ")||"—"}</td></tr>
       </tbody></table></div></div>`];

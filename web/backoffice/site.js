@@ -58,6 +58,27 @@ Mastodon | https://mastodon.example/@noc">${(s.contact_links||[]).map(l=>`${l.la
         used only if SMTP is configured in <a href="${pathOf("notify")}" data-goto="notify">NOC alerting</a>; otherwise
         messages simply wait in Messages.</div>
     </div></div>
+    <div class="card"><h3>Public pages</h3><div class="body">
+      <p class="note" style="margin-top:0">Untick a page to take it off the public site: it leaves the
+        menu, the links of the other pages and the sitemap, and its address answers
+        <span class="mono">404</span>. Federation stays out of the menu while federation is off,
+        Pairing while federation is off or no AS number is set, and Host network until an AS number
+        is set.</p>
+      ${[["federation","Federation","Public peers, latency in both directions, the inter-AS matrix."],
+         ["network","Host network","Your AS as global routing and PeeringDB see it."],
+         ["pairing","Pairing","Identity, key fingerprint and how to request a pairing."]].map(([id,name,what])=>
+        html`<label class="chk"><input type="checkbox" data-pubpage="${id}"
+          ${(s.hidden_pages||[]).includes(id)?"":"checked"}><span>${name}<small>${what}</small></span></label>`)}
+      <label class="chk"><input type="checkbox" checked disabled>
+        <span>Home and About<small>Always published. About is where visitors find who runs this
+          instance and how to reach you, and a public probe nobody can identify is not worth
+          reading.</small></span></label>
+      <div class="note" style="margin:10px 0 0"><b>Hiding a page is presentation, not policy.</b> The
+        federation and pairing APIs other instances call keep answering, so hiding Federation or
+        Pairing neither stops this instance federating nor breaks a pairing in progress. To stop
+        federating, set <span class="mono">federation.enabled</span> to false in the configuration
+        file.</div>
+    </div></div>
     <div class="card"><h3>Search engines</h3><div class="body">
       <label class="chk"><input type="checkbox" id="search_index" ${s.search_index?"checked":""}>
         <span>Let search engines index the public pages<small>On by default. Each page gets a title, a
@@ -132,6 +153,8 @@ Mastodon | https://mastodon.example/@noc">${(s.contact_links||[]).map(l=>`${l.la
         const label=l.slice(0,i).trim(), url=l.slice(i+1).trim();
         return (label&&url)?{label,url}:null;}).filter(Boolean);
       body.search_index=$("#search_index").checked;
+      body.hidden_pages=Array.from(document.querySelectorAll("[data-pubpage]"))
+        .filter(c=>!c.checked).map(c=>c.dataset.pubpage);
       body.public_availability=$("#public_availability").checked;
       body.mask_addresses=$("#mask_addresses").checked;
       body.thresholds={loss_warn:parseFloat($("#th_lw").value||"0"),

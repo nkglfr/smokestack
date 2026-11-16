@@ -656,6 +656,19 @@ a plain summary of the public targets inside `<noscript>`. `/sitemap.xml` and
 without anyone maintaining a list, and private targets never appear. One
 setting turns all of it off, and the back-office is always `noindex`.
 
+**Hiding a page is presentation, not policy.** The navigation leaves out a
+page the configuration makes empty — Federation and Pairing without
+federation, Host network without an AS number — and the operator can hide any
+of those three on top of that (`hidden_pages` in `PUT /api/v1/admin/site`). A
+hidden page leaves the menu, the links of the other pages and the sitemap, and
+its address, `.html` file included, answers 404 rather than redirecting, so
+that a search engine drops it. The APIs behind it keep answering: peers call
+`/api/v1/fed/*` whatever this instance publishes, and pairing never goes
+through the HTML page, so hiding Pairing cannot quietly break it. Federation
+is turned off in the configuration file. Home and About cannot be hidden:
+About is where the operator is identifiable and reachable. The setting names
+what is hidden, so an instance upgraded from before it hides nothing.
+
 All share one stylesheet (automatic dark theme), the translation library and
 a common footer. The link to the official website comes from a value compiled
 into the binary and cannot be changed from the back-office.
