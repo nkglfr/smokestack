@@ -156,8 +156,9 @@ probe`, service `smokestack-probe`), seul autorisé à ouvrir un socket brut
 et prioritaire sur le CPU. Le service web, exposé à Internet, n'a plus ce
 droit. Les deux dialoguent par un socket Unix.
 
-- Horodatage des réponses par le noyau (`SO_TIMESTAMPNS`, `TCP_INFO`) : la
-  charge du processus ne s'ajoute jamais au temps de réponse mesuré.
+- Horodatage des réponses ICMP et DNS par le noyau (`SO_TIMESTAMPNS`), poignée
+  de main TCP lue dans `TCP_INFO` : la charge du processus ne s'ajoute jamais
+  au temps de réponse mesuré.
 - La sonde ne touche pas la base : cibles en mémoire, mesures dans une file
   non bloquante, un écrivain unique par lots sur une connexion dédiée.
 - Accueil précalculé en tâche de fond, arbre et séries en cache, gzip,
@@ -243,10 +244,68 @@ GET  /api/v1/charts?from=now-24h
 GET  /api/v1/events?from=now-7d
 GET  /api/v1/live                      (SSE)
 GET  /healthz
+GET  /badge/<slug>.svg                 badge d'état, image SVG (ci-dessous)
 ```
 
 `from` et `to` acceptent un epoch, une date RFC3339 ou une expression
 relative (`now-3h` ou sa forme courte `-3h`).
+
+**Un badge est le même pour tout le monde.** `GET /badge/<slug>.svg` est une
+image à deux cases pour le site de l'exploitant, un README ou une note
+PeeringDB : le titre de la cible, puis son état tel que les pages publiques le
+classent, dans les mêmes couleurs. `?metric=uptime&window=30d` (`24h`, `7d`,
+`30d`, `1y`) affiche la disponibilité, `?metric=latency` la médiane courante,
+et `?label=` remplace le titre, coupé à 40 caractères. Rien de l'appelant ne
+change la réponse : une cible privée répond 404 exactement comme un slug qui
+n'existe pas, une session n'en montre pas davantage, et **un jeton de partage
+n'ouvre pas de badge** — un jeton dans un `<img src>` est un identifiant
+publié à chaque lecteur de la page qui l'embarque. C'est ce qui permet aux
+proxys d'images, celui de GitHub compris, de le garder une minute. La route
+n'est pas limitée en débit, elle lit donc ce qui est déjà calculé : l'état et
+la médiane dans la vue d'ensemble construite en tâche de fond — un badge ne la
+construit jamais, et répond 503 jusqu'à la première construction — et la
+disponibilité dans le cache d'une minute de la page cible, qu'une seule
+requête remplit par cible pendant que les autres l'attendent : une page
+chargée coûte au plus un calcul de disponibilité par minute. Le chiffre est
+écrit comme la page cible l'écrit, une décimale (deux sous 1 %) avec le
+séparateur décimal de la langue, de sorte que le badge et la page vers
+laquelle il pointe ne se contredisent jamais ; une fenêtre que la cible n'a
+pas couverte en entier affiche *depuis le <date>* au lieu de son nom, pour
+qu'une cible créée la semaine dernière n'affiche pas un chiffre annuel. Quand
+la disponibilité n'est pas publiée, le badge de disponibilité le dit en gris
+plutôt que de répondre 404 : une image cassée sur une page que l'exploitant ne
+maîtrise pas se lit comme une instance en panne. Les mots sont dans la langue
+par défaut de l'instance. Le back-office donne le Markdown et le HTML à
+coller, sous *Badge* à côté de chaque cible que la vue d'ensemble publique
+affiche, construits sur l'adresse publique de l'instance (*Address of this
+instance*).
+Public, en Atom 1.0 (RFC 4287) :
+
+```
+GET  /feed.atom                        actualité de l'état de l'instance
+GET  /t/<slug>/feed.atom               la même pour une cible publique
+```
+
+**Le flux est une seconde porte, pas une porte plus large.** Il est construit
+à partir de l'aperçu public : une cible privée n'a pas de flux et n'apparaît
+dans aucun, et un hôte s'y lit exactement comme sur la page de la cible —
+masqué, ou absent pour une cible dont l'adresse reste privée. Une maintenance
+y paraît dès que le bandeau l'aurait annoncée (sept jours avant) et jamais
+quand elle a été saisie après coup ; les événements sont ceux que sert
+`/api/v1/events`, changements de route exceptés ; aucun traceroute, aucune
+sonde, aucun détail d'alerte n'y est jamais écrit. Les incidents détectés par
+l'instance n'y sont ajoutés que si la page éditeur le demande
+(`public_incidents`, désactivé par défaut), rédigés comme des enregistrements
+et non comme des mesures. Un incident plus court que le délai d'alerte, ouvert
+pendant une fenêtre de maintenance qui coupe l'alerte ou la mesure, sur une
+cible dont les alertes sont coupées, ou décidé par une sonde désactivée
+depuis, reste dehors. Les entrées couvrent les 30 derniers jours, 50 au plus,
+dans la langue par défaut de l'instance, avec des identifiants `tag:`
+construits à partir de l'hôte de l'instance, d'une date enregistrée à la
+construction du premier flux (`feed_tag_date`) et de l'identifiant de la
+ligne : un incident qui se termine met à jour son entrée au lieu d'en
+ajouter une seconde, et aucune entrée ne dit quand sa ligne a été écrite. Un
+flux est reconstruit au plus toutes les 30 secondes et porte un ETag.
 
 Administration, avec `Authorization: Bearer <admin_token>` :
 
@@ -258,6 +317,7 @@ POST   /api/v1/admin/targets
 DELETE /api/v1/admin/targets/{id}
 POST   /api/v1/admin/categories
 POST   /api/v1/admin/events
+GET    /metrics                (rôle lecteur suffisant)
 ```
 
 Une clé d'API (`Authorization: Bearer ssk_…`) s'emploie de la même façon,
@@ -299,6 +359,11 @@ curl -s -X POST localhost:8080/api/v1/admin/targets \
   -d '{"category_id":2,"title":"Transitaire exemple","host":"192.0.2.1",
        "interval_s":30,"packets":10,"spacing_ms":200,"timeout_ms":1500}'
 
+curl -s -X POST localhost:8080/api/v1/admin/targets \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"category_id":2,"title":"Résolveur exemple","host":"192.0.2.53","family":4,
+       "proto":"dns","dns_name":".","dns_type":"NS"}'
+
 curl -s -X PUT localhost:8080/api/v1/admin/storage \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"mode":"hybrid",
@@ -314,12 +379,100 @@ curl -s localhost:8080/api/v1/admin/storage -H "Authorization: Bearer $TOKEN" | 
 Le secret S3 ne ressort jamais de l'API ; un `PUT` sans `secret_key`
 conserve celui déjà en base.
 
+### Métriques Prometheus
+
+`GET /metrics` sert le format texte d'exposition 0.0.4 à tout appelant
+authentifié, à partir du rôle lecteur, cibles privées comprises. Il est
+écrit à la main : la bibliothèque cliente serait un second module. Une
+collecte lit la table `live`, les statuts que l'alerteur a calculés à son
+dernier tour, les petites tables de `config.db` et les compteurs de la
+chaîne d'écriture — jamais les échantillons ni les agrégats. Mille cibles
+vues de trois sondes se collectent en 7 ms environ sur un portable :
+30 000 séries, 3,5 Mio, 150 Kio compressés. Le point d'accès partage la
+limite de débit de l'API, 20 requêtes/s par IP cliente, qu'aucun intervalle
+de collecte n'approche.
+
+Aucun hôte, port ni adresse n'est exporté, quoi que l'appelant puisse lire
+ailleurs : ce que Prometheus conserve échappe aux règles de visibilité de
+l'instance. Les instants sont des horodatages Unix plutôt que des durées,
+comme Prometheus le recommande : la vie restante d'un certificat est sa date
+d'expiration, et le silence d'une sonde vaut `time()` moins son dernier
+rapport.
+
+Ci-dessous, *cible* désigne les étiquettes `target` (slug), `target_id`,
+`category` et `proto`.
+
+| Famille | Étiquettes | Contenu |
+|---|---|---|
+| `smokestack_target_rtt_median_seconds`, `smokestack_target_rtt_p95_seconds` | cible, `probe` | Dernière passe ; absente quand rien n'est revenu ou que la passe est périmée |
+| `smokestack_target_loss_ratio` | cible, `probe` | Dernière passe, de 0 à 1 ; absente quand la passe est périmée |
+| `smokestack_target_last_pass_timestamp_seconds` | cible, `probe` | |
+| `smokestack_target_status` | cible, `probe`, `state` | Ensemble d'états : `ok`, `warn`, `crit`, `nodata`, `maint` ; rafraîchi par l'alerteur chaque minute |
+| `smokestack_target_info` | cible, `title`, `public` | Toujours 1 |
+| `smokestack_target_in_maintenance`, `smokestack_target_incident_open` | cible | 0 ou 1 |
+| `smokestack_target_certificate_valid`, `smokestack_target_certificate_expiry_timestamp_seconds` | cible | Cibles TCP dont le certificat a été inspecté |
+| `smokestack_probe_enabled` | `probe` | |
+| `smokestack_probe_last_report_timestamp_seconds` | `probe` | Sondes actives qui ont déjà rendu compte |
+| `smokestack_write_queue_length`, `smokestack_write_queue_capacity`, `smokestack_write_last_batch_duration_seconds` | | La chaîne d'écriture |
+| `smokestack_measurements_written_total`, `smokestack_measurements_dropped_total`, `smokestack_measurements_write_failed_total` | | Compteurs depuis le démarrage du service : mesures enregistrées dans `metrics.db`, refusées par une file d'écriture pleine, et prises dans un lot dont l'écriture a échoué |
+| `smokestack_archive_chunks_pending_upload`, `smokestack_archive_local_bytes` | | L'archive brute |
+| `smokestack_database_size_bytes` | `database`, `file` | `config` ou `metrics`, `main` ou `wal` |
+| `smokestack_build_info` | `version`, `goversion` | Toujours 1 |
+
+Un couple cible et sonde n'est exporté que tant que la sonde est active et
+mesure encore la cible : la table `live` garde une ligne après l'arrêt de
+l'une ou de l'autre, et l'exporter présenterait un chiffre figé comme
+actuel. Pour la même raison, une passe est périmée dès qu'elle est plus
+ancienne à la fois que trois intervalles de la cible et que les cinq minutes
+au-delà desquelles l'alerteur déclare une sonde silencieuse : son temps de réponse
+et sa perte sont omis, pour qu'une sonde tombée pendant une panne ne
+rapporte pas sa dernière perte indéfiniment. L'horodatage de sa dernière
+passe reste, et le silence s'y lit.
+
 ## Garde-fous
 
 La création de cible refuse une rafale qui ne tient pas dans son
 intervalle : `packets × spacing_ms + timeout_ms` doit rester sous 75 %
 de `interval_s`. À 30 secondes, cela impose 10 paquets espacés de 200 ms
 plutôt que les 20 paquets par seconde de SmokePing.
+
+## Cibles DNS
+
+Un résolveur peut continuer de répondre à l'ICMP depuis son noyau pendant que
+chaque requête attend l'expiration du client, si bien qu'un ping ne dit rien de
+sa capacité à résoudre ; sur une instance de production, un résolveur en panne
+pendant plus d'une heure ne s'est vu que sous forme de pertes sur les cibles
+qui dépendaient de lui. Une cible `dns` envoie une
+requête par paquet, en UDP, récursion demandée, pour le `dns_name` et le
+`dns_type` qu'elle indique — `. NS` par défaut, la requête d'amorçage à
+laquelle tout résolveur récursif répond depuis son cache : le chiffre est celui
+du résolveur, et le nom d'aucun tiers n'est interrogé. Le type est l'un de
+`A`, `AAAA`, `NS`, `SOA`, `MX`, `TXT` ; le port vaut 53 par défaut. NOERROR et
+NXDOMAIN sont des réponses, tronquées comprises, puisque c'est le résolveur
+qu'on chronomètre. SERVFAIL est une perte. REFUSED est une perte signalée
+comme une configuration à corriger, comme l'écho UDP signale un port où rien
+n'écoute.
+
+Les requêtes d'une rafale partent à l'espacement de la cible sans s'attendre
+les unes les autres, comme les échos ICMP : un résolveur muet retient une
+passe le temps de la rafale plus le délai d'attente, dans les
+`packets × spacing_ms + timeout_ms` que l'intervalle contrôle. Une réponse ne
+compte que si elle arrive sur le socket connecté à l'adresse et au port
+interrogés, dans le délai d'attente de sa propre requête, et reprend
+l'identifiant aléatoire et la question de cette requête : une réponse n'est
+jamais chronométrée contre une autre requête, et celle qui arrive après son
+délai est perdue, quelle que soit la place de sa requête dans la rafale. La
+seule réponse admise sans la question est un en-tête d'erreur nu portant le
+bon identifiant, la façon dont Unbound refuse un client que son contrôle
+d'accès écarte : il compte comme la perte qu'il nomme, jamais comme une
+réponse. Seuls l'en-tête et la question sont lus, à des positions fixes : rien
+dans une réponse n'est suivi. La requête ne porte pas d'enregistrement EDNS,
+la réponse tient donc en 512 octets. La requête est effacée sur tout autre
+protocole plutôt que refusée, pour qu'un simple changement de protocole ne
+soit jamais refusé à cause d'un champ que l'appelant n'a pas envoyé, et une
+cible qui cache son adresse cache aussi son nom interrogé dans l'arbre public.
+Une demande de double vérification n'a pas de place pour une requête : les
+cibles DNS y sont refusées, et la décomposition reste propre au TCP.
 
 ## Limites actuelles
 
@@ -614,6 +767,25 @@ curl https://smokestack.exemple.fr/api/v1/asn/64501    # un pair approuvé
 | `/about` | exploitant, contacts, méthode |
 
 Toutes partagent `app.css` (thème sombre automatique), `i18n.js` et `app.js`.
+
+Chaque page publique annonce aussi le flux Atom de l'instance dans son en-tête,
+et une page de cible le sien à côté, pour un lecteur qui trouve les flux à
+partir de l'adresse d'une page ; le pied de page renvoie au flux de l'instance
+(voir la section API).
+**Masquer une page relève de la présentation, pas de la politique.** La
+navigation omet déjà une page que la configuration rend vide — Fédération et
+Appairage sans fédération, Réseau hôte sans numéro d'AS — et l'exploitant peut
+en plus masquer n'importe laquelle de ces trois (`hidden_pages` dans
+`PUT /api/v1/admin/site`). Une page masquée disparaît du menu, des liens des
+autres pages et du sitemap, et son adresse, fichier `.html` compris, répond 404
+plutôt que de rediriger, pour qu'un moteur de recherche l'oublie. Les API
+derrière elle continuent de répondre : les pairs appellent `/api/v1/fed/*` quoi
+que publie cette instance, et l'appairage ne passe jamais par la page HTML, si
+bien que masquer Appairage ne peut pas le casser en silence. La fédération se
+coupe dans le fichier de configuration. Accueil et À propos ne se masquent pas :
+À propos est l'endroit où l'exploitant est identifiable et joignable. Le
+réglage nomme ce qui est masqué, donc une instance mise à jour depuis une
+version antérieure ne masque rien.
 
 ## IPv6 et traceroute sur anomalie
 

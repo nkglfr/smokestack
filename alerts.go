@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/smtp"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -92,6 +93,10 @@ type Alerter struct {
 	// be tested without a federation behind it. Nil when the instance is
 	// not federated.
 	corroborate func(targetID int64)
+	// lastViews is the latest round of views, kept for GET /metrics: a
+	// scrape reads what this loop already worked out from the rollups
+	// instead of working it out again.
+	lastViews atomic.Pointer[map[int64]probeView]
 }
 
 func NewAlerter(store *Store) *Alerter {
@@ -530,6 +535,7 @@ func (a *Alerter) gather(localProbeID int64) (map[int64]string, map[int64]string
 			views[id] = v
 		}
 	}
+	a.lastViews.Store(&views)
 	if _, ok := views[localProbeID]; !ok && len(views) == 0 {
 		return nil, nil, nil, fmt.Errorf("no probe produced a view")
 	}

@@ -358,6 +358,9 @@ func main() {
 	api.AdviceRoutes(mux)
 	api.ShareRoutes(mux)
 	api.APIKeyRoutes(mux)
+	api.MetricsRoutes(mux)
+	api.BadgeRoutes(mux)
+	api.FeedRoutes(mux)
 
 	// Public pages get their metadata and a no-JavaScript summary injected
 	// on the way out, so that a crawler sees a real page.
@@ -452,7 +455,7 @@ func main() {
 	go certs.Loop(stop)
 
 	// Compression et limite de debit devant toutes les routes.
-	handler := withRateLimit(newRateLimiter(20, 80), withGzip(mux))
+	handler := withRateLimit(newRateLimiter(20, 80), api.frontHandler(mux))
 
 	srv := &http.Server{
 		Addr:              cfg.Listen,

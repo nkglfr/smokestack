@@ -122,6 +122,9 @@ func (a *API) seoHead(r *http.Request, m pageMeta) string {
 		}
 		fmt.Fprintf(&b, `<link rel="alternate" hreflang="x-default" href="%s">`+"\n", esc(canonical))
 	}
+	if !m.NoIndex {
+		b.WriteString(a.feedLinks(base, m))
+	}
 	fmt.Fprintf(&b, `<meta property="og:type" content="website">`+"\n")
 	fmt.Fprintf(&b, `<meta property="og:site_name" content="%s">`+"\n", esc(name))
 	fmt.Fprintf(&b, `<meta property="og:title" content="%s">`+"\n", esc(title))
@@ -312,6 +315,9 @@ func (a *API) sitemapXML(w http.ResponseWriter, r *http.Request) {
 	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
 	b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">` + "\n")
 	add := func(path, freq, prio string) {
+		if site.Hides(pageAt(path)) {
+			return
+		}
 		fmt.Fprintf(&b, "<url><loc>%s%s</loc><lastmod>%s</lastmod>"+
 			"<changefreq>%s</changefreq><priority>%s</priority></url>\n",
 			esc(base), esc(path), day, freq, prio)

@@ -143,6 +143,20 @@
     "until": "bis {until}",
     "measure_paused": "Messung ausgesetzt"
   },
+  "feed": {
+    "subscribe": "Statusmeldungen abonnieren (Atom)",
+    "title": "{name}: Statusmeldungen",
+    "incident_open": "Störung bei {target}",
+    "incident_closed": "Behoben: Störung bei {target}",
+    "incident_open_text": "Für {target} ist seit {since} eine Störung offen.",
+    "incident_closed_text": "Für {target} wurde von {from} bis {until} ({duration}) eine Störung verzeichnet.",
+    "maint_title": "Geplante Wartung an {target}: {title}",
+    "maint_planned": "Geplant von {from} bis {until}.",
+    "maint_live": "Läuft bis {until}.",
+    "maint_done": "Abgeschlossen, von {from} bis {until}.",
+    "maint_paused": "Die Messung ist während des Zeitfensters ausgesetzt.",
+    "event_span": "Von {from} bis {until}."
+  },
   "corr": {
     "title": "Aus einem anderen Netz geprüft",
     "hint": "Eine Partnerinstanz in einem anderen AS hat dieses Ziel auf Anfrage gemessen. Ein einzelner Beobachtungspunkt kann ein ausgefallenes Ziel nicht von einem gestörten Pfad unterscheiden; zwei Punkte in verschiedenen Netzen können es. Die Zahlen stammen von diesem Partner, über ein kurzes Zeitfenster, und werden veröffentlicht, weil der Betreiber dieser Instanz sich dafür entschieden hat.",
@@ -314,5 +328,10 @@
   "share": {
     "banner": "Nur-Lese-Graph, geteilt von {org}, gemessen von {loc}. Ein Ziel aus Sicht dieses Netzes: Latenz und Verlust dorthin, mit Perzentilbändern und den Traceroutes, die bei Abweichung von der Referenz erhoben wurden.",
     "who": "Geteilt von"
+  },
+  "badge": {
+    "uptime_not_published": "Verfügbarkeit nicht veröffentlicht",
+    "decimal_mark": ",",
+    "since": "seit {date}"
   }
 }

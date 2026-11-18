@@ -167,7 +167,7 @@ What makes the difference:
 - **Kernel timestamps.** ICMP replies are timestamped by the kernel on arrival
   (`SO_TIMESTAMPNS`); the send time is written into the packet right before
   the system call. TCP handshake times are read from `TCP_INFO`, measured by
-  the TCP stack itself.
+  the TCP stack itself. DNS answers carry the kernel's arrival time too.
 - **The probe never waits.** It reads targets from memory and hands results to
   a non-blocking queue. If the queue is full (database stuck for minutes), the
   measurement is counted as dropped and reported, but the probe keeps
@@ -247,11 +247,37 @@ GET  /api/v1/asn                          host network
 GET  /api/v1/fed/peers                    public federation peers
 GET  /api/v1/version
 GET  /healthz
+GET  /badge/<slug>.svg                    status badge, an SVG image (below)
 ```
 
 `from` and `to` accept a Unix timestamp, an RFC 3339 date or a relative
 expression: `now-3h`, or its shorthand `-3h` (units `s`, `m`, `h`, `d`, `w`,
 `y`).
+
+Public, read-only, Atom 1.0 (RFC 4287):
+
+```
+GET  /feed.atom                           status updates, whole instance
+GET  /t/<slug>/feed.atom                  the same for one public target
+```
+
+**The feed is a second door, not a wider one.** It is built from the public
+overview, so a private target has no feed and appears in none, and a host
+reads exactly as the target page shows it — masked, or absent for a target
+whose address is private. Maintenance appears once the banner would have
+announced it (seven days ahead) and never when it was recorded after the fact;
+events are those `/api/v1/events` serves, route changes excepted; no
+traceroute, probe or alert detail is ever written into it. The incidents this
+instance detects are added only when the publisher page says so
+(`public_incidents`, off by default), worded as records rather than
+measurements. An incident shorter than the alert delay, opened during a
+maintenance window that stops alerts or measurement, on a target with alerts
+off, or decided by a probe since disabled stays out. Entries cover the last 30
+days, at most 50, in the instance's default language, with `tag:` ids built
+from the instance's host, one date stored the first time a feed is built
+(`feed_tag_date`) and the row's id, so an incident that closes updates its
+entry instead of adding a second one, and no entry reveals when its row was
+written. A feed is rebuilt at most every 30 seconds and carries an ETag.
 
 Administration uses a session cookie (back-office) or, for automation,
 `Authorization: Bearer <admin_token>` with the token from `config.json`,
@@ -268,6 +294,11 @@ curl -s -X POST localhost:8080/api/v1/admin/targets \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"category_id":2,"title":"Example transit","host":"192.0.2.1","family":4,
        "interval_s":30,"packets":10,"spacing_ms":200,"timeout_ms":1500}'
+
+curl -s -X POST localhost:8080/api/v1/admin/targets \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"category_id":2,"title":"Example resolver","host":"192.0.2.53","family":4,
+       "proto":"dns","dns_name":".","dns_type":"NS"}'
 
 curl -s -X PUT localhost:8080/api/v1/admin/storage \
   -H "Authorization: Bearer $TOKEN" \
@@ -313,6 +344,33 @@ traceroutes of that target, nothing else, whatever its visibility. It
 expires, it is revocable, its uses are counted, and both the page and
 `robots.txt` keep it out of search engines: a token that ends up in a search
 result is a leak, not a share.
+
+**A badge is the same for everyone.** `GET /badge/<slug>.svg` is a flat
+two-part image for an operator's website, a README or a PeeringDB note: the
+target's title, then its status as the public pages classify it, in the same
+colours. `?metric=uptime&window=30d` (`24h`, `7d`, `30d`, `1y`) shows the
+availability figure instead, `?metric=latency` the current median, and
+`?label=` replaces the title, cut at 40 characters. Nothing about the caller
+changes the answer: a private target answers 404 exactly like a slug that does
+not exist, a session reveals nothing more, and **a share token does not unlock
+a badge** — a token in an `<img src>` is a credential published to every
+reader of the page it is embedded in. That sameness is what lets image proxies
+such as GitHub's keep it for a minute. The route is not rate-limited, so it
+reads what is already computed: the status and the median from the overview
+the background loop builds — a badge never builds it, and answers 503 until
+the first build — and the uptime figure from the target page's one-minute
+availability cache, which one request fills per target while the others wait
+for it, so a busy page costs at most one availability computation a minute.
+The figure is written the way the target page writes it, one decimal (two
+under 1 %) with the language's decimal mark, so the badge and the page it
+links to never disagree; a window the target has not been measured across
+reads *since <date>* instead of its name, so a target created last week does
+not show a yearly figure. When availability is not published, the uptime badge
+says so in grey rather than answering 404, since a broken image on a page the
+operator may not control reads as an instance that is down. Words are in the
+instance's default language. The back-office gives the Markdown and HTML to
+paste, under *Badge* beside each target the public overview lists, built on
+the instance's public address (*Address of this instance*).
 
 **Hiding an address is not hiding a target.** A public target can keep its
 address private: the series, the status and the title are public, while the
@@ -450,6 +508,36 @@ with the reason.
 move between ICMP and TCP without rewriting its address; older targets stored
 as `host:port` are migrated on start.
 
+**DNS targets.** A resolver can keep answering ICMP from its kernel while
+every query waits out the client's timeout, so a ping says nothing about
+whether it resolves; on a production instance, one failing for over an hour
+showed only as loss on the targets that depended on it. A `dns` target sends one query per packet over UDP,
+recursion desired, for the `dns_name` and `dns_type` it states — `. NS` by
+default, the priming query every recursive resolver answers from its cache,
+so the figure is the resolver's and no third party's name is looked up. The
+type is one of `A`, `AAAA`, `NS`, `SOA`, `MX`, `TXT`; the port defaults to 53.
+NOERROR and NXDOMAIN are answers, a truncated one included, since the
+resolver is what is timed. SERVFAIL is loss. REFUSED is loss reported as a
+configuration to fix, the way a UDP echo reports a port nobody listens on.
+
+The queries of a burst go out at the target's spacing without waiting for each
+other, as ICMP echoes do, so a resolver that says nothing holds a pass for the
+burst plus the timeout, inside the `packets × spacing_ms + timeout_ms` the
+interval is checked against. An answer counts only if it arrives on the socket
+connected to the address and port queried, within the timeout of its own
+query, and repeats that query's random ID and its question: an answer is never
+timed against another query, and one that comes after its timeout is lost
+wherever its query sat in the burst. The one reply taken without the question
+is a bare error header carrying the right ID, which is how Unbound refuses a
+client its access control leaves out; it counts as the loss it names, never as
+an answer. Only the header and the question are read, at fixed offsets:
+nothing in an answer is followed. The query carries no EDNS record, so the
+answer fits 512 bytes. The query is cleared on any other protocol rather than
+refused, so that changing only a target's protocol is never turned down over a
+field the caller did not send, and a target hiding its address hides its query
+name from the public tree as well. A double-check request has no room for a
+query, so DNS targets are refused there, and the breakdown stays TCP-only.
+
 **Interval and retention.** The interval is free between 10 s and a day: the
 list of four values was a restriction, not a measurement constraint, and the
 real limit is the burst fitting in the interval. Two things follow from a free
@@ -469,6 +557,51 @@ probe on another machine, with `Authorization: Bearer <probe token>`. A
 probe without a token is always rejected, so nobody can inject fake
 measurements. Issuing tokens is not available yet (see
 [known limits](#15-known-limits)).
+
+**Prometheus metrics.** `GET /metrics` serves the text exposition format
+0.0.4 to any authenticated caller, from the viewer role up, private targets
+included. It is written by hand: the client library would be a second
+module. A scrape reads the live table, the statuses the alerter worked out
+on its last round, the small tables of `config.db` and the pipeline's
+counters — never the samples or the rollups. A thousand targets seen from
+three probes scrape in about 7 ms on a laptop: 30 000 series, 3.5 MiB,
+150 KiB gzipped. The endpoint shares the API's rate limit, 20 requests/s
+per client IP, which no scrape interval comes near.
+
+No host, port or address is exported, whatever the caller may read
+elsewhere: what Prometheus stores is not bound by this instance's visibility
+rules. Moments are Unix timestamps rather than ages, as Prometheus
+recommends, so a certificate's remaining life is its expiry date and a
+probe's silence is `time()` minus its last report.
+
+Below, *target* stands for the labels `target` (slug), `target_id`,
+`category` and `proto`.
+
+| Family | Labels | What |
+|---|---|---|
+| `smokestack_target_rtt_median_seconds`, `smokestack_target_rtt_p95_seconds` | target, `probe` | Last pass; absent when nothing came back or the pass is stale |
+| `smokestack_target_loss_ratio` | target, `probe` | Last pass, 0 to 1; absent when the pass is stale |
+| `smokestack_target_last_pass_timestamp_seconds` | target, `probe` | |
+| `smokestack_target_status` | target, `probe`, `state` | State set: `ok`, `warn`, `crit`, `nodata`, `maint`; refreshed by the alerter every minute |
+| `smokestack_target_info` | target, `title`, `public` | Always 1 |
+| `smokestack_target_in_maintenance`, `smokestack_target_incident_open` | target | 0 or 1 |
+| `smokestack_target_certificate_valid`, `smokestack_target_certificate_expiry_timestamp_seconds` | target | TCP targets the certificate watcher has inspected |
+| `smokestack_probe_enabled` | `probe` | |
+| `smokestack_probe_last_report_timestamp_seconds` | `probe` | Enabled probes that have reported |
+| `smokestack_write_queue_length`, `smokestack_write_queue_capacity`, `smokestack_write_last_batch_duration_seconds` | | The write pipeline |
+| `smokestack_measurements_written_total`, `smokestack_measurements_dropped_total`, `smokestack_measurements_write_failed_total` | | Counters since the service started: measurements committed to `metrics.db`, refused by a full write queue, and caught in a batch that failed to commit |
+| `smokestack_archive_chunks_pending_upload`, `smokestack_archive_local_bytes` | | The raw archive |
+| `smokestack_database_size_bytes` | `database`, `file` | `config` or `metrics`, `main` or `wal` |
+| `smokestack_build_info` | `version`, `goversion` | Always 1 |
+
+A pair of target and probe is exported only while that probe is enabled and
+still measures that target: the live table keeps a row after either stops,
+and exporting it would present a frozen figure as a current one. For the
+same reason, a pass is stale once it is older than both three of the
+target's intervals and the five minutes after which the alerter calls a
+probe silent: its round trip and loss are left out, so a probe that dies during an
+outage does not report its last loss forever. Its last pass timestamp stays,
+and the silence shows in it.
 
 ## 9. Back-office and security
 
@@ -695,6 +828,22 @@ a plain summary of the public targets inside `<noscript>`. `/sitemap.xml` and
 `/robots.txt` are generated from the same data, so a new instance is indexed
 without anyone maintaining a list, and private targets never appear. One
 setting turns all of it off, and the back-office is always `noindex`.
+
+Every public page also advertises the instance's Atom feed in its head, and a
+target page its own beside it, for a reader that finds feeds by the page
+address; the footer links to the instance's feed (see the API section).
+**Hiding a page is presentation, not policy.** The navigation leaves out a
+page the configuration makes empty — Federation and Pairing without
+federation, Host network without an AS number — and the operator can hide any
+of those three on top of that (`hidden_pages` in `PUT /api/v1/admin/site`). A
+hidden page leaves the menu, the links of the other pages and the sitemap, and
+its address, `.html` file included, answers 404 rather than redirecting, so
+that a search engine drops it. The APIs behind it keep answering: peers call
+`/api/v1/fed/*` whatever this instance publishes, and pairing never goes
+through the HTML page, so hiding Pairing cannot quietly break it. Federation
+is turned off in the configuration file. Home and About cannot be hidden:
+About is where the operator is identifiable and reachable. The setting names
+what is hidden, so an instance upgraded from before it hides nothing.
 
 All share one stylesheet (automatic dark theme), the translation library and
 a common footer. The link to the official website comes from a value compiled

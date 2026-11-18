@@ -8,7 +8,7 @@
 SmokePing: one binary, fast graphs, exact percentiles, and a federation
 between operators who measure each other.
 
-- 📈 **Latency, jitter and loss** to your transits, exchanges, DNS resolvers and clouds
+- 📈 **Latency, jitter and loss** to your transits, exchanges, DNS resolvers and clouds — resolvers timed on real queries, not pings
 - 🔍 **Zoom from one year down to 30 seconds**, percentiles stay exact at every level
 - 📍 **Measure from several places**: probes on your other sites report to one instance, and a target says which of them decides its status
 - 🧭 **Traceroute on anomalies**, compared with the last healthy path, over IPv4 and IPv6
@@ -189,7 +189,7 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 
 **Back-office**
 - Accounts with four roles (viewer, editor, admin, master) and an audit log
-- Targets and categories, ICMP, TCP or UDP echo, IPv4 or IPv6, every 30 s, 1, 5 or 10 min
+- Targets and categories, ICMP, TCP, UDP echo or DNS queries, IPv4 or IPv6, every 30 s, 1, 5 or 10 min
 - A catalogue of ready-made targets to enable in one click, plus per-country
   suggestions in the [wiki](https://github.com/nkglfr/smokestack/wiki)
 - A contact form on the public pages, so your address stays off spam lists
@@ -356,6 +356,7 @@ Public, read-only, JSON:
 | `GET /api/v1/asn` | Host network (RIPEstat, PeeringDB) |
 | `GET /api/v1/fed/peers` | Public federation peers |
 | `GET /api/v1/traceroutes?target=ID` | Traceroutes, if made public by the operator |
+| `GET /badge/<slug>.svg` | Status badge (SVG) of a target on the public overview, the same answer for every caller; `?metric=uptime&window=24h\|7d\|30d\|1y`, `?metric=latency`, `?label=` |
 
 `series`, `availability`, `traceroutes` and the AS path take an optional
 `&probe=ID` to answer from one vantage point. Without it they answer from the
@@ -364,9 +365,13 @@ instance's own probe, as they always have.
 Private targets never appear in these endpoints. An authenticated call (session
 cookie, or `Authorization: Bearer` with the admin token or an API key) sees
 them, and `/api/v1/overview?all=1` returns them too.
+cookie or `Authorization: Bearer <admin token>`) sees them, and
+`/api/v1/overview?all=1` returns them too. The badge is the exception: it is
+embedded in pages anyone reads, so a private target has none, whoever asks and
+whatever share link they hold.
 | `GET /healthz` | Health check |
 
-Rate limit: 20 requests/s per client IP, bursts of 80.
+Rate limit on `/api/`: 20 requests/s per client IP, bursts of 80.
 
 ---
 

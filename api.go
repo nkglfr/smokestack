@@ -36,6 +36,7 @@ type API struct {
 	setupFile string
 
 	streams liveStreams
+	feeds   feedCache
 }
 
 // liveStreams bounds the SSE endpoint. Each stream holds a goroutine and a
@@ -924,6 +925,8 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 		LossCrit  *float64 `json:"loss_crit"`
 		LatFactor *float64 `json:"lat_factor"`
 		CertOff   *bool    `json:"cert_off"`
+		DNSName   *string  `json:"dns_name"`
+		DNSType   *string  `json:"dns_type"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, 400, err.Error())
@@ -937,6 +940,8 @@ func (a *API) targetsPatch(w http.ResponseWriter, r *http.Request) {
 	set(&t.Title, in.Title)
 	set(&t.Host, in.Host)
 	set(&t.Proto, in.Proto)
+	set(&t.DNSName, in.DNSName)
+	set(&t.DNSType, in.DNSType)
 	if in.Slug != nil {
 		want := slugify(*in.Slug)
 		if want == "" {

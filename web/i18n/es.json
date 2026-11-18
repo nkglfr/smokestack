@@ -143,6 +143,20 @@
     "until": "hasta {until}",
     "measure_paused": "medición suspendida"
   },
+  "feed": {
+    "subscribe": "Suscribirse a las actualizaciones de estado (Atom)",
+    "title": "{name}: actualizaciones de estado",
+    "incident_open": "Incidencia en {target}",
+    "incident_closed": "Resuelta: incidencia en {target}",
+    "incident_open_text": "Hay una incidencia abierta en {target} desde el {since}.",
+    "incident_closed_text": "Se registró una incidencia en {target} del {from} al {until} ({duration}).",
+    "maint_title": "Mantenimiento programado en {target}: {title}",
+    "maint_planned": "Previsto del {from} al {until}.",
+    "maint_live": "En curso hasta el {until}.",
+    "maint_done": "Terminado, del {from} al {until}.",
+    "maint_paused": "La medición se suspende durante la ventana.",
+    "event_span": "Del {from} al {until}."
+  },
   "corr": {
     "title": "Verificado desde otra red",
     "hint": "Una instancia par situada en otro AS ha medido este objetivo a petición. Un solo punto de observación no distingue un objetivo caído de un camino roto; dos puntos en redes distintas sí. Las cifras son de ese par, sobre una ventana corta, y se publican porque el operador de esta instancia eligió publicarlas.",
@@ -314,5 +328,10 @@
   "share": {
     "banner": "Gráfico de solo lectura compartido por {org}, medido desde {loc}. Un único destino, visto desde esta red: latencia y pérdida hacia él, con las bandas de percentiles y los traceroutes tomados cuando se apartó de su referencia.",
     "who": "Compartido por"
+  },
+  "badge": {
+    "uptime_not_published": "disponibilidad no publicada",
+    "decimal_mark": ",",
+    "since": "desde el {date}"
   }
 }

@@ -143,6 +143,20 @@
     "until": "jusqu'au {until}",
     "measure_paused": "mesure suspendue"
   },
+  "feed": {
+    "subscribe": "S'abonner aux mises à jour de statut (Atom)",
+    "title": "{name} : mises à jour de statut",
+    "incident_open": "Incident sur {target}",
+    "incident_closed": "Résolu : incident sur {target}",
+    "incident_open_text": "Un incident est ouvert sur {target} depuis le {since}.",
+    "incident_closed_text": "Un incident a été enregistré sur {target} du {from} au {until} ({duration}).",
+    "maint_title": "Maintenance programmée sur {target} : {title}",
+    "maint_planned": "Prévue du {from} au {until}.",
+    "maint_live": "En cours jusqu'au {until}.",
+    "maint_done": "Terminée, du {from} au {until}.",
+    "maint_paused": "La mesure est suspendue pendant la fenêtre.",
+    "event_span": "Du {from} au {until}."
+  },
   "corr": {
     "title": "Vérifié depuis un autre réseau",
     "hint": "Une instance pair située dans un autre AS a mesuré cette cible à la demande. Un seul point d'observation ne permet pas de distinguer une cible en panne d'un chemin cassé ; deux points dans des réseaux différents, si. Les chiffres sont ceux de ce pair, sur une fenêtre courte, et sont publiés parce que l'exploitant de cette instance a choisi de les publier.",
@@ -314,5 +328,10 @@
   "share": {
     "banner": "Graphe en lecture seule partagé par {org}, mesuré depuis {loc}. Une seule cible, vue depuis ce réseau : latence et perte vers elle, avec les bandes de percentiles et les traceroutes relevés lorsqu'elle s'est écartée de sa référence.",
     "who": "Partagé par"
+  },
+  "badge": {
+    "uptime_not_published": "disponibilité non publiée",
+    "decimal_mark": ",",
+    "since": "depuis le {date}"
   }
 }

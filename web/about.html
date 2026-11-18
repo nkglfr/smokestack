@@ -89,7 +89,8 @@ function render(s) {
   document.getElementById("desc").textContent = s.description || "";
   H.render(document.getElementById("operator"), kv([
     ["about.org", s.org],
-    ["about.asn", asnNum && html`<a class="mono" href="/network">${s.asn}</a>`],
+    ["about.asn", asnNum && (!App.hides("network")
+      ? html`<a class="mono" href="/network">${s.asn}</a>` : html`<span class="mono">${s.asn}</span>`)],
     ["about.owner", s.owner],
     ["about.location", s.location],
     ["about.timezone", s.timezone],

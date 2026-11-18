@@ -143,6 +143,20 @@
     "until": "until {until}",
     "measure_paused": "measurement paused"
   },
+  "feed": {
+    "subscribe": "Subscribe to status updates (Atom)",
+    "title": "{name}: status updates",
+    "incident_open": "Incident on {target}",
+    "incident_closed": "Resolved: incident on {target}",
+    "incident_open_text": "An incident has been open on {target} since {since}.",
+    "incident_closed_text": "An incident was recorded on {target} from {from} to {until} ({duration}).",
+    "maint_title": "Planned maintenance on {target}: {title}",
+    "maint_planned": "Planned from {from} to {until}.",
+    "maint_live": "In progress until {until}.",
+    "maint_done": "Completed, from {from} to {until}.",
+    "maint_paused": "Measurement is paused during the window.",
+    "event_span": "From {from} to {until}."
+  },
   "corr": {
     "title": "Checked from another network",
     "hint": "A peer instance in a different AS measured this target on request. One vantage point cannot tell a target that is down from a path that is broken; two in different networks can. The figures are that peer's, over a short window, and are published because the operator of this instance chose to publish them.",
@@ -314,5 +328,10 @@
   "share": {
     "banner": "Read-only graph shared by {org}, measured from {loc}. One target, from this network's point of view: latency and loss towards it, with the percentile bands and the traceroutes taken when it left its baseline.",
     "who": "Shared by"
+  },
+  "badge": {
+    "uptime_not_published": "availability not published",
+    "decimal_mark": ".",
+    "since": "since {date}"
   }
 }

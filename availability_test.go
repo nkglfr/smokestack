@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http/httptest"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -339,5 +343,109 @@ func TestAvailabilityNotPublished(t *testing.T) {
 	}
 	if code := get(false); code != 200 {
 		t.Errorf("published again: %d", code)
+	}
+}
+
+// The target page's endpoint answers what it answered before its cache was
+// shared with the badges: the same three fields, the windows the store
+// computes for the same data, and the same bytes again from the cache.
+func TestAvailabilityEndpointAnswer(t *testing.T) {
+	store, id := availStore(t)
+	now := time.Now().Unix()
+	for i := 0; i < 30; i++ {
+		m := Measurement{TargetID: id, ProbeID: 1, TS: now - int64(i)*60, Sent: 5}
+		if i%10 == 0 {
+			m.Lost = 5
+		}
+		for j := 0; j < m.Sent-m.Lost; j++ {
+			m.RTTus = append(m.RTTus, 1000)
+		}
+		if err := store.Record(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.RollupTick(now); err != nil {
+		t.Fatal(err)
+	}
+	availCache.mu.Lock()
+	availCache.items = map[string]availEntry{}
+	availCache.mu.Unlock()
+	api := &API{store: store, token: "secret", probeID: 1}
+	get := func() *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		api.availability(w, httptest.NewRequest("GET", "/api/v1/availability?target="+strconv.FormatInt(id, 10), nil))
+		return w
+	}
+
+	first := get()
+	if first.Code != 200 ||
+		first.Header().Get("Content-Type") != "application/json; charset=utf-8" ||
+		first.Header().Get("Cache-Control") != "public, max-age=60" {
+		t.Fatalf("HTTP %d, headers %v", first.Code, first.Header())
+	}
+	var got struct {
+		Windows []AvailWindow `json:"windows"`
+	}
+	if err := json.Unmarshal(first.Body.Bytes(), &got); err != nil || len(got.Windows) != len(availWindows) {
+		t.Fatalf("windows: %v\n%s", err, first.Body)
+	}
+	at := time.Unix(got.Windows[0].Since+availWindows[0].secs, 0)
+	var want bytes.Buffer
+	json.NewEncoder(&want).Encode(map[string]any{
+		"target_id":  id,
+		"windows":    store.Availability(id, 1, at),
+		"disclaimer": "measured from a single vantage point; not a contractual SLA",
+	})
+	if first.Body.String() != want.String() {
+		t.Errorf("the endpoint's answer changed:\n got %s\nwant %s", first.Body, &want)
+	}
+	if again := get(); again.Body.String() != first.Body.String() {
+		t.Errorf("the cached answer differs from the first:\n%s\n%s", again.Body, first.Body)
+	}
+}
+
+// Badges are not rate-limited, so a missing entry is computed by one caller
+// however many miss it together, and the others get that same answer.
+func TestAvailabilityFilledOnce(t *testing.T) {
+	c := &availCacheT{items: map[string]availEntry{}, filling: map[string]chan struct{}{}}
+	var runs atomic.Int32
+	started, release := make(chan struct{}), make(chan struct{})
+	compute := func() map[string]any {
+		if runs.Add(1) == 1 {
+			close(started)
+		}
+		<-release
+		return map[string]any{"n": 1}
+	}
+	got := make([]map[string]any, 20)
+	var wg sync.WaitGroup
+	for i := range got {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got[i] = c.fill("k", time.Minute, compute)
+		}()
+	}
+	<-started
+	time.Sleep(20 * time.Millisecond)
+	close(release)
+	wg.Wait()
+	if n := runs.Load(); n != 1 {
+		t.Errorf("%d concurrent misses ran the computation %d times", len(got), n)
+	}
+	for i, v := range got {
+		if v["n"] != 1 {
+			t.Errorf("caller %d got %v", i, v)
+		}
+	}
+	if len(c.filling) != 0 {
+		t.Errorf("fills left behind: %v", c.filling)
+	}
+
+	// An expired entry is computed again.
+	c.fill("e", -time.Second, compute)
+	c.fill("e", -time.Second, compute)
+	if n := runs.Load(); n != 3 {
+		t.Errorf("an expired entry was not computed again: %d runs", n)
 	}
 }

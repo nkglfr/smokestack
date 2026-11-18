@@ -572,6 +572,7 @@ func (s *Store) dcDropTarget(id int64) {
 	} {
 		s.mxw.Exec(q, id)
 	}
+	s.cfg.Exec(`DELETE FROM local_incidents WHERE target_id=?`, id)
 	s.cfg.Exec(`DELETE FROM targets WHERE id=?`, id)
 	s.notifyTargets()
 }
@@ -758,6 +759,12 @@ func (f *Federation) RequestDoubleCheck(targetID int64, asn string, minutes int)
 	}
 	if t.DCCheck != "" {
 		return nil, fmt.Errorf("this target is itself a double-check")
+	}
+	// Refused here rather than left to the peer: a request carries no DNS
+	// query, so even a peer willing to measure one could not measure this.
+	if t.Proto != "icmp" && t.Proto != "tcp" {
+		return nil, fmt.Errorf("%s is measured over %s: a double-check covers ICMP and TCP "+
+			"targets only", t.Title, strings.ToUpper(t.Proto))
 	}
 	norm, err := normASN(asn)
 	if err != nil {

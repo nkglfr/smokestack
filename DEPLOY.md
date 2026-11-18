@@ -309,6 +309,21 @@ The canonical addresses use the **Website** field of the publisher page. Set
 it to the address visitors use, otherwise they fall back to the host of the
 request.
 
+### Atom feed
+
+`/feed.atom`, and `/t/<name>/feed.atom` for one target, let anyone subscribe
+to planned maintenance and the events you publish, with no account and no
+e-mail address. Every public page advertises them and the footer links to the
+first. The incidents the instance detects are **not** in them until you tick
+*Publish detected incidents in the Atom feed* in *Instance → Publisher page*:
+that turns the live state already on the home page into a dated 30-day record
+pushed to every subscriber, which is your call to make. Even then, an
+incident stays out if it is shorter than the alert delay, opened during a
+maintenance window that stops alerts or measurement, belongs to a target
+with alerts off, or was decided by a probe you have since disabled. The
+entry ids are built from the **Website** field, so set it before the feed is
+shared — a reader that sees the host change sees every entry as new.
+
 ### Being reachable without publishing your address
 
 By default the public *About* page carries a **contact form** instead of your
@@ -765,6 +780,50 @@ about **their** network. The two are separate: one is about the others,
 this one is about you. Incidents are recorded either way, alerting off
 included, and listed on the same screen.
 
+### Graphing and alerting from Prometheus
+
+`GET /metrics` serves the instance in the Prometheus text format, so a
+Grafana that already watches the rest of your network can watch this too.
+It takes the same credentials as the API, from the viewer role up, and
+includes private targets. The `admin_token` from `config.json` works; it is
+the master key, so keep the file that holds it readable by Prometheus only.
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: smokestack
+    scheme: https
+    scrape_interval: 15s
+    authorization:
+      credentials_file: /etc/prometheus/smokestack.token   # or credentials: "<token>"
+    static_configs:
+      - targets: ['smokestack.example.net']
+```
+
+Scrape over HTTPS, or from the host itself: the token travels in a header.
+
+Each target is labelled `target` (its slug), `target_id`, `category`,
+`proto` and, for what a probe measured, `probe`. Figures are those of the
+last pass, and dates are Unix timestamps, so ages and remaining lives are
+computed in the query. A round trip or a loss is left out once its pass is
+older than both three of the target's intervals and five minutes, rather
+than repeated: a probe that stops reporting takes its figures with it, and
+only its last pass timestamp stays.
+
+| To watch | PromQL |
+|---|---|
+| Median round trip, in ms | `smokestack_target_rtt_median_seconds * 1000` |
+| Targets in crit, per probe | `smokestack_target_status{state="crit"} == 1` |
+| A probe silent for five minutes | `time() - smokestack_probe_last_report_timestamp_seconds > 300` |
+| Certificates expiring within 14 days | `(smokestack_target_certificate_expiry_timestamp_seconds - time()) / 86400 < 14` |
+| Measurements that never reached the database | `increase(smokestack_measurements_dropped_total[10m]) + increase(smokestack_measurements_write_failed_total[10m]) > 0` |
+
+`smokestack_target_status` appears a minute after the service starts: it is
+what the alerter works out on each round. No host, port or address is
+exported, since what Prometheus stores is not bound by this instance's
+visibility settings. Every family is listed in
+[DESIGN.md](docs/DESIGN.md#8-api).
+
 ### Where the logs are
 
 Four places, in this order:
@@ -1058,6 +1117,16 @@ The public navigation adapts on its own: **Federation** and **Pairing**
 appear only when federation is enabled, and **Host network** only once an AS
 number is set. An instance that just watches a few targets shows two tabs,
 not five, without a single setting to tick.
+
+To publish fewer still, untick a page under *Instance → Publisher page →
+Public pages*: **Federation**, **Host network** and **Pairing** can each be
+hidden. A hidden page leaves the menu, the links of the other pages and the
+sitemap, and its address answers 404. Hiding is presentation, not policy: the
+federation and pairing APIs other instances call keep answering, so hiding
+*Pairing* does not break a pairing in progress, and hiding *Federation* does
+not stop federating — `federation.enabled` in the configuration file does.
+*Home* and *About* cannot be hidden: *About* is where visitors find who runs
+the instance and how to reach you.
 
 The **order of the categories** in the back-office is the order of the
 sections on the public page: the arrows next to each category move it.

@@ -385,6 +385,8 @@ func (p *Prober) Run(t *Target) {
 		m.RTTus, m.Err = p.runTCP(t)
 	case "udp":
 		m.RTTus, m.Err = p.runUDP(t)
+	case "dns":
+		m.RTTus, m.Err = p.runDNS(t)
 	case "icmp", "":
 		// Empty is ICMP, as it has always been here. Targets written before
 		// the protocol was validated are normalised at startup, so this only

@@ -36,7 +36,8 @@ type gzipWriter struct {
 }
 
 func compressible(ct string) bool {
-	for _, p := range []string{"application/json", "text/", "application/javascript", "image/svg+xml"} {
+	for _, p := range []string{"application/json", "text/", "application/javascript", "image/svg+xml",
+		"application/atom+xml"} {
 		if strings.HasPrefix(ct, p) {
 			return true
 		}
@@ -245,7 +246,8 @@ func isLocalDirect(r *http.Request) bool {
 
 func withRateLimit(rl *rateLimiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") && !isLocalDirect(r) && !rl.allow(clientIP(r)) {
+		limited := strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/metrics"
+		if limited && !isLocalDirect(r) && !rl.allow(clientIP(r)) {
 			w.Header().Set("Retry-After", "1")
 			writeErr(w, http.StatusTooManyRequests, "too many requests, slow down")
 			return

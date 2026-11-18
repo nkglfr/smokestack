@@ -312,6 +312,8 @@ func OpenStore(dir string) (*Store, error) {
 	// otherwise — so an instance that never enrols a remote probe behaves
 	// exactly as it did before this column existed.
 	addColumn(cfg, "targets", "primary_probe_id INTEGER NOT NULL DEFAULT 0")
+	addColumn(cfg, "targets", "dns_name TEXT NOT NULL DEFAULT ''")
+	addColumn(cfg, "targets", "dns_type TEXT NOT NULL DEFAULT ''")
 	// When this probe was last reported as silent, so that going quiet wakes
 	// somebody once rather than every minute. Cleared the moment it reports
 	// again, which is also what sends the notice that it is back.
@@ -448,6 +450,10 @@ type Target struct {
 	// own route rather than with the rest of these, because it is a statement
 	// about probes and is validated against what each probe may measure.
 	PrimaryProbeID int64 `json:"primary_probe_id"`
+	// DNSName and DNSType are the query a dns target times (see dns.go).
+	// Empty on every other protocol.
+	DNSName string `json:"dns_name,omitempty"`
+	DNSType string `json:"dns_type,omitempty"`
 }
 
 type Category struct {
@@ -534,7 +540,7 @@ func (s *Store) SetCategoryParams(id int64, p TargetParams) error {
 // targetCols is the column list every target query shares, so adding a
 // column is one edit rather than five.
 const targetCols = `id,category_id,slug,title,host,proto,interval_s,packets,
-	        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host,keep_days,loss_warn,loss_crit,lat_factor,cert_off,dc_check,primary_probe_id`
+	        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host,keep_days,loss_warn,loss_crit,lat_factor,cert_off,dc_check,primary_probe_id,dns_name,dns_type`
 
 // inheritableFields maps the name the interface uses to the column it
 // clears. Only these can be inherited; the host, the protocol, the port and
@@ -694,8 +700,7 @@ func (s *Store) TouchProbe(id int64) {
 
 func (s *Store) ActiveTargets() ([]*Target, error) {
 	rows, err := s.cfg.Query(
-		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host,keep_days,loss_warn,loss_crit,lat_factor,cert_off,dc_check,primary_probe_id
+		`SELECT ` + targetCols + `
 		   FROM targets WHERE enabled=1 AND archived_at=0 ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -718,7 +723,8 @@ func scanTargets(rows *sql.Rows) ([]*Target, error) {
 		if err := rows.Scan(&t.ID, &t.CategoryID, &t.Slug, &t.Title, &t.Host,
 			&t.Proto, &t.IntervalS, &t.Packets, &t.SpacingMs, &t.TimeoutMs,
 			&pub, &en, &t.Family, &t.Port, &t.PinIP, &off, &t.ArchivedAt, &t.TraceHours, &hide, &t.KeepDays,
-			&t.LossWarn, &t.LossCrit, &t.LatFactor, &certOff, &t.DCCheck, &t.PrimaryProbeID); err != nil {
+			&t.LossWarn, &t.LossCrit, &t.LatFactor, &certOff, &t.DCCheck, &t.PrimaryProbeID,
+			&t.DNSName, &t.DNSType); err != nil {
 			return nil, err
 		}
 		t.Public, t.Enabled, t.AlertsOff = pub == 1, en == 1, off == 1
@@ -765,8 +771,7 @@ func (s *Store) Tree(publicOnly bool) ([]*Category, error) {
 	}
 
 	trows, err := s.cfg.Query(
-		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host,keep_days,loss_warn,loss_crit,lat_factor,cert_off,dc_check,primary_probe_id
+		`SELECT ` + targetCols + `
 		   FROM targets WHERE archived_at=0 AND dc_check='' ORDER BY title`)
 	if err != nil {
 		return nil, err
@@ -785,7 +790,7 @@ func (s *Store) Tree(publicOnly bool) ([]*Category, error) {
 		}
 		if publicOnly && t.HideHost {
 			copy := *t
-			copy.Host, copy.Port, copy.PinIP = "", 0, ""
+			copy.Host, copy.Port, copy.PinIP, copy.DNSName = "", 0, "", ""
 			t = &copy
 		}
 		if c, ok := byID[t.CategoryID]; ok {
@@ -797,8 +802,7 @@ func (s *Store) Tree(publicOnly bool) ([]*Category, error) {
 
 func (s *Store) TargetByID(id int64) (*Target, error) {
 	rows, err := s.cfg.Query(
-		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host,keep_days,loss_warn,loss_crit,lat_factor,cert_off,dc_check,primary_probe_id
+		`SELECT `+targetCols+`
 		   FROM targets WHERE id=?`, id)
 	if err != nil {
 		return nil, err
@@ -1309,7 +1313,7 @@ func normalizeHost(raw string) (string, error) {
 // The protocols a target may be measured with. One list, so that adding one
 // is a single edit and so that nothing can be stored that Prober.Run would
 // not recognise.
-var knownProtos = []string{"icmp", "tcp", "udp"}
+var knownProtos = []string{"icmp", "tcp", "udp", "dns"}
 
 func validProto(p string) bool {
 	for _, k := range knownProtos {
@@ -1395,6 +1399,9 @@ func checkTarget(t *Target) error {
 			return fmt.Errorf("a UDP echo target needs a port between 1 and 65535 (7 by default)")
 		}
 	}
+	if err := checkDNSQuery(t); err != nil {
+		return err
+	}
 	// Zero means "inherit from the category, then from what the binary
 	// ships". The caller validates the effective values separately, so a
 	// target cannot end up measuring something the limits would refuse.
@@ -1479,10 +1486,10 @@ func (s *Store) UpdateTarget(t *Target) error {
 	_, err := s.cfg.Exec(
 		`UPDATE targets SET category_id=?,slug=?,title=?,host=?,proto=?,family=?,interval_s=?,packets=?,
 		        spacing_ms=?,timeout_ms=?,public=?,enabled=?,port=?,pin_ip=?,alerts_off=?,trace_hours=?,hide_host=?,keep_days=?,
-		        loss_warn=?,loss_crit=?,lat_factor=?,cert_off=?,dc_check=? WHERE id=?`,
+		        loss_warn=?,loss_crit=?,lat_factor=?,cert_off=?,dc_check=?,dns_name=?,dns_type=? WHERE id=?`,
 		t.CategoryID, t.Slug, t.Title, t.Host, t.Proto, t.Family, t.IntervalS, t.Packets,
 		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), t.Port, t.PinIP, b2i(t.AlertsOff), t.TraceHours, b2i(t.HideHost), t.KeepDays,
-		t.LossWarn, t.LossCrit, t.LatFactor, b2i(t.CertOff), t.DCCheck, t.ID)
+		t.LossWarn, t.LossCrit, t.LatFactor, b2i(t.CertOff), t.DCCheck, t.DNSName, t.DNSType, t.ID)
 	if err != nil {
 		return slugError(err, t.Slug)
 	}
@@ -1511,12 +1518,12 @@ func (s *Store) CreateTarget(t *Target) (int64, error) {
 	res, err := s.cfg.Exec(
 		`INSERT INTO targets(category_id,slug,title,host,proto,interval_s,packets,
 		                     spacing_ms,timeout_ms,public,enabled,created_at,family,port,pin_ip,alerts_off,trace_hours,hide_host,keep_days,
-		                     loss_warn,loss_crit,lat_factor,cert_off,dc_check)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		                     loss_warn,loss_crit,lat_factor,cert_off,dc_check,dns_name,dns_type)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.CategoryID, t.Slug, t.Title, t.Host, t.Proto, t.IntervalS, t.Packets,
 		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), time.Now().Unix(), t.Family, t.Port,
 		t.PinIP, b2i(t.AlertsOff), t.TraceHours, b2i(t.HideHost), t.KeepDays,
-		t.LossWarn, t.LossCrit, t.LatFactor, b2i(t.CertOff), t.DCCheck)
+		t.LossWarn, t.LossCrit, t.LatFactor, b2i(t.CertOff), t.DCCheck, t.DNSName, t.DNSType)
 	if err != nil {
 		return 0, slugError(err, t.Slug)
 	}
@@ -1552,8 +1559,7 @@ func (s *Store) ArchiveTarget(id int64) error {
 // ArchivedTargets lists what was archived, most recent first.
 func (s *Store) ArchivedTargets() ([]*Target, error) {
 	rows, err := s.cfg.Query(
-		`SELECT id,category_id,slug,title,host,proto,interval_s,packets,
-		        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host,keep_days,loss_warn,loss_crit,lat_factor,cert_off,dc_check,primary_probe_id
+		`SELECT ` + targetCols + `
 		   FROM targets WHERE archived_at>0 ORDER BY archived_at DESC`)
 	if err != nil {
 		return nil, err
@@ -1581,6 +1587,9 @@ func (s *Store) PurgeTarget(id int64) error {
 	} {
 		s.mxw.Exec(q, id)
 	}
+	// local_incidents has no foreign key, and SQLite may hand a purged id to
+	// the next target created: left behind, these would become its own.
+	s.cfg.Exec(`DELETE FROM local_incidents WHERE target_id=?`, id)
 	_, err = s.cfg.Exec(`DELETE FROM targets WHERE id=?`, id)
 	s.notifyTargets()
 	return err

@@ -20,7 +20,61 @@ Versions are published as signed releases; servers with automatic updates instal
   - A live stream opened with a key or a session checks it again every 5 seconds, and drops the private targets once the key is revoked or the session closed.
 
   Target, category, event, site, storage and federation peer routes still need admin and still write no audit entry, with a key or without, so a key for Ansible or Terraform has to be an admin one.
+- **Prometheus and Grafana can scrape the instance at `/metrics`.**
 
+  An operator who already graphs and alerts on the rest of the network from Prometheus no longer needs a separate tab for smokestack. `GET /metrics` serves the standard text format. For each target and probe it gives the last pass's median and 95th percentile round trip, its loss and its status. Each target also says whether it is in maintenance, whether an incident is open and when its certificate expires. Each enabled probe says when it last reported. The instance reports its write queue, the measurements it dropped or failed to commit, its archive backlog and its database sizes. `DEPLOY.md` has the `scrape_config` and a few ready-made alert expressions.
+
+  It asks for the same credentials as the API, from the viewer role up, and includes private targets. No host, port or address is exported, whatever the caller may read elsewhere: what Prometheus keeps is not bound by this instance's visibility settings, so the series carry names and figures and never the addressing. It shares the API's rate limit of 20 requests per second per address, which no scrape interval comes near.
+
+  A scrape reads what the instance already holds in memory and in the small tables, never the measurement history, so a thousand targets seen from three probes cost a few milliseconds every fifteen seconds. The price is that a target's status is the one the alerter worked out on its last round, at most a minute old, and appears a minute after the service starts.
+
+  A round trip or a loss disappears once its pass is older than both three of the target's intervals and five minutes, so a probe that dies during an outage does not report its last loss forever. Its last pass stays as a timestamp, and dates in general are exported as timestamps rather than ages, as Prometheus recommends: a probe's silence and a certificate's remaining days are computed in the query.
+
+  A batch of measurements the writer fails to commit, on a full disk for instance, was only logged until now. It is now counted in `smokestack_measurements_write_failed_total`.
+- **DNS targets, timed on real queries rather than pings.**
+
+  A resolver can answer ICMP from its kernel while every query waits out the client's timeout, so a ping says nothing about whether it resolves. On a production instance, a resolver that failed to answer within three seconds for over an hour showed only as unexplained loss on the targets that depended on it. A target can now use the DNS protocol, and what it measures is the time to answer a query.
+
+  Each packet of the burst is one query over UDP, recursion desired, to port 53 by default. The question is `. NS` unless the target states another. That is the priming query every recursive resolver answers from its cache, so the figure is the resolver's own, and nobody else's name is looked up thousands of times a day. A name and a type among `A`, `AAAA`, `NS`, `SOA`, `MX` and `TXT` can be set instead, which is how an authoritative server is measured.
+
+  The queries go out at the target's spacing without waiting for each other, as ICMP echoes do, so a resolver that stops answering holds a pass for the burst plus the timeout, within the budget the interval is checked against. Each query has the same timeout wherever it sits in the burst: an answer that takes longer is loss.
+
+  What the server says decides the outcome. NOERROR and NXDOMAIN are answers, a truncated one included, since the resolver is what is timed. SERVFAIL is loss: the resolver is up and failing, which is exactly what the target exists to see. REFUSED is loss too, and the reason under the target says it is a configuration to fix — an access list, or an authoritative server asked to recurse — rather than a path to investigate.
+
+  An answer counts only if it comes from the address and port queried and repeats the ID and the question of a query still waiting, so it is never timed against another query. The one exception is a bare error header with the right ID, which is how Unbound refuses a client its access control leaves out: it counts as the error it names, never as an answer. Only the header and the question are read, and the probe sends one small query per packet, without EDNS.
+
+  A forwarder that does not cache NS records, such as dnsmasq on many home routers, passes `. NS` upstream every time: ask it for an `A` record it answers often instead. A DNS target has no response-time breakdown, and a peer cannot be asked to double-check it, since the request has no room for a query. That refusal is now made before asking, for UDP echo targets as well. The two new columns are added on start; existing targets are untouched.
+
+  **Upgrade remote probes before giving them a DNS target.** The service cannot tell which version a remote probe runs. One from 0.7 pings the resolver and graphs it under the DNS label; one from 0.8 reports an unknown protocol and measures nothing. The embedded probe, and a separate probe on the same machine, follow the service's version by themselves.
+- **A target's status can be embedded as a badge on a website, a README or a PeeringDB note.**
+
+  `GET /badge/<slug>.svg` draws a small two-part image: the target's title, then its status as the public pages classify it — nominal, degraded, incident, maintenance, no data — in the same colours. `?metric=uptime&window=30d` (`24h`, `7d`, `30d`, `1y`) shows the availability figure instead, `?metric=latency` the current median, and `?label=` replaces the title. In the back-office, *Badge* beside each target the public overview lists gives the Markdown and HTML to paste.
+
+  The snippets use the instance's public address (*Publisher page → Address of this instance*, or `federation.base_url`). Without one they fall back to the address you are browsing from, and the panel says so.
+
+  The image is the same for everybody, which is what lets GitHub's image proxy and any other cache keep it for a minute. A private target, a disabled one or one in a private category answers exactly like a slug that does not exist. Being signed in shows nothing more, and a share link does not unlock it: a token in an `<img src>` is a credential handed to every reader of the page.
+
+  However many readers load it, a badge costs at most one availability computation per target a minute:
+
+  - **Status and median:** they come from the overview the background loop builds. A badge never builds it, and answers 503 until the first build.
+  - **Availability:** it comes from the same one-minute cache as the target page. One request fills that cache while the others wait.
+
+  A target made private stops being served at once, since every target change rebuilds the overview; an image proxy may keep the last copy for up to a minute.
+
+  The figure is written as the target page writes it: one decimal, two under 1 %, with the language's decimal mark, so the badge and the page it links to show the same number. A period the target has not been measured across reads *since <date>* instead of the period's name, so a target created last week does not show a yearly figure.
+
+  With availability not published, the uptime badge says so in grey rather than answering 404. The target and the missing figure are both on its public page already, and a broken image on a page the operator may not control reads as an instance that is down. Words are in the instance's default language.
+- **Anyone can now follow an instance's status through an Atom feed, with no account and no e-mail address.**
+
+  `/feed.atom` covers the whole instance and `/t/<name>/feed.atom` covers one target. Every public page advertises them to feed readers, and the footer links to the first. Each entry links to the page it concerns and keeps the same id from start to end, so a reader updates the entry when an incident closes instead of showing a second one.
+
+  The feed publishes nothing the public pages do not already show. A target without a public page (private, disabled, or in a private category) appears in no feed and has none of its own; its address returns the same 404 as a target that does not exist. A host is masked or hidden exactly as on the target page. Planned maintenance appears when the banner would announce it, seven days ahead. The events are the ones already drawn on the graphs, minus route changes. No traceroute, probe or alert detail is ever included.
+
+  Detected incidents are the exception, and they stay out until you choose otherwise. The home page already shows the current state, but a dated 30-day list of other people's outages, pushed to every subscriber, is a publication of its own. Tick *Publish detected incidents in the Atom feed* in *Instance → Publisher page* to add them. Even then, an incident stays out if it is shorter than the alert delay, opened during a maintenance window that stops alerts or measurement, belongs to a target with alerts off, or was decided by a probe you have since disabled. Each entry says when an incident was recorded, not what was measured.
+
+  Purging a target now also deletes the incidents recorded for it. They used to stay behind, and a target created later could be given the purged target's id and inherit them. The feed also ignores any incident older than its target, so rows left by earlier purges are never published.
+
+  Entry ids are built from the **Website** address and one date fixed when the first feed is built, so set the Website before sharing the feed: a reader that sees the host change treats every entry as new. Entries cover the last 30 days, at most 50, in the instance's default language, with times in UTC. Each feed is rebuilt at most every 30 seconds and can be revalidated with an ETag.
 - **How long each resolution is kept is now an instance setting.**
 
   Every measurement is stored five times over at falling resolution, and how long each of those was kept was compiled in: raw passes 48 hours, one-minute buckets a year, five-minute buckets three years, hourly and daily for ever. The only setting near it was *Keep measurements for* on a target, which cuts every resolution at the same date. So an instance could not drop the minute while keeping the hour, and an instance with the disk for it could not keep the minute beyond a year.
@@ -32,6 +86,16 @@ Versions are published as signed releases; servers with automatic updates instal
   Two rules are enforced rather than advised, because breaking either loses measurements instead of history. A tier may not be kept for less than the window that rolls it up: the minute is rebuilt from the raw samples over two hours, the hour from the five minutes over three days, and a tier purged before it has been rolled up is gone rather than coarse. And a coarser tier may not be kept for less than a finer one, which inverts the point of the cascade: every row in the minute tier stands for sixty raw ones, so keeping the expensive detail longer than the cheap summary is almost always a transposed pair of numbers, and it costs disk for months before anyone notices. A value breaking either is refused and the previous one kept — there is no half-applied retention, since the damage would arrive with the next purge rather than with the save.
 
   **Shortening a tier deletes two things, and the second is the one nobody expects.** The old rows go at the next purge, within six hours, and that cannot be undone. It also removes the only source for rebuilding the tier above it over that period: with the minute kept seven days, the five-minute tier can never again be recovered beyond seven days, whatever happens later. That is the mechanism that brings the long views back after a stop. So both are stated before anything is saved — the back-office counts the rows and names the tier that stops being recoverable, and the command line prints the same and saves nothing without `-apply`. Reported in #115.
+- **The Federation, Host network and Pairing pages can be taken off the public site.**
+
+  In *Instance → Publisher page → Public pages*, untick a page and it leaves the menu, the links the other pages make to it and the sitemap, and its address answers 404 — a 404 rather than a redirect, so a search engine drops it instead of following it somewhere else. The navigation already left out a page the configuration made empty; this is for the instance that has no use for one anyway.
+
+  Hiding is presentation, not policy. The federation and pairing APIs other instances call keep answering, so hiding *Pairing* does not break a pairing in progress and hiding *Federation* does not stop federating — `federation.enabled` in the configuration file does that. *Home* and *About* cannot be hidden: *About* is where visitors find who runs the instance and how to reach it.
+
+  Nothing changes on upgrade. The setting records what is hidden, so an instance hides nothing until somebody says otherwise, and no page somebody links to disappears with an update.
+
+  Asked for in #11.
+
 - **A disabled probe's traceroutes were still published, with its id on them.**
 
   `/api/v1/probes` lists enabled probes only, so turning a probe off is how an operator says it is no longer part of what the instance shows. The traceroute list answered from every probe when none was named, and every entry carries its `probe_id`, so one endpoint published the existence of a probe the other deliberately hid — the same inconsistency as the one fixed in 0.8.4 for `?probe=`, one layer down.

@@ -104,6 +104,10 @@ The back-office shows the reason under the target's name:
 | `cannot resolve …` | The name has no address in the requested family. A target forced to IPv6 whose name has only an A record fails here |
 | `IPv6 is not available on this probe` | The host has no IPv6, or the probe could not open an ICMPv6 socket |
 | `no reply to N ICMP echo requests sent to …` | The packets left, nothing came back. The message gives the address actually probed |
+| `the host answered: nothing is listening on UDP/…` | A UDP echo or DNS target whose host is up but runs nothing on that port |
+| `no answer to N queries for …` | A DNS target: the queries left and nothing came back in time — which a resolver that still answers ping can very well do |
+| `the resolver answered SERVFAIL to …` | Reachable, and failing to resolve: its upstream, its cache or its workers |
+| `the server answered REFUSED to …` | The server will not answer this probe: an access list leaves out the probe's address, or an authoritative server was asked to recurse. A configuration to fix, not a path |
 
 ---
 
@@ -117,6 +121,7 @@ The back-office shows the reason under the target's name:
 | A home router, an ONT, a CPE | 300 s | 10 | 300 ms | 1500 ms |
 | An intercontinental destination | 60 s | 10 | 300 ms | 2000 ms |
 | A TCP service (HTTPS, SSH, BGP) | 60 s | 5 | 500 ms | 2000 ms |
+| A DNS resolver, timed on queries | 60 s | 10 | 200 ms | 2000 ms |
 
 TCP targets open a real connection each time: keep the packet count low, and
 prefer a service you are allowed to knock on.
@@ -127,6 +132,71 @@ measured normally; only a refused connection, a timeout or a name that does
 not resolve counts as a failure. If such a target fails while `curl` works
 from the same host, look at the reason shown under its name — a missing port
 is the usual cause.
+
+---
+
+## Measuring a DNS resolver
+
+A resolver can answer ping perfectly while failing every query: the kernel
+replies to ICMP, and the resolver behind it waits on an upstream that is gone
+or a cache that is wedged. Choose **DNS query** as the protocol to time what
+users actually wait for.
+
+Each packet of the burst is one query over UDP, recursion desired, to the
+target's host on port 53 (settable). The question is `. NS` unless you set
+another, and that default is deliberate:
+
+- every recursive resolver keeps the root NS set in its cache, because it
+  cannot resolve anything without it, so the figure is the resolver's own
+  answering time rather than the time it spends asking somebody else;
+- on the rare miss, the question goes to the root servers, which exist to
+  answer it — nobody else's name is looked up thousands of times a day.
+
+To measure an authoritative server, or a name your users depend on, set a
+name in the zone it serves and a type among `A`, `AAAA`, `NS`, `SOA`, `MX`
+and `TXT`. An authoritative server asked for `.` usually answers `REFUSED`.
+
+A forwarder is not a recursive resolver, and some do not cache every type:
+dnsmasq, common on home routers and CPE, caches address records by default
+and passes most other questions upstream, so `. NS` there times the upstream
+as well. For such a box, ask for the `A` record of a name it answers often.
+
+| The server answers | Counted as |
+|---|---|
+| `NOERROR` or `NXDOMAIN` | an answer, timed: the resolver did its job |
+| an answer flagged truncated | an answer too: the resolver is what is timed, there is no retry over TCP |
+| `SERVFAIL` | loss: the resolver is up and failing |
+| `REFUSED` | loss, with a reason saying it is a configuration to fix |
+| nothing within the timeout | loss |
+
+The queries of a burst go out at the target's spacing without waiting for
+answers, as ICMP echoes do. A resolver that says nothing therefore holds a
+pass for the burst plus the timeout, never longer, and each query has the
+same timeout wherever it sits in the burst: an answer that takes longer is
+lost.
+
+An answer counts only when it comes from the address and port queried and
+repeats the random ID and the question of a query still waiting for it, so
+it is never timed against another query. The one exception is a bare error
+header carrying the right ID and no question, which is how Unbound refuses a
+client its access control leaves out: it counts as the error it names, never
+as an answer. Unbound refuses every client but localhost until told
+otherwise, so on Unbound a `REFUSED` reason usually means no `access-control`
+line allows the probe's address.
+
+A DNS target is measured over an ordinary UDP socket. It has no response-time
+breakdown, which is TCP-only, and a peer cannot be asked to double-check it.
+
+**Upgrade remote probes before giving them a DNS target.** The embedded probe
+and a separate probe on the same machine follow the service's version by
+themselves, but a remote probe runs whatever was installed on its own
+machine, and the service cannot tell which version that is. A remote probe
+older than the release that introduced DNS targets cannot measure one:
+
+| The remote probe runs | What it does with a DNS target |
+|---|---|
+| a 0.7 release | pings the resolver with ICMP, and the graph is labelled DNS |
+| a 0.8 release | reports `unknown protocol "dns"` and measures nothing |
 
 ---
 
@@ -247,3 +317,26 @@ waste an evening: finding who to write to, and explaining the context.
 note, so you know months later who holds which link. And give the link an
 expiry — 30 days covers an incident; a link without one outlives the reason
 it was created.
+
+---
+
+## Showing a target's status on your own pages
+
+Press **Badge** next to a target shown on the public pages (public, enabled,
+in a public category): you get a small image of its status — nominal,
+degraded, incident, maintenance — for your website, a README or your
+PeeringDB notes, with the Markdown and the HTML ready to paste. It can show
+the availability over a period or the current median instead, and `?label=`
+changes the text on the left. The figures read exactly as on the target's
+page; a period the target has not been measured across shows *since <date>*
+rather than the period's name.
+
+The snippets use the instance's public address, set under **Publisher page →
+Address of this instance** (or `federation.base_url`). Without one they fall
+back to the address you are browsing from, and the panel says so: check it is
+one your readers can reach.
+
+A badge is public by construction. A private target has none, and a share
+link does not unlock one: whatever sits in an image address is published to
+everyone who reads the page, so a share link belongs in a ticket, never in an
+`<img>`.

@@ -47,7 +47,8 @@ function render() {
   document.getElementById("lead").textContent = t(D.open ? "pairing.lead_open" : "pairing.lead_closed");
   const rows = [
     ["pairing.org", D.org],
-    ["pairing.asn", html`<a class="mono" href="/network">${D.asn}</a>`],
+    ["pairing.asn", !App.hides("network")
+      ? html`<a class="mono" href="/network">${D.asn}</a>` : html`<span class="mono">${D.asn}</span>`],
     ["pairing.url", html`<span class="mono">${D.url}</span>`],
     ["pairing.fingerprint", html`<span class="fp">${D.fingerprint}</span>`],
     ["pairing.anchors", html`<div class="pill-list" style="justify-content:flex-end">${

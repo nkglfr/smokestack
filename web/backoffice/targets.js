@@ -3,6 +3,10 @@
  * portee globale, comme app.js et i18n.js du site public. */
 /* ----------------------------------------------------------- targets */
 const FAMILY={0:"auto",4:"IPv4",6:"IPv6"};
+const DNS_TYPES=["NS","SOA","A","AAAA","MX","TXT"];
+// The port each protocol starts from. One left over from the previous protocol is replaced on a switch, so
+// a UDP echo target turned into a DNS one does not go on querying port 7.
+const DEFAULT_PORT={udp:"7",dns:"53"};
 const COMMON_PORTS=[[443,"HTTPS"],[80,"HTTP"],[22,"SSH"],[53,"DNS"],[25,"SMTP"],[587,"SMTP submission"],[179,"BGP"],[3306,"MySQL"],[5432,"PostgreSQL"],[8080,"HTTP alt"]];
 let EDIT=null;   // target being edited, null when creating
 
@@ -39,11 +43,21 @@ async function viewTargets(m){
         <div class="field"><label>Host or IP address</label><input id="thost" placeholder="192.0.2.1 or 2001:db8::1"></div>
         <div class="field"><label>Protocol</label><select id="tproto">
           <option value="icmp">ICMP</option><option value="tcp">TCP connect</option>
-          <option value="udp">UDP echo</option></select></div>
+          <option value="udp">UDP echo</option><option value="dns">DNS query</option></select></div>
         <div class="field" id="portfield" hidden><label id="portlabel">TCP port</label>
           <input id="tport" list="ports" placeholder="443">
           <datalist id="ports">${COMMON_PORTS.map(([p,l])=>html`<option value="${p}">${p} — ${l}</option>`)}</datalist>
           <div id="portnote" style="font-size:11px;color:var(--ink3);margin-top:3px" hidden>Port 7 is the RFC 862 echo port, which a Junos probe-server listens on. A receiver can be told to use the 49160–65535 range instead.</div></div>
+        <div class="field" id="dnsnamefield" hidden><label>Query name</label>
+          <input id="tdnsname" class="mono" placeholder=".">
+          <div style="font-size:11px;color:var(--ink3);margin-top:3px">One query per packet, recursion desired.
+            The root, “.”, is in every recursive resolver's cache, so its answer times the resolver rather than
+            whatever it would have to ask. For an authoritative server, ask for a name in a zone it serves.</div></div>
+        <div class="field" id="dnstypefield" hidden><label>Query type</label>
+          <select id="tdnstype">${DNS_TYPES.map(x=>html`<option value="${x}">${x}</option>`)}</select>
+          <div style="font-size:11px;color:var(--ink3);margin-top:3px">NOERROR and NXDOMAIN are answers.
+            SERVFAIL counts as loss, and so does REFUSED, which the reason under the target names as a
+            configuration to fix.</div></div>
         <div class="note" style="grid-column:1/-1">Prefer a name over a public IP address.
           Publishing the address of a machine you do not own exposes it, and that stays the
           responsibility of whoever runs this instance — not of the tool. Public pages show only
@@ -243,17 +257,22 @@ async function viewTargets(m){
   });
   // A UDP echo target needs a port as much as a TCP one does. Leaving this on "tcp" alone was the
   // one-line gap that would have shipped a protocol with no way to set the port it measures.
+  let lastProto=null;
   const syncProto=()=>{
-    const p=$("#tproto").value, needsPort=p==="tcp"||p==="udp";
+    const p=$("#tproto").value, needsPort=p==="tcp"||p==="udp"||p==="dns";
     $("#portfield").hidden=!needsPort;
-    $("#portlabel").textContent=p==="udp"?"UDP port":"TCP port";
+    $("#portlabel").textContent={udp:"UDP port",dns:"DNS port"}[p]||"TCP port";
     $("#portnote").hidden=p!=="udp";
-    if(p==="udp"&&!$("#tport").value) $("#tport").value="7";
+    $("#dnsnamefield").hidden=$("#dnstypefield").hidden=p!=="dns";
+    const port=$("#tport").value;
+    if(DEFAULT_PORT[p]&&(!port||port===DEFAULT_PORT[lastProto])) $("#tport").value=DEFAULT_PORT[p];
+    lastProto=p;
   };
   $("#tproto").onchange=syncProto;
   if(EDIT){
     $("#tcat").value=EDIT.category_id; $("#ttitle").value=EDIT.title; $("#thost").value=EDIT.host;
     $("#tproto").value=EDIT.proto; $("#tport").value=EDIT.port||""; $("#tfam").value=String(EDIT.family||0);
+    $("#tdnsname").value=EDIT.dns_name||""; $("#tdnstype").value=EDIT.dns_type||"NS";
     $("#tlw").value=EDIT.loss_warn||0; $("#tlc").value=EDIT.loss_crit||0; $("#tlf").value=EDIT.lat_factor||0;
     // Auto is no longer offered for a new target; a target that already has
     // it keeps it visible, so editing something else does not silently
@@ -353,7 +372,9 @@ async function viewTargets(m){
     }
     const body={category_id:parseInt($("#tcat").value,10),title:$("#ttitle").value,
       host:cleanHost($("#thost").value),family:parseInt($("#tfam").value,10),proto:$("#tproto").value,
-      port:($("#tproto").value==="tcp"||$("#tproto").value==="udp")?parseInt($("#tport").value||"0",10):0,
+      port:$("#portfield").hidden?0:parseInt($("#tport").value||"0",10),
+      dns_name:$("#tproto").value==="dns"?$("#tdnsname").value.trim():"",
+      dns_type:$("#tproto").value==="dns"?$("#tdnstype").value:"",
       interval_s:num0($("#tiv").value), keep_days:parseInt($("#tkeep").value||"0",10),
       packets:num0($("#tpk").value), spacing_ms:num0($("#tsp").value), timeout_ms:num0($("#tto").value),
       pin_ip:$("#tpin").value.trim(), alerts_off:!$("#talert").checked,
@@ -429,7 +450,9 @@ async function viewTargets(m){
     const F=new Set(feat||[]);
     // Host and category sit under the title: fewer columns, and the table
     // turns into one card per target on a phone.
-    const cname={}; (tree||[]).forEach(c=>cname[c.id]=c.menu_en||c.menu_fr);
+    const cname={}, cpub={}; (tree||[]).forEach(c=>{cname[c.id]=c.menu_en||c.menu_fr; cpub[c.id]=c.public;});
+    // Only a target the public overview lists has a badge; any other answers 404.
+    const onOverview=t=>t.public&&t.enabled&&cpub[t.category_id];
     H.render($("#tlist"),(list&&list.length)?html`<table class="resp">
       <thead><tr><th title="Critical target: always shown at the top of the home page">★</th><th>Target</th>
       <th>Family</th><th>Check</th><th>Interval</th><th>Alerts</th><th>Visibility</th><th></th></tr></thead><tbody>${list.map(t=>html`<tr><td data-l=""><button class="btn s" data-star="${t.id}" title="Critical target"
@@ -458,7 +481,7 @@ async function viewTargets(m){
             <button class="btn s" data-fam6="${t.id}">Set IPv6</button></div>`:""}
           ${t.last_error?html`<div class="terr" title="Last failure: ${new Date(t.last_error_ts*1000).toLocaleString()}">
             ⚠ ${t.last_error}</div>`:""}</td>
-        <td data-l="Family">${FAMILY[t.family||0]}</td><td data-l="Check">${t.proto}</td>
+        <td data-l="Family">${FAMILY[t.family||0]}</td><td data-l="Check">${t.proto}${t.proto==="dns"?html` <span class="mono">${t.dns_name} ${t.dns_type}</span>`:""}</td>
         <td data-l="Interval">${t.interval_s} s</td>
         <td data-l="Alerts"><button class="btn s" data-alert="${t.id}" data-off="${t.alerts_off?1:0}"
           title="Alert when this target stays in incident">${t.alerts_off?
@@ -469,6 +492,8 @@ async function viewTargets(m){
           <button class="btn s" data-edit="${t.id}">Edit</button>
           <button class="btn s" data-now="${t.id}" title="Measure right away">Check now</button>
           <button class="btn s" data-share="${t.id}">Share</button>
+          ${onOverview(t)&&html`<button class="btn s" data-badge="${t.id}"
+            title="An image of this target's status, for your website, a README or a PeeringDB note">Badge</button>`}
           <button class="btn s" data-advice="${t.id}" title="Look at the shape of the loss">Why this loss?</button>
           <button class="btn s" data-trace="${t.id}">Traceroute</button>
           <button class="btn s" data-twin="${t.id}" data-fam="${t.family||0}"
@@ -538,6 +563,51 @@ async function viewTargets(m){
         box.querySelector("#cpy").onclick=()=>{navigator.clipboard?.writeText(l.url);toast("Link copied");};
         box.querySelectorAll("[data-goto]").forEach(a=>a.onclick=e=>{e.preventDefault();go(a.dataset.goto);});
       }catch(e){toast(e.message,true);}
+    });
+    // The snippets name the instance's public address, not the one this
+    // back-office happens to be reached at through a tunnel or a LAN.
+    document.querySelectorAll("[data-badge]").forEach(b=>b.onclick=async()=>{
+      const row=b.closest("tr"), open=row.nextElementSibling;
+      if(open&&open.dataset.badgeOf===b.dataset.badge){open.remove();return;}
+      const t=list.find(x=>x.id==b.dataset.badge);
+      const own=((await api("GET","/api/v1/fed/profile").catch(()=>null))?.url||"").replace(/\/+$/,"");
+      const base=/^https?:\/\/[^/]/.test(own)?own:location.origin;
+      if(row.nextElementSibling?.dataset.badgeOf===b.dataset.badge) return;
+      const box=document.createElement("tr"); box.dataset.badgeOf=b.dataset.badge;
+      H.render(box,html`<td colspan="8"><div class="note" style="margin:0">
+        <strong>Status badge</strong> — this target as an image, refreshed within a minute. Anyone can
+        load it, so only targets shown on the public pages have one, and a share link does not unlock it:
+        a token in an image address is published to every reader of the page.
+        ${base===location.origin&&own!==location.origin&&html`<div class="twarn" style="margin-top:6px">No usable
+          public address is set for this instance, so these links use the one you are browsing from,
+          <span class="mono">${location.origin}</span>. Check that readers can reach it, or set
+          <a href="${pathOf("site")}" data-goto="site">Publisher page → Address of this instance</a>.</div>`}
+        <div class="row2" style="margin:8px 0">
+          <select data-bm><option value="">Status</option><option value="uptime">Availability</option>
+            <option value="latency">Median latency</option></select>
+          <select data-bw>${["24h","7d","30d","1y"].map(w=>html`<option ${w==="30d"?"selected":""}>${w}</option>`)}</select>
+        </div>
+        <img data-bimg alt="Badge preview" style="display:block;margin:0 0 8px">
+        ${["Markdown","HTML"].map(k=>html`<div class="field"><label>${k}</label>
+          <div style="display:flex;gap:6px"><input class="mono" readonly data-bs="${k}" style="font-size:12px">
+          <button class="btn s" data-bc="${k}">Copy</button></div></div>`)}
+      </div></td>`);
+      row.after(box);
+      const bm=box.querySelector("[data-bm]"), bw=box.querySelector("[data-bw]");
+      const draw=()=>{
+        bw.hidden=bm.value!=="uptime";
+        const q=bm.value?"?metric="+bm.value+(bm.value==="uptime"?"&window="+bw.value:""):"";
+        const page=base+"/t/"+encodeURIComponent(t.slug);
+        const src=base+"/badge/"+encodeURIComponent(t.slug)+".svg"+q;
+        box.querySelector("[data-bimg]").src=src;
+        box.querySelector('[data-bs="Markdown"]').value=`[![${t.title.replace(/[[\]\\]/g,"\\$&")}](${src})](${page})`;
+        box.querySelector('[data-bs="HTML"]').value=`<a href="${H.esc(page)}"><img src="${H.esc(src)}" alt="${H.esc(t.title)}"></a>`;
+      };
+      bm.onchange=bw.onchange=draw; draw();
+      box.querySelectorAll("[data-goto]").forEach(a=>a.onclick=e=>{e.preventDefault();go(a.dataset.goto);});
+      box.querySelectorAll("[data-bc]").forEach(c=>c.onclick=()=>{
+        navigator.clipboard?.writeText(box.querySelector(`[data-bs="${c.dataset.bc}"]`).value);toast("Copied");
+      });
     });
     document.querySelectorAll("[data-advice]").forEach(b=>b.onclick=async()=>{
       const id=b.dataset.advice, host=b.closest("tr");
