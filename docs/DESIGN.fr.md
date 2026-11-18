@@ -56,9 +56,12 @@ tombant sur la même seconde ne partent pas ensemble.
 Chaque cible est publique ou privée. Une cible privée est mesurée, stockée et
 tracée comme les autres, mais elle est exclue de toutes les routes publiques :
 arbre, vue d'ensemble, séries, graphes, flux temps réel et traceroutes. Le
-contrôle accepte le jeton d'API ou une session du back-office. La liste des
-cibles publiques est mise en cache et reconstruite à chaque modification, donc
-une bascule prend effet immédiatement.
+contrôle accepte le jeton d'API, une clé d'API ou une session du back-office.
+La liste des cibles publiques est mise en cache et reconstruite à chaque
+modification, donc une bascule prend effet immédiatement. Un flux temps réel
+ouvert par un appelant authentifié revérifie son accès toutes les 5 secondes,
+et retombe sur les cibles publiques dès que la clé est révoquée ou la session
+fermée.
 
 ## Contact sans adresse publique
 
@@ -96,6 +99,7 @@ smokestack [-config F] [-ip IP] [-port P]    lance le service web
 smokestack probe [-config FICHIER]           lance la sonde isolée
 smokestack version | selftest
 smokestack user add -email E [-role master]  crée un compte (mot de passe généré)
+smokestack apikey list | create | revoke     clés d'API (create -email E -name N [-role R] [-days D])
 smokestack languages [-default CODE]         liste les langues, choisit la langue par défaut
 smokestack update [-force] PAQUET.zip        installe une version
 smokestack rollback                          revient à la version précédente
@@ -255,6 +259,20 @@ DELETE /api/v1/admin/targets/{id}
 POST   /api/v1/admin/categories
 POST   /api/v1/admin/events
 ```
+
+Une clé d'API (`Authorization: Bearer ssk_…`) s'emploie de la même façon,
+avec le rôle qu'elle porte. Elle appartient à un compte, se crée dans
+*Accounts → API keys* ou par `smokestack apikey create` sur l'hôte, et se
+gère par :
+
+```
+GET    /api/v1/admin/apikeys        ses clés ; un admin voit celles de tous les comptes
+POST   /api/v1/admin/apikeys        {"name":"ansible","role":"admin","days":90}
+DELETE /api/v1/admin/apikeys/{id}   révocation, immédiate
+```
+
+Les routes des cibles et des catégories exigent pour l'instant le rôle admin,
+d'où la clé admin donnée à Ansible ci-dessus.
 
 Ingestion depuis une sonde distante (`Authorization: Bearer <jeton de sonde>`) :
 
@@ -438,12 +456,31 @@ supprimé, ni rétrogradé, ni désactivé.
   stocké haché en base, durée de 12 heures.
 - Jeton CSRF exigé sur toute méthode mutante en mode cookie.
 - 8 tentatives de connexion par IP et par tranche de 10 minutes, message
-  d'erreur identique que le compte existe ou non.
+  d'erreur identique que le compte existe ou non. La vérification du mot de
+  passe actuel, lors d'un changement de mot de passe, compte comme une
+  tentative.
 - Un changement de mot de passe ou une désactivation ferme toutes les sessions
   du compte.
 - Le jeton `admin_token` de `config.json` continue de fonctionner en `Bearer`
   pour l'automatisation, et vaut `master`. Le CSRF ne s'applique pas à ce mode.
-- Journal d'audit : connexions, échecs, créations, décisions d'appairage.
+- Une clé d'API est l'alternative qui ne donne pas tout : elle agit au nom de
+  son compte avec le plus bas de deux rôles, celui qu'elle a reçu — jamais
+  au-dessus de celui du créateur, jamais `master` — et celui qu'a le compte au
+  moment de l'appel. Rétrograder le compte rétrograde ses clés ; le désactiver
+  ou le supprimer les supprime, pour qu'un compte compromis puis réactivé ne
+  rende pas ses clés à l'intrus. Un changement de mot de passe les laisse en
+  place. Une clé ne crée ni compte ni clé, ne change pas le mot de passe de
+  son compte, n'exige pas de CSRF, et lit les cibles privées sur les routes
+  publiques comme une session. Ce qu'elle peut créer par ailleurs — liens de
+  partage, jetons de sonde, pairs de fédération — survit à sa révocation :
+  c'est là qu'il faut regarder après une fuite. Affichée une seule fois,
+  stockée hachée en SHA-256 (un hachage lent protège un mot de passe devinable,
+  pas 256 bits aléatoires) ; le préfixe `ssk_` sert aux détecteurs de secrets.
+  Dernière utilisation enregistrée au plus une fois par minute.
+- Journal d'audit : connexions, échecs, créations, décisions d'appairage, et,
+  sur chaque entrée écrite pour une requête faite avec une clé d'API, la clé.
+  Les modifications des cibles, catégories, événements, réglages du site,
+  stockage et pairs de fédération, entre autres, n'y sont pas encore écrites.
 
 ## Appairage en deux temps
 

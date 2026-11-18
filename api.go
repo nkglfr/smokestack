@@ -263,12 +263,11 @@ func parseTime(s string, def int64) int64 {
 	return def
 }
 
-// authenticated reports whether the request comes from the API token or a
-// valid back-office session. Private targets are only ever served to these.
+// authenticated reports whether the request comes from the API token, an API
+// key or a valid back-office session. Private targets are only ever served to
+// these.
 func (a *API) authenticated(r *http.Request) bool {
-	bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	if bearer != "" && a.token != "" &&
-		subtle.ConstantTimeCompare([]byte(bearer), []byte(a.token)) == 1 {
+	if a.bearerUser(r) != nil {
 		return true
 	}
 	c, err := r.Cookie(sessionCookie)
@@ -549,6 +548,9 @@ func (a *API) eventsPost(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, e)
 }
 
+// liveEvery is how often the live stream sends, and re-checks its caller.
+var liveEvery = 5 * time.Second
+
 // live pousse le dernier point de chaque cible en SSE. Le client
 // n'a donc jamais besoin de recharger une serie entiere pour rester
 // a jour.
@@ -570,12 +572,14 @@ func (a *API) live(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	// Private targets are left out unless the caller is authenticated.
+	// Private targets are left out unless the caller is authenticated, and
+	// from the first tick after a revoked key or a closed session.
+	privileged := a.authenticated(r)
 	var visible map[int64]bool
-	if !a.authenticated(r) {
+	if !privileged {
 		visible = a.publicTargetIDs()
 	}
-	tick := time.NewTicker(5 * time.Second)
+	tick := time.NewTicker(liveEvery)
 	defer tick.Stop()
 	for {
 		rows, err := a.store.Live()
@@ -597,6 +601,9 @@ func (a *API) live(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-tick.C:
+		}
+		if privileged && !a.authenticated(r) {
+			privileged, visible = false, a.publicTargetIDs()
 		}
 	}
 }

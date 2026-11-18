@@ -362,8 +362,8 @@ Public, read-only, JSON:
 instance's own probe, as they always have.
 
 Private targets never appear in these endpoints. An authenticated call (session
-cookie or `Authorization: Bearer <admin token>`) sees them, and
-`/api/v1/overview?all=1` returns them too.
+cookie, or `Authorization: Bearer` with the admin token or an API key) sees
+them, and `/api/v1/overview?all=1` returns them too.
 | `GET /healthz` | Health check |
 
 Rate limit: 20 requests/s per client IP, bursts of 80.

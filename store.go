@@ -264,6 +264,9 @@ func OpenStore(dir string) (*Store, error) {
 	if _, err := cfg.Exec(maintenanceSchema); err != nil {
 		return nil, fmt.Errorf("schema maintenances: %w", err)
 	}
+	if err := migrateAPIKeys(cfg); err != nil {
+		return nil, fmt.Errorf("schema api_keys: %w", err)
+	}
 	addColumn(cfg, "targets", "family INTEGER NOT NULL DEFAULT 0")
 	addColumn(cfg, "targets", "port INTEGER NOT NULL DEFAULT 0")
 	addColumn(cfg, "targets", "pin_ip TEXT NOT NULL DEFAULT ''")

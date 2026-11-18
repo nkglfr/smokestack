@@ -4,6 +4,23 @@ Versions are published as signed releases; servers with automatic updates instal
 
 ## Unreleased
 
+- **Each script can have an API key of its own, at a role no higher than its account's.**
+
+  Until now automation had one credential: the `admin_token` of `config.json`, which acts as master, belongs to nobody, cannot be narrowed, and is withdrawn only by editing the configuration and restarting. Every playbook, pipeline and scraper held the keys to everything, and the audit log could only say that the token did it.
+
+  A key belongs to an account and is made in *Accounts → API keys*, or with `smokestack apikey create` on the host, with a role up to the account's own and an optional expiry. It is sent as `Authorization: Bearer ssk_…`, needs no CSRF token, and reads private targets on the public API endpoints as a signed-in operator does. Each audit log entry written for a request made with it names the account and the key.
+
+  It acts with the lower of its own role and the account's current one, so demoting an account demotes its keys, and disabling or deleting the account deletes them: an account taken over and later re-enabled does not hand the intruder's keys back. A key is never master, cannot create accounts or keys, and cannot change the account's password. Whatever else it creates, such as share links, probe tokens or federation peers, survives its revocation, and is where to look after a leak.
+
+  The key is shown once and only its SHA-256 hash is stored. `ssk_` followed by 64 hex digits is the pattern to give a secret scanner, and the list shows the first characters so a leaked key can be matched and revoked. Its last use is recorded at most once a minute. The admin token keeps working exactly as before.
+
+  Two existing behaviours change with it:
+
+  - Changing a password counts against the sign-in budget of 8 attempts per address per 10 minutes, so a stolen session cannot guess the current password without limit. A sign-in, the change and the sign-in after it use three.
+  - A live stream opened with a key or a session checks it again every 5 seconds, and drops the private targets once the key is revoked or the session closed.
+
+  Target, category, event, site, storage and federation peer routes still need admin and still write no audit entry, with a key or without, so a key for Ansible or Terraform has to be an admin one.
+
 - **How long each resolution is kept is now an instance setting.**
 
   Every measurement is stored five times over at falling resolution, and how long each of those was kept was compiled in: raw passes 48 hours, one-minute buckets a year, five-minute buckets three years, hourly and daily for ever. The only setting near it was *Keep measurements for* on a target, which cuts every resolution at the same date. So an instance could not drop the minute while keeping the hour, and an instance with the disk for it could not keep the minute beyond a year.

@@ -78,7 +78,7 @@ async function viewAudit(m){
     const list=await api("GET","/api/v1/admin/audit");
     H.render($("#l"),(list&&list.length)?html`<table><thead><tr><th>Date</th><th>Account</th>
       <th>Action</th><th>Object</th><th>IP</th></tr></thead><tbody>${list.map(e=>html`<tr><td style="font-size:12px">${dt(e.ts)}</td>
-        <td style="font-size:12px">${e.email||"—"}</td>
+        <td style="font-size:12px">${e.email||"—"}${e.key_name?html`<div style="color:var(--ink3)">with key ${e.key_name}</div>`:""}</td>
         <td><span class="badge ${e.action==="login_failed"?"b-crit":"b-n"}">${e.action}</span></td>
         <td style="font-size:12px">${e.entity} ${e.entity_id}</td>
         <td class="mono" style="font-size:12px">${e.ip}</td></tr>`)}</tbody></table>`:html`<div class="empty">The log is empty.</div>`);

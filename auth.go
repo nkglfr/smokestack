@@ -50,6 +50,10 @@ type User struct {
 	Disabled    bool   `json:"disabled"`
 	CreatedAt   int64  `json:"created_at"`
 	LastLoginAt *int64 `json:"last_login_at"`
+	// The API key the request authenticated with, if any. Audit names it
+	// beside the account it acts for.
+	KeyID   int64  `json:"key_id,omitempty"`
+	KeyName string `json:"key_name,omitempty"`
 }
 
 func (u *User) Level() int { return roleLevels[u.Role] }
@@ -222,6 +226,10 @@ func (s *Store) UpdateUser(id int64, name, role, pw *string, disabled *bool) err
 		s.cfg.Exec(`UPDATE users SET disabled=? WHERE id=?`, b2i(*disabled), id)
 		if *disabled {
 			s.cfg.Exec(`DELETE FROM sessions WHERE user_id=?`, id)
+			// Deleted, not suspended: an account disabled because it was
+			// taken over must not get the intruder's keys back when it is
+			// enabled again.
+			s.cfg.Exec(`DELETE FROM api_keys WHERE user_id=?`, id)
 		}
 	}
 	if pw != nil {
@@ -253,16 +261,19 @@ func (s *Store) DeleteUser(id int64) error {
 }
 
 func (s *Store) Audit(u *User, ip, action, entity, entityID string) {
-	var uid *int64
-	var email *string
+	var uid, keyID *int64
+	var email, keyName *string
 	if u != nil {
 		uid = &u.ID
 		email = &u.Email
+		if u.KeyID != 0 {
+			keyID, keyName = &u.KeyID, &u.KeyName
+		}
 	}
 	s.cfg.Exec(
-		`INSERT INTO audit_log(ts,user_id,email,action,entity,entity_id,ip)
-		 VALUES(?,?,?,?,?,?,?)`,
-		time.Now().Unix(), uid, email, action, entity, entityID, ip)
+		`INSERT INTO audit_log(ts,user_id,email,action,entity,entity_id,ip,key_id,key_name)
+		 VALUES(?,?,?,?,?,?,?,?,?)`,
+		time.Now().Unix(), uid, email, action, entity, entityID, ip, keyID, keyName)
 }
 
 // ------------------------------------------------------------ sessions
@@ -419,16 +430,17 @@ func forwardedFor(h string) string {
 // ------------------------------------------------------- garde d'acces
 
 // need construit un gestionnaire protege. Deux modes d'authentification
-// coexistent : le cookie de session pour l'interface, et le jeton
-// d'administration en Bearer pour l'automatisation, qui vaut master.
-// Le CSRF n'est exige que pour le mode cookie.
+// coexistent : le cookie de session pour l'interface, et un Bearer pour
+// l'automatisation — le jeton d'administration, qui vaut master, ou une
+// cle d'API (apikeys.go). Le CSRF n'est exige que pour le mode cookie.
 func (a *API) need(level int, h func(http.ResponseWriter, *http.Request, *User)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		bearer := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-		if bearer != "" && a.token != "" &&
-			subtle.ConstantTimeCompare([]byte(bearer), []byte(a.token)) == 1 {
-			h(w, r, &User{ID: 0, Email: "api-token", DisplayName: "jeton API",
-				Role: "master"})
+		if u := a.bearerUser(r); u != nil {
+			if u.Level() < level {
+				writeErr(w, http.StatusForbidden, "insufficient privileges")
+				return
+			}
+			h(w, r, u)
 			return
 		}
 		c, err := r.Cookie(sessionCookie)
@@ -605,6 +617,12 @@ func (a *API) authMe(w http.ResponseWriter, r *http.Request, u *User) {
 }
 
 func (a *API) authPassword(w http.ResponseWriter, r *http.Request, u *User) {
+	// A leaked key that could change the password would become the account,
+	// beyond the key's role and its revocation.
+	if u.KeyID != 0 {
+		writeErr(w, http.StatusForbidden, "an API key cannot change the password: sign in")
+		return
+	}
 	var in struct{ Current, New string }
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeErr(w, 400, err.Error())
@@ -612,6 +630,13 @@ func (a *API) authPassword(w http.ResponseWriter, r *http.Request, u *User) {
 	}
 	if u.ID == 0 {
 		writeErr(w, 400, "the API token has no password")
+		return
+	}
+	// The current password is checked like a sign-in, against the same
+	// budget: a stolen session must not make an unlimited password oracle.
+	if !a.limiter.allow(clientIP(r)) {
+		writeErr(w, http.StatusTooManyRequests,
+			"too many attempts, try again in a few minutes")
 		return
 	}
 	var hash string
@@ -703,7 +728,7 @@ func (a *API) usersDelete(w http.ResponseWriter, r *http.Request, actor *User) {
 func (a *API) auditList(w http.ResponseWriter, r *http.Request, u *User) {
 	rows, err := a.store.cfg.Query(
 		`SELECT ts,COALESCE(email,''),action,COALESCE(entity,''),
-		        COALESCE(entity_id,''),COALESCE(ip,'')
+		        COALESCE(entity_id,''),COALESCE(ip,''),COALESCE(key_name,'')
 		   FROM audit_log ORDER BY ts DESC LIMIT 200`)
 	if err != nil {
 		writeErr(w, 500, err.Error())
@@ -717,12 +742,13 @@ func (a *API) auditList(w http.ResponseWriter, r *http.Request, u *User) {
 		Entity   string `json:"entity"`
 		EntityID string `json:"entity_id"`
 		IP       string `json:"ip"`
+		KeyName  string `json:"key_name,omitempty"`
 	}
 	out := []entry{}
 	for rows.Next() {
 		var e entry
 		if err := rows.Scan(&e.TS, &e.Email, &e.Action, &e.Entity,
-			&e.EntityID, &e.IP); err == nil {
+			&e.EntityID, &e.IP, &e.KeyName); err == nil {
 			out = append(out, e)
 		}
 	}
