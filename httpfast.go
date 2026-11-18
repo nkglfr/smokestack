@@ -245,7 +245,8 @@ func isLocalDirect(r *http.Request) bool {
 
 func withRateLimit(rl *rateLimiter, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/") && !isLocalDirect(r) && !rl.allow(clientIP(r)) {
+		limited := strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/metrics"
+		if limited && !isLocalDirect(r) && !rl.allow(clientIP(r)) {
 			w.Header().Set("Retry-After", "1")
 			writeErr(w, http.StatusTooManyRequests, "too many requests, slow down")
 			return

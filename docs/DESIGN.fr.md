@@ -258,6 +258,7 @@ POST   /api/v1/admin/targets
 DELETE /api/v1/admin/targets/{id}
 POST   /api/v1/admin/categories
 POST   /api/v1/admin/events
+GET    /metrics                (rôle lecteur suffisant)
 ```
 
 Une clé d'API (`Authorization: Bearer ssk_…`) s'emploie de la même façon,
@@ -313,6 +314,56 @@ curl -s localhost:8080/api/v1/admin/storage -H "Authorization: Bearer $TOKEN" | 
 
 Le secret S3 ne ressort jamais de l'API ; un `PUT` sans `secret_key`
 conserve celui déjà en base.
+
+### Métriques Prometheus
+
+`GET /metrics` sert le format texte d'exposition 0.0.4 à tout appelant
+authentifié, à partir du rôle lecteur, cibles privées comprises. Il est
+écrit à la main : la bibliothèque cliente serait un second module. Une
+collecte lit la table `live`, les statuts que l'alerteur a calculés à son
+dernier tour, les petites tables de `config.db` et les compteurs de la
+chaîne d'écriture — jamais les échantillons ni les agrégats. Mille cibles
+vues de trois sondes se collectent en 7 ms environ sur un portable :
+30 000 séries, 3,5 Mio, 150 Kio compressés. Le point d'accès partage la
+limite de débit de l'API, 20 requêtes/s par IP cliente, qu'aucun intervalle
+de collecte n'approche.
+
+Aucun hôte, port ni adresse n'est exporté, quoi que l'appelant puisse lire
+ailleurs : ce que Prometheus conserve échappe aux règles de visibilité de
+l'instance. Les instants sont des horodatages Unix plutôt que des durées,
+comme Prometheus le recommande : la vie restante d'un certificat est sa date
+d'expiration, et le silence d'une sonde vaut `time()` moins son dernier
+rapport.
+
+Ci-dessous, *cible* désigne les étiquettes `target` (slug), `target_id`,
+`category` et `proto`.
+
+| Famille | Étiquettes | Contenu |
+|---|---|---|
+| `smokestack_target_rtt_median_seconds`, `smokestack_target_rtt_p95_seconds` | cible, `probe` | Dernière passe ; absente quand rien n'est revenu ou que la passe est périmée |
+| `smokestack_target_loss_ratio` | cible, `probe` | Dernière passe, de 0 à 1 ; absente quand la passe est périmée |
+| `smokestack_target_last_pass_timestamp_seconds` | cible, `probe` | |
+| `smokestack_target_status` | cible, `probe`, `state` | Ensemble d'états : `ok`, `warn`, `crit`, `nodata`, `maint` ; rafraîchi par l'alerteur chaque minute |
+| `smokestack_target_info` | cible, `title`, `public` | Toujours 1 |
+| `smokestack_target_in_maintenance`, `smokestack_target_incident_open` | cible | 0 ou 1 |
+| `smokestack_target_certificate_valid`, `smokestack_target_certificate_expiry_timestamp_seconds` | cible | Cibles TCP dont le certificat a été inspecté |
+| `smokestack_probe_enabled` | `probe` | |
+| `smokestack_probe_last_report_timestamp_seconds` | `probe` | Sondes actives qui ont déjà rendu compte |
+| `smokestack_write_queue_length`, `smokestack_write_queue_capacity`, `smokestack_write_last_batch_duration_seconds` | | La chaîne d'écriture |
+| `smokestack_measurements_written_total`, `smokestack_measurements_dropped_total`, `smokestack_measurements_write_failed_total` | | Compteurs depuis le démarrage du service : mesures enregistrées dans `metrics.db`, refusées par une file d'écriture pleine, et prises dans un lot dont l'écriture a échoué |
+| `smokestack_archive_chunks_pending_upload`, `smokestack_archive_local_bytes` | | L'archive brute |
+| `smokestack_database_size_bytes` | `database`, `file` | `config` ou `metrics`, `main` ou `wal` |
+| `smokestack_build_info` | `version`, `goversion` | Toujours 1 |
+
+Un couple cible et sonde n'est exporté que tant que la sonde est active et
+mesure encore la cible : la table `live` garde une ligne après l'arrêt de
+l'une ou de l'autre, et l'exporter présenterait un chiffre figé comme
+actuel. Pour la même raison, une passe est périmée dès qu'elle est plus
+ancienne à la fois que trois intervalles de la cible et que les cinq minutes
+au-delà desquelles l'alerteur déclare une sonde silencieuse : son temps de réponse
+et sa perte sont omis, pour qu'une sonde tombée pendant une panne ne
+rapporte pas sa dernière perte indéfiniment. L'horodatage de sa dernière
+passe reste, et le silence s'y lit.
 
 ## Garde-fous
 

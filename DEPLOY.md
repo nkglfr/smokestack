@@ -765,6 +765,50 @@ about **their** network. The two are separate: one is about the others,
 this one is about you. Incidents are recorded either way, alerting off
 included, and listed on the same screen.
 
+### Graphing and alerting from Prometheus
+
+`GET /metrics` serves the instance in the Prometheus text format, so a
+Grafana that already watches the rest of your network can watch this too.
+It takes the same credentials as the API, from the viewer role up, and
+includes private targets. The `admin_token` from `config.json` works; it is
+the master key, so keep the file that holds it readable by Prometheus only.
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: smokestack
+    scheme: https
+    scrape_interval: 15s
+    authorization:
+      credentials_file: /etc/prometheus/smokestack.token   # or credentials: "<token>"
+    static_configs:
+      - targets: ['smokestack.example.net']
+```
+
+Scrape over HTTPS, or from the host itself: the token travels in a header.
+
+Each target is labelled `target` (its slug), `target_id`, `category`,
+`proto` and, for what a probe measured, `probe`. Figures are those of the
+last pass, and dates are Unix timestamps, so ages and remaining lives are
+computed in the query. A round trip or a loss is left out once its pass is
+older than both three of the target's intervals and five minutes, rather
+than repeated: a probe that stops reporting takes its figures with it, and
+only its last pass timestamp stays.
+
+| To watch | PromQL |
+|---|---|
+| Median round trip, in ms | `smokestack_target_rtt_median_seconds * 1000` |
+| Targets in crit, per probe | `smokestack_target_status{state="crit"} == 1` |
+| A probe silent for five minutes | `time() - smokestack_probe_last_report_timestamp_seconds > 300` |
+| Certificates expiring within 14 days | `(smokestack_target_certificate_expiry_timestamp_seconds - time()) / 86400 < 14` |
+| Measurements that never reached the database | `increase(smokestack_measurements_dropped_total[10m]) + increase(smokestack_measurements_write_failed_total[10m]) > 0` |
+
+`smokestack_target_status` appears a minute after the service starts: it is
+what the alerter works out on each round. No host, port or address is
+exported, since what Prometheus stores is not bound by this instance's
+visibility settings. Every family is listed in
+[DESIGN.md](docs/DESIGN.md#8-api).
+
 ### Where the logs are
 
 Four places, in this order:

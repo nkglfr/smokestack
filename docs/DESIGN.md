@@ -470,6 +470,51 @@ probe without a token is always rejected, so nobody can inject fake
 measurements. Issuing tokens is not available yet (see
 [known limits](#15-known-limits)).
 
+**Prometheus metrics.** `GET /metrics` serves the text exposition format
+0.0.4 to any authenticated caller, from the viewer role up, private targets
+included. It is written by hand: the client library would be a second
+module. A scrape reads the live table, the statuses the alerter worked out
+on its last round, the small tables of `config.db` and the pipeline's
+counters — never the samples or the rollups. A thousand targets seen from
+three probes scrape in about 7 ms on a laptop: 30 000 series, 3.5 MiB,
+150 KiB gzipped. The endpoint shares the API's rate limit, 20 requests/s
+per client IP, which no scrape interval comes near.
+
+No host, port or address is exported, whatever the caller may read
+elsewhere: what Prometheus stores is not bound by this instance's visibility
+rules. Moments are Unix timestamps rather than ages, as Prometheus
+recommends, so a certificate's remaining life is its expiry date and a
+probe's silence is `time()` minus its last report.
+
+Below, *target* stands for the labels `target` (slug), `target_id`,
+`category` and `proto`.
+
+| Family | Labels | What |
+|---|---|---|
+| `smokestack_target_rtt_median_seconds`, `smokestack_target_rtt_p95_seconds` | target, `probe` | Last pass; absent when nothing came back or the pass is stale |
+| `smokestack_target_loss_ratio` | target, `probe` | Last pass, 0 to 1; absent when the pass is stale |
+| `smokestack_target_last_pass_timestamp_seconds` | target, `probe` | |
+| `smokestack_target_status` | target, `probe`, `state` | State set: `ok`, `warn`, `crit`, `nodata`, `maint`; refreshed by the alerter every minute |
+| `smokestack_target_info` | target, `title`, `public` | Always 1 |
+| `smokestack_target_in_maintenance`, `smokestack_target_incident_open` | target | 0 or 1 |
+| `smokestack_target_certificate_valid`, `smokestack_target_certificate_expiry_timestamp_seconds` | target | TCP targets the certificate watcher has inspected |
+| `smokestack_probe_enabled` | `probe` | |
+| `smokestack_probe_last_report_timestamp_seconds` | `probe` | Enabled probes that have reported |
+| `smokestack_write_queue_length`, `smokestack_write_queue_capacity`, `smokestack_write_last_batch_duration_seconds` | | The write pipeline |
+| `smokestack_measurements_written_total`, `smokestack_measurements_dropped_total`, `smokestack_measurements_write_failed_total` | | Counters since the service started: measurements committed to `metrics.db`, refused by a full write queue, and caught in a batch that failed to commit |
+| `smokestack_archive_chunks_pending_upload`, `smokestack_archive_local_bytes` | | The raw archive |
+| `smokestack_database_size_bytes` | `database`, `file` | `config` or `metrics`, `main` or `wal` |
+| `smokestack_build_info` | `version`, `goversion` | Always 1 |
+
+A pair of target and probe is exported only while that probe is enabled and
+still measures that target: the live table keeps a row after either stops,
+and exporting it would present a frozen figure as a current one. For the
+same reason, a pass is stale once it is older than both three of the
+target's intervals and the five minutes after which the alerter calls a
+probe silent: its round trip and loss are left out, so a probe that dies during an
+outage does not report its last loss forever. Its last pass timestamp stays,
+and the silence shows in it.
+
 ## 9. Back-office and security
 
 The back-office is at `/admin`, in English.

@@ -358,6 +358,7 @@ func main() {
 	api.AdviceRoutes(mux)
 	api.ShareRoutes(mux)
 	api.APIKeyRoutes(mux)
+	api.MetricsRoutes(mux)
 
 	// Public pages get their metadata and a no-JavaScript summary injected
 	// on the way out, so that a crawler sees a real page.

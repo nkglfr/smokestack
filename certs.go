@@ -241,11 +241,17 @@ func (s *Store) certTargets() []*Target {
 	}
 	var out []*Target
 	for _, t := range all {
-		if t.Proto == "tcp" && t.Port > 0 && !t.CertOff && t.DCCheck == "" {
+		if t.certWatched() {
 			out = append(out, t)
 		}
 	}
 	return out
+}
+
+// certWatched is the rule certTargets applies, for a caller holding one
+// target rather than asking for the list.
+func (t *Target) certWatched() bool {
+	return t.Proto == "tcp" && t.Port > 0 && !t.CertOff && t.DCCheck == ""
 }
 
 // CertLoop inspects the certificates once a day, and on start so an
