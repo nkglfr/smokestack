@@ -314,5 +314,10 @@
   "share": {
     "banner": "Alleen-lezen graaf gedeeld door {org}, gemeten vanaf {loc}. Eén doel, gezien vanuit dit netwerk: latentie en verlies ernaartoe, met de percentielbanden en de traceroutes van het moment waarop het van zijn referentie afweek.",
     "who": "Gedeeld door"
+  },
+  "badge": {
+    "uptime_not_published": "beschikbaarheid niet gepubliceerd",
+    "decimal_mark": ",",
+    "since": "sinds {date}"
   }
 }

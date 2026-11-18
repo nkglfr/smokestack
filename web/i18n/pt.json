@@ -314,5 +314,10 @@
   "share": {
     "banner": "Gráfico apenas de leitura partilhado por {org}, medido de {loc}. Um único destino, visto desta rede: latência e perda até ele, com as faixas de percentis e os traceroutes recolhidos quando se afastou da referência.",
     "who": "Partilhado por"
+  },
+  "badge": {
+    "uptime_not_published": "disponibilidade não publicada",
+    "decimal_mark": ",",
+    "since": "desde {date}"
   }
 }

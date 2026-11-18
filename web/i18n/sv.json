@@ -314,5 +314,10 @@
   "share": {
     "banner": "Läsgraf delad av {org}, mätt från {loc}. Ett mål, sett från detta nät: latens och förlust dit, med percentilband och de traceroutes som togs när målet avvek från sin referens.",
     "who": "Delad av"
+  },
+  "badge": {
+    "uptime_not_published": "tillgänglighet inte publicerad",
+    "decimal_mark": ",",
+    "since": "sedan {date}"
   }
 }

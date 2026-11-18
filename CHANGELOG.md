@@ -46,6 +46,24 @@ Versions are published as signed releases; servers with automatic updates instal
   A forwarder that does not cache NS records, such as dnsmasq on many home routers, passes `. NS` upstream every time: ask it for an `A` record it answers often instead. A DNS target has no response-time breakdown, and a peer cannot be asked to double-check it, since the request has no room for a query. That refusal is now made before asking, for UDP echo targets as well. The two new columns are added on start; existing targets are untouched.
 
   **Upgrade remote probes before giving them a DNS target.** The service cannot tell which version a remote probe runs. One from 0.7 pings the resolver and graphs it under the DNS label; one from 0.8 reports an unknown protocol and measures nothing. The embedded probe, and a separate probe on the same machine, follow the service's version by themselves.
+- **A target's status can be embedded as a badge on a website, a README or a PeeringDB note.**
+
+  `GET /badge/<slug>.svg` draws a small two-part image: the target's title, then its status as the public pages classify it — nominal, degraded, incident, maintenance, no data — in the same colours. `?metric=uptime&window=30d` (`24h`, `7d`, `30d`, `1y`) shows the availability figure instead, `?metric=latency` the current median, and `?label=` replaces the title. In the back-office, *Badge* beside each target the public overview lists gives the Markdown and HTML to paste.
+
+  The snippets use the instance's public address (*Publisher page → Address of this instance*, or `federation.base_url`). Without one they fall back to the address you are browsing from, and the panel says so.
+
+  The image is the same for everybody, which is what lets GitHub's image proxy and any other cache keep it for a minute. A private target, a disabled one or one in a private category answers exactly like a slug that does not exist. Being signed in shows nothing more, and a share link does not unlock it: a token in an `<img src>` is a credential handed to every reader of the page.
+
+  However many readers load it, a badge costs at most one availability computation per target a minute:
+
+  - **Status and median:** they come from the overview the background loop builds. A badge never builds it, and answers 503 until the first build.
+  - **Availability:** it comes from the same one-minute cache as the target page. One request fills that cache while the others wait.
+
+  A target made private stops being served at once, since every target change rebuilds the overview; an image proxy may keep the last copy for up to a minute.
+
+  The figure is written as the target page writes it: one decimal, two under 1 %, with the language's decimal mark, so the badge and the page it links to show the same number. A period the target has not been measured across reads *since <date>* instead of the period's name, so a target created last week does not show a yearly figure.
+
+  With availability not published, the uptime badge says so in grey rather than answering 404. The target and the missing figure are both on its public page already, and a broken image on a page the operator may not control reads as an instance that is down. Words are in the instance's default language.
 
 - **How long each resolution is kept is now an instance setting.**
 

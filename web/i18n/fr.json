@@ -314,5 +314,10 @@
   "share": {
     "banner": "Graphe en lecture seule partagé par {org}, mesuré depuis {loc}. Une seule cible, vue depuis ce réseau : latence et perte vers elle, avec les bandes de percentiles et les traceroutes relevés lorsqu'elle s'est écartée de sa référence.",
     "who": "Partagé par"
+  },
+  "badge": {
+    "uptime_not_published": "disponibilité non publiée",
+    "decimal_mark": ",",
+    "since": "depuis le {date}"
   }
 }

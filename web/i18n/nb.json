@@ -314,5 +314,10 @@
   "share": {
     "banner": "Lesegraf delt av {org}, målt fra {loc}. Ett mål, sett fra dette nettet: latens og tap dit, med persentilbånd og traceroutene som ble tatt da målet avvek fra referansen.",
     "who": "Delt av"
+  },
+  "badge": {
+    "uptime_not_published": "tilgjengelighet ikke publisert",
+    "decimal_mark": ",",
+    "since": "siden {date}"
   }
 }

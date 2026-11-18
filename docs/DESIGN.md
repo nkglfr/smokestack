@@ -247,6 +247,7 @@ GET  /api/v1/asn                          host network
 GET  /api/v1/fed/peers                    public federation peers
 GET  /api/v1/version
 GET  /healthz
+GET  /badge/<slug>.svg                    status badge, an SVG image (below)
 ```
 
 `from` and `to` accept a Unix timestamp, an RFC 3339 date or a relative
@@ -318,6 +319,33 @@ traceroutes of that target, nothing else, whatever its visibility. It
 expires, it is revocable, its uses are counted, and both the page and
 `robots.txt` keep it out of search engines: a token that ends up in a search
 result is a leak, not a share.
+
+**A badge is the same for everyone.** `GET /badge/<slug>.svg` is a flat
+two-part image for an operator's website, a README or a PeeringDB note: the
+target's title, then its status as the public pages classify it, in the same
+colours. `?metric=uptime&window=30d` (`24h`, `7d`, `30d`, `1y`) shows the
+availability figure instead, `?metric=latency` the current median, and
+`?label=` replaces the title, cut at 40 characters. Nothing about the caller
+changes the answer: a private target answers 404 exactly like a slug that does
+not exist, a session reveals nothing more, and **a share token does not unlock
+a badge** — a token in an `<img src>` is a credential published to every
+reader of the page it is embedded in. That sameness is what lets image proxies
+such as GitHub's keep it for a minute. The route is not rate-limited, so it
+reads what is already computed: the status and the median from the overview
+the background loop builds — a badge never builds it, and answers 503 until
+the first build — and the uptime figure from the target page's one-minute
+availability cache, which one request fills per target while the others wait
+for it, so a busy page costs at most one availability computation a minute.
+The figure is written the way the target page writes it, one decimal (two
+under 1 %) with the language's decimal mark, so the badge and the page it
+links to never disagree; a window the target has not been measured across
+reads *since <date>* instead of its name, so a target created last week does
+not show a yearly figure. When availability is not published, the uptime badge
+says so in grey rather than answering 404, since a broken image on a page the
+operator may not control reads as an instance that is down. Words are in the
+instance's default language. The back-office gives the Markdown and HTML to
+paste, under *Badge* beside each target the public overview lists, built on
+the instance's public address (*Address of this instance*).
 
 **Hiding an address is not hiding a target.** A public target can keep its
 address private: the series, the status and the title are public, while the

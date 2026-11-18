@@ -314,5 +314,10 @@
   "share": {
     "banner": "Læsegraf delt af {org}, målt fra {loc}. Ét mål set fra dette net: latens og tab dertil, med percentilbånd og de traceroutes, der blev taget, da målet afveg fra sin reference.",
     "who": "Delt af"
+  },
+  "badge": {
+    "uptime_not_published": "tilgængelighed ikke offentliggjort",
+    "decimal_mark": ",",
+    "since": "siden {date}"
   }
 }
