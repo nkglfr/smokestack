@@ -427,12 +427,13 @@ func forwardedFor(h string) string {
 	return out
 }
 
-// ------------------------------------------------------- garde d'acces
+// ----------------------------------------------------------- access guard
 
-// need construit un gestionnaire protege. Deux modes d'authentification
-// coexistent : le cookie de session pour l'interface, et un Bearer pour
-// l'automatisation — le jeton d'administration, qui vaut master, ou une
-// cle d'API (apikeys.go). Le CSRF n'est exige que pour le mode cookie.
+// need builds a guarded handler. Two authentication modes coexist: the
+// session cookie for the interface, and a Bearer credential for automation —
+// the instance admin token, which acts as master, or an API key (apikeys.go).
+// CSRF is required for the cookie mode only, because a Bearer credential is
+// not sent by a browser on someone else's behalf.
 func (a *API) need(level int, h func(http.ResponseWriter, *http.Request, *User)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if u := a.bearerUser(r); u != nil {

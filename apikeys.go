@@ -220,7 +220,7 @@ func (a *API) bearerUser(r *http.Request) *User {
 	case tok == "":
 		return nil
 	case a.token != "" && subtle.ConstantTimeCompare([]byte(tok), []byte(a.token)) == 1:
-		return &User{ID: 0, Email: "api-token", DisplayName: "jeton API", Role: "master"}
+		return &User{ID: 0, Email: "api-token", DisplayName: "API token", Role: "master"}
 	case strings.HasPrefix(tok, apiKeyPrefix):
 		return a.store.APIKeyUser(tok)
 	}
