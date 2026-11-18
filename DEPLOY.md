@@ -1118,6 +1118,16 @@ appear only when federation is enabled, and **Host network** only once an AS
 number is set. An instance that just watches a few targets shows two tabs,
 not five, without a single setting to tick.
 
+To publish fewer still, untick a page under *Instance → Publisher page →
+Public pages*: **Federation**, **Host network** and **Pairing** can each be
+hidden. A hidden page leaves the menu, the links of the other pages and the
+sitemap, and its address answers 404. Hiding is presentation, not policy: the
+federation and pairing APIs other instances call keep answering, so hiding
+*Pairing* does not break a pairing in progress, and hiding *Federation* does
+not stop federating — `federation.enabled` in the configuration file does.
+*Home* and *About* cannot be hidden: *About* is where visitors find who runs
+the instance and how to reach you.
+
 The **order of the categories** in the back-office is the order of the
 sections on the public page: the arrows next to each category move it.
 

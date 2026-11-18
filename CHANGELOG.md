@@ -75,6 +75,15 @@ Versions are published as signed releases; servers with automatic updates instal
   Purging a target now also deletes the incidents recorded for it. They used to stay behind, and a target created later could be given the purged target's id and inherit them. The feed also ignores any incident older than its target, so rows left by earlier purges are never published.
 
   Entry ids are built from the **Website** address and one date fixed when the first feed is built, so set the Website before sharing the feed: a reader that sees the host change treats every entry as new. Entries cover the last 30 days, at most 50, in the instance's default language, with times in UTC. Each feed is rebuilt at most every 30 seconds and can be revalidated with an ETag.
+- **The Federation, Host network and Pairing pages can be taken off the public site.**
+
+  In *Instance → Publisher page → Public pages*, untick a page and it leaves the menu, the links the other pages make to it and the sitemap, and its address answers 404 — a 404 rather than a redirect, so a search engine drops it instead of following it somewhere else. The navigation already left out a page the configuration made empty; this is for the instance that has no use for one anyway.
+
+  Hiding is presentation, not policy. The federation and pairing APIs other instances call keep answering, so hiding *Pairing* does not break a pairing in progress and hiding *Federation* does not stop federating — `federation.enabled` in the configuration file does that. *Home* and *About* cannot be hidden: *About* is where visitors find who runs the instance and how to reach it.
+
+  Nothing changes on upgrade. The setting records what is hidden, so an instance hides nothing until somebody says otherwise, and no page somebody links to disappears with an update.
+
+  Asked for in #11.
 
 - **How long each resolution is kept is now an instance setting.**
 

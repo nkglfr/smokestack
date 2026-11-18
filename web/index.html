@@ -251,9 +251,10 @@ function railGroup(c, ci, q) {
 
 // The host-network figures are fetched from RIPEstat in the background:
 // until the cache is warm the server answers {pending:true}, and a card
-// full of "undefined" is worse than no card.
+// full of "undefined" is worse than no card. The card is the way into the
+// network page, so it goes when the operator hides that page.
 function netCard() {
-  if (!S.net || S.net.pending || !S.net.asn) return "";
+  if (App.hides("network") || !S.net || S.net.pending || !S.net.asn) return "";
   const p = S.net.peeringdb, num = v => (v == null ? "—" : v);
   return html`<a class="netcard" href="/network"><div class="h">${t("home.hosted_by")}</div>
       <div class="n">AS${S.net.asn}${S.net.holder && " · " + S.net.holder.split(" - ")[0]}</div>
