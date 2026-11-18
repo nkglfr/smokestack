@@ -156,8 +156,9 @@ probe`, service `smokestack-probe`), seul autorisé à ouvrir un socket brut
 et prioritaire sur le CPU. Le service web, exposé à Internet, n'a plus ce
 droit. Les deux dialoguent par un socket Unix.
 
-- Horodatage des réponses par le noyau (`SO_TIMESTAMPNS`, `TCP_INFO`) : la
-  charge du processus ne s'ajoute jamais au temps de réponse mesuré.
+- Horodatage des réponses ICMP et DNS par le noyau (`SO_TIMESTAMPNS`), poignée
+  de main TCP lue dans `TCP_INFO` : la charge du processus ne s'ajoute jamais
+  au temps de réponse mesuré.
 - La sonde ne touche pas la base : cibles en mémoire, mesures dans une file
   non bloquante, un écrivain unique par lots sur une connexion dédiée.
 - Accueil précalculé en tâche de fond, arbre et séries en cache, gzip,
@@ -300,6 +301,11 @@ curl -s -X POST localhost:8080/api/v1/admin/targets \
   -d '{"category_id":2,"title":"Transitaire exemple","host":"192.0.2.1",
        "interval_s":30,"packets":10,"spacing_ms":200,"timeout_ms":1500}'
 
+curl -s -X POST localhost:8080/api/v1/admin/targets \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"category_id":2,"title":"Résolveur exemple","host":"192.0.2.53","family":4,
+       "proto":"dns","dns_name":".","dns_type":"NS"}'
+
 curl -s -X PUT localhost:8080/api/v1/admin/storage \
   -H "Authorization: Bearer $TOKEN" \
   -d '{"mode":"hybrid",
@@ -371,6 +377,44 @@ La création de cible refuse une rafale qui ne tient pas dans son
 intervalle : `packets × spacing_ms + timeout_ms` doit rester sous 75 %
 de `interval_s`. À 30 secondes, cela impose 10 paquets espacés de 200 ms
 plutôt que les 20 paquets par seconde de SmokePing.
+
+## Cibles DNS
+
+Un résolveur peut continuer de répondre à l'ICMP depuis son noyau pendant que
+chaque requête attend l'expiration du client, si bien qu'un ping ne dit rien de
+sa capacité à résoudre ; sur une instance de production, un résolveur en panne
+pendant plus d'une heure ne s'est vu que sous forme de pertes sur les cibles
+qui dépendaient de lui. Une cible `dns` envoie une
+requête par paquet, en UDP, récursion demandée, pour le `dns_name` et le
+`dns_type` qu'elle indique — `. NS` par défaut, la requête d'amorçage à
+laquelle tout résolveur récursif répond depuis son cache : le chiffre est celui
+du résolveur, et le nom d'aucun tiers n'est interrogé. Le type est l'un de
+`A`, `AAAA`, `NS`, `SOA`, `MX`, `TXT` ; le port vaut 53 par défaut. NOERROR et
+NXDOMAIN sont des réponses, tronquées comprises, puisque c'est le résolveur
+qu'on chronomètre. SERVFAIL est une perte. REFUSED est une perte signalée
+comme une configuration à corriger, comme l'écho UDP signale un port où rien
+n'écoute.
+
+Les requêtes d'une rafale partent à l'espacement de la cible sans s'attendre
+les unes les autres, comme les échos ICMP : un résolveur muet retient une
+passe le temps de la rafale plus le délai d'attente, dans les
+`packets × spacing_ms + timeout_ms` que l'intervalle contrôle. Une réponse ne
+compte que si elle arrive sur le socket connecté à l'adresse et au port
+interrogés, dans le délai d'attente de sa propre requête, et reprend
+l'identifiant aléatoire et la question de cette requête : une réponse n'est
+jamais chronométrée contre une autre requête, et celle qui arrive après son
+délai est perdue, quelle que soit la place de sa requête dans la rafale. La
+seule réponse admise sans la question est un en-tête d'erreur nu portant le
+bon identifiant, la façon dont Unbound refuse un client que son contrôle
+d'accès écarte : il compte comme la perte qu'il nomme, jamais comme une
+réponse. Seuls l'en-tête et la question sont lus, à des positions fixes : rien
+dans une réponse n'est suivi. La requête ne porte pas d'enregistrement EDNS,
+la réponse tient donc en 512 octets. La requête est effacée sur tout autre
+protocole plutôt que refusée, pour qu'un simple changement de protocole ne
+soit jamais refusé à cause d'un champ que l'appelant n'a pas envoyé, et une
+cible qui cache son adresse cache aussi son nom interrogé dans l'arbre public.
+Une demande de double vérification n'a pas de place pour une requête : les
+cibles DNS y sont refusées, et la décomposition reste propre au TCP.
 
 ## Limites actuelles
 

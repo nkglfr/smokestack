@@ -31,6 +31,21 @@ Versions are published as signed releases; servers with automatic updates instal
   A round trip or a loss disappears once its pass is older than both three of the target's intervals and five minutes, so a probe that dies during an outage does not report its last loss forever. Its last pass stays as a timestamp, and dates in general are exported as timestamps rather than ages, as Prometheus recommends: a probe's silence and a certificate's remaining days are computed in the query.
 
   A batch of measurements the writer fails to commit, on a full disk for instance, was only logged until now. It is now counted in `smokestack_measurements_write_failed_total`.
+- **DNS targets, timed on real queries rather than pings.**
+
+  A resolver can answer ICMP from its kernel while every query waits out the client's timeout, so a ping says nothing about whether it resolves. On a production instance, a resolver that failed to answer within three seconds for over an hour showed only as unexplained loss on the targets that depended on it. A target can now use the DNS protocol, and what it measures is the time to answer a query.
+
+  Each packet of the burst is one query over UDP, recursion desired, to port 53 by default. The question is `. NS` unless the target states another. That is the priming query every recursive resolver answers from its cache, so the figure is the resolver's own, and nobody else's name is looked up thousands of times a day. A name and a type among `A`, `AAAA`, `NS`, `SOA`, `MX` and `TXT` can be set instead, which is how an authoritative server is measured.
+
+  The queries go out at the target's spacing without waiting for each other, as ICMP echoes do, so a resolver that stops answering holds a pass for the burst plus the timeout, within the budget the interval is checked against. Each query has the same timeout wherever it sits in the burst: an answer that takes longer is loss.
+
+  What the server says decides the outcome. NOERROR and NXDOMAIN are answers, a truncated one included, since the resolver is what is timed. SERVFAIL is loss: the resolver is up and failing, which is exactly what the target exists to see. REFUSED is loss too, and the reason under the target says it is a configuration to fix — an access list, or an authoritative server asked to recurse — rather than a path to investigate.
+
+  An answer counts only if it comes from the address and port queried and repeats the ID and the question of a query still waiting, so it is never timed against another query. The one exception is a bare error header with the right ID, which is how Unbound refuses a client its access control leaves out: it counts as the error it names, never as an answer. Only the header and the question are read, and the probe sends one small query per packet, without EDNS.
+
+  A forwarder that does not cache NS records, such as dnsmasq on many home routers, passes `. NS` upstream every time: ask it for an `A` record it answers often instead. A DNS target has no response-time breakdown, and a peer cannot be asked to double-check it, since the request has no room for a query. That refusal is now made before asking, for UDP echo targets as well. The two new columns are added on start; existing targets are untouched.
+
+  **Upgrade remote probes before giving them a DNS target.** The service cannot tell which version a remote probe runs. One from 0.7 pings the resolver and graphs it under the DNS label; one from 0.8 reports an unknown protocol and measures nothing. The embedded probe, and a separate probe on the same machine, follow the service's version by themselves.
 
 - **How long each resolution is kept is now an instance setting.**
 
