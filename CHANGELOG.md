@@ -2,7 +2,9 @@
 
 Versions are published as signed releases; servers with automatic updates install the newest one directly, whatever versions came in between. The release workflow reads a section straight out of this file and publishes it as the release notes, so how an entry is written matters — see [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
-## Unreleased
+## 0.8.5
+
+**The largest batch of new capability so far, and most of it came from outside.** An instance can now be scraped by Prometheus, followed through an Atom feed, embedded as a badge in somebody else's README, and driven by a script holding a key of its own rather than the master token. It can measure a DNS resolver by asking it a real question instead of pinging it, keep each resolution for as long as the disk allows, and take the pages it has no use for off the public site. Six of the nine entries below are contributions from HostMyServers, reviewed and merged as a set.
 
 - **Each script can have an API key of its own, at a role no higher than its account's.**
 
