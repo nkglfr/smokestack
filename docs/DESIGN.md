@@ -254,6 +254,31 @@ GET  /badge/<slug>.svg                    status badge, an SVG image (below)
 expression: `now-3h`, or its shorthand `-3h` (units `s`, `m`, `h`, `d`, `w`,
 `y`).
 
+Public, read-only, Atom 1.0 (RFC 4287):
+
+```
+GET  /feed.atom                           status updates, whole instance
+GET  /t/<slug>/feed.atom                  the same for one public target
+```
+
+**The feed is a second door, not a wider one.** It is built from the public
+overview, so a private target has no feed and appears in none, and a host
+reads exactly as the target page shows it — masked, or absent for a target
+whose address is private. Maintenance appears once the banner would have
+announced it (seven days ahead) and never when it was recorded after the fact;
+events are those `/api/v1/events` serves, route changes excepted; no
+traceroute, probe or alert detail is ever written into it. The incidents this
+instance detects are added only when the publisher page says so
+(`public_incidents`, off by default), worded as records rather than
+measurements. An incident shorter than the alert delay, opened during a
+maintenance window that stops alerts or measurement, on a target with alerts
+off, or decided by a probe since disabled stays out. Entries cover the last 30
+days, at most 50, in the instance's default language, with `tag:` ids built
+from the instance's host, one date stored the first time a feed is built
+(`feed_tag_date`) and the row's id, so an incident that closes updates its
+entry instead of adding a second one, and no entry reveals when its row was
+written. A feed is rebuilt at most every 30 seconds and carries an ETag.
+
 Administration uses a session cookie (back-office) or, for automation,
 `Authorization: Bearer <admin_token>` with the token from `config.json`,
 which has the master role:
@@ -803,6 +828,10 @@ a plain summary of the public targets inside `<noscript>`. `/sitemap.xml` and
 `/robots.txt` are generated from the same data, so a new instance is indexed
 without anyone maintaining a list, and private targets never appear. One
 setting turns all of it off, and the back-office is always `noindex`.
+
+Every public page also advertises the instance's Atom feed in its head, and a
+target page its own beside it, for a reader that finds feeds by the page
+address; the footer links to the instance's feed (see the API section).
 
 All share one stylesheet (automatic dark theme), the translation library and
 a common footer. The link to the official website comes from a value compiled

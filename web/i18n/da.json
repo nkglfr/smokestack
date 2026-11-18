@@ -143,6 +143,20 @@
     "until": "til {until}",
     "measure_paused": "måling sat på pause"
   },
+  "feed": {
+    "subscribe": "Abonnér på statusopdateringer (Atom)",
+    "title": "{name}: statusopdateringer",
+    "incident_open": "Hændelse på {target}",
+    "incident_closed": "Løst: hændelse på {target}",
+    "incident_open_text": "En hændelse har været åben på {target} siden {since}.",
+    "incident_closed_text": "En hændelse blev registreret på {target} fra {from} til {until} ({duration}).",
+    "maint_title": "Planlagt vedligeholdelse på {target}: {title}",
+    "maint_planned": "Planlagt fra {from} til {until}.",
+    "maint_live": "I gang til {until}.",
+    "maint_done": "Afsluttet, fra {from} til {until}.",
+    "maint_paused": "Målingen er sat på pause i vinduet.",
+    "event_span": "Fra {from} til {until}."
+  },
   "corr": {
     "title": "Kontrolleret fra et andet net",
     "hint": "En modpartsinstans i et andet AS har målt dette mål efter anmodning. Ét observationspunkt kan ikke skelne et nede mål fra en brudt vej; to punkter i forskellige net kan. Tallene kommer fra den modpart, over et kort vindue, og offentliggøres, fordi den, der driver denne instans, valgte at offentliggøre dem.",

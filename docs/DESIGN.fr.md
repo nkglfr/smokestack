@@ -279,6 +279,33 @@ par défaut de l'instance. Le back-office donne le Markdown et le HTML à
 coller, sous *Badge* à côté de chaque cible que la vue d'ensemble publique
 affiche, construits sur l'adresse publique de l'instance (*Address of this
 instance*).
+Public, en Atom 1.0 (RFC 4287) :
+
+```
+GET  /feed.atom                        actualité de l'état de l'instance
+GET  /t/<slug>/feed.atom               la même pour une cible publique
+```
+
+**Le flux est une seconde porte, pas une porte plus large.** Il est construit
+à partir de l'aperçu public : une cible privée n'a pas de flux et n'apparaît
+dans aucun, et un hôte s'y lit exactement comme sur la page de la cible —
+masqué, ou absent pour une cible dont l'adresse reste privée. Une maintenance
+y paraît dès que le bandeau l'aurait annoncée (sept jours avant) et jamais
+quand elle a été saisie après coup ; les événements sont ceux que sert
+`/api/v1/events`, changements de route exceptés ; aucun traceroute, aucune
+sonde, aucun détail d'alerte n'y est jamais écrit. Les incidents détectés par
+l'instance n'y sont ajoutés que si la page éditeur le demande
+(`public_incidents`, désactivé par défaut), rédigés comme des enregistrements
+et non comme des mesures. Un incident plus court que le délai d'alerte, ouvert
+pendant une fenêtre de maintenance qui coupe l'alerte ou la mesure, sur une
+cible dont les alertes sont coupées, ou décidé par une sonde désactivée
+depuis, reste dehors. Les entrées couvrent les 30 derniers jours, 50 au plus,
+dans la langue par défaut de l'instance, avec des identifiants `tag:`
+construits à partir de l'hôte de l'instance, d'une date enregistrée à la
+construction du premier flux (`feed_tag_date`) et de l'identifiant de la
+ligne : un incident qui se termine met à jour son entrée au lieu d'en
+ajouter une seconde, et aucune entrée ne dit quand sa ligne a été écrite. Un
+flux est reconstruit au plus toutes les 30 secondes et porte un ETag.
 
 Administration, avec `Authorization: Bearer <admin_token>` :
 
@@ -740,6 +767,11 @@ curl https://smokestack.exemple.fr/api/v1/asn/64501    # un pair approuvé
 | `/about` | exploitant, contacts, méthode |
 
 Toutes partagent `app.css` (thème sombre automatique), `i18n.js` et `app.js`.
+
+Chaque page publique annonce aussi le flux Atom de l'instance dans son en-tête,
+et une page de cible le sien à côté, pour un lecteur qui trouve les flux à
+partir de l'adresse d'une page ; le pied de page renvoie au flux de l'instance
+(voir la section API).
 
 ## IPv6 et traceroute sur anomalie
 

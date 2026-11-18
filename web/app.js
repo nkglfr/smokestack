@@ -98,6 +98,7 @@
       <div class="fbottom">
         ${official ? html`<a href="${official}" rel="noopener" target="_blank">${t("footer.powered")}</a>`
                    : html`<span>${t("footer.powered")}</span>`}
+        <a href="/feed.atom" type="application/atom+xml">${t("feed.subscribe")}</a>
       </div>
     </div>`;
   }

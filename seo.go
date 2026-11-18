@@ -122,6 +122,9 @@ func (a *API) seoHead(r *http.Request, m pageMeta) string {
 		}
 		fmt.Fprintf(&b, `<link rel="alternate" hreflang="x-default" href="%s">`+"\n", esc(canonical))
 	}
+	if !m.NoIndex {
+		b.WriteString(a.feedLinks(base, m))
+	}
 	fmt.Fprintf(&b, `<meta property="og:type" content="website">`+"\n")
 	fmt.Fprintf(&b, `<meta property="og:site_name" content="%s">`+"\n", esc(name))
 	fmt.Fprintf(&b, `<meta property="og:title" content="%s">`+"\n", esc(title))

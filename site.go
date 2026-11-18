@@ -64,6 +64,11 @@ type Site struct {
 	// to it say, so an operator who does not want to be read that way can
 	// stop publishing it rather than explain it.
 	PublicAvailability bool `json:"public_availability"`
+	// PublicIncidents adds the incidents this instance detects to the Atom
+	// feed. Off by default, upgrades included: the current state is on the
+	// home page already, but a dated record of other people's outages,
+	// pushed to every subscriber, is a publication the operator chooses.
+	PublicIncidents bool `json:"public_incidents"`
 	// Thresholds applied to every target that does not set its own.
 	Thresholds Thresholds `json:"thresholds,omitempty"`
 	// MaskAddresses : sur les pages publiques, une adresse IP n'est montree

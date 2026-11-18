@@ -1587,6 +1587,9 @@ func (s *Store) PurgeTarget(id int64) error {
 	} {
 		s.mxw.Exec(q, id)
 	}
+	// local_incidents has no foreign key, and SQLite may hand a purged id to
+	// the next target created: left behind, these would become its own.
+	s.cfg.Exec(`DELETE FROM local_incidents WHERE target_id=?`, id)
 	_, err = s.cfg.Exec(`DELETE FROM targets WHERE id=?`, id)
 	s.notifyTargets()
 	return err

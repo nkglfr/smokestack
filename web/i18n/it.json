@@ -143,6 +143,20 @@
     "until": "fino al {until}",
     "measure_paused": "misura sospesa"
   },
+  "feed": {
+    "subscribe": "Iscriviti agli aggiornamenti di stato (Atom)",
+    "title": "{name}: aggiornamenti di stato",
+    "incident_open": "Incidente su {target}",
+    "incident_closed": "Risolto: incidente su {target}",
+    "incident_open_text": "Un incidente è aperto su {target} dal {since}.",
+    "incident_closed_text": "È stato registrato un incidente su {target} dal {from} al {until} ({duration}).",
+    "maint_title": "Manutenzione programmata su {target}: {title}",
+    "maint_planned": "Prevista dal {from} al {until}.",
+    "maint_live": "In corso fino al {until}.",
+    "maint_done": "Conclusa, dal {from} al {until}.",
+    "maint_paused": "La misura è sospesa durante la finestra.",
+    "event_span": "Dal {from} al {until}."
+  },
   "corr": {
     "title": "Verificato da un'altra rete",
     "hint": "Un'istanza pari situata in un altro AS ha misurato questo bersaglio su richiesta. Un solo punto di osservazione non distingue un bersaglio guasto da un percorso rotto; due punti in reti diverse sì. Le cifre sono di quel pari, su una finestra breve, e sono pubblicate perché l'operatore di questa istanza ha scelto di pubblicarle.",
