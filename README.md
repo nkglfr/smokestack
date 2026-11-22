@@ -123,6 +123,7 @@ admin account. It measures nothing until you assign it targets:
 | Graphs | Rendered on the server at every page view | Drawn in the browser, from pre-aggregated data |
 | Percentiles over long periods | Averaged (inaccurate) | Merged histograms (exact) |
 | Measurements under server load | Skewed | Kernel timestamps, isolated probe process |
+| Measurement interval | A 5-minute cycle, the step fixed once the RRD files exist | Free from 10 s to a day, per target; the limit is the burst fitting in the interval |
 | Storage | RRD files | SQLite + optional S3 archive of raw data |
 | Measuring from several places | Master/slave, shared secret, slaves listed in the config file | Probes enrolled from the back-office, one token each, targets assigned per probe |
 | Deployment | Perl, fping, rrdtool, web server | One binary |
@@ -189,7 +190,7 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 
 **Back-office**
 - Accounts with four roles (viewer, editor, admin, master) and an audit log
-- Targets and categories, ICMP, TCP, UDP echo or DNS queries, IPv4 or IPv6, every 30 s, 1, 5 or 10 min
+- Targets and categories, ICMP, TCP, UDP echo or DNS queries, IPv4 or IPv6, at any interval from 10 s to a day
 - A catalogue of ready-made targets to enable in one click, plus per-country
   suggestions in the [wiki](https://github.com/nkglfr/smokestack/wiki)
 - A contact form on the public pages, so your address stays off spam lists
