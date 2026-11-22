@@ -2,6 +2,18 @@
 
 Versions are published as signed releases; servers with automatic updates install the newest one directly, whatever versions came in between. The release workflow reads a section straight out of this file and publishes it as the release notes, so how an entry is written matters — see [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
+## Unreleased
+
+- **NTP targets.**
+
+  A 48-byte client request to port 123, timed the way every other protocol here is timed, so an NTP target sits on the same axis as an ICMP one. Not NTP's own offset formula, which is a different quantity and would not be comparable with anything else on the page.
+
+  It is a protocol rather than a UDP echo pointed at port 123 because an NTP server does not echo: it answers a client packet with a server packet and refuses what it does not recognise. And the answer carries what no round trip can — the server's own view of itself. **A clock that replies in two milliseconds while reporting stratum 16, or whose leap indicator says its own clock is adrift, is recorded as a failure rather than graphed as a healthy two milliseconds.** Stratum 0 is a refusal rather than a fault, and the four-character reference id says which: `RATE` for polling too often, `DENY` or `RSTR` for a client that is not welcome.
+
+  A request and its reply are matched by the protocol's own mechanism rather than a nonce bolted onto it: a server copies the client's transmit timestamp into the origin field, so a reply arriving late — during the wait for the next packet of the pass — is dropped rather than timed against the wrong request. Understated latency is the worst failure a latency tool has, because nothing about the graph looks wrong.
+
+  A peer double-check refuses an NTP target without anyone having to add it, since that refusal has been an allow-list of ICMP and TCP. The probe needs no privilege, so unlike ICMP it works in either probe mode.
+
 ## 0.8.5
 
 **The largest batch of new capability so far, and most of it came from outside.** An instance can now be scraped by Prometheus, followed through an Atom feed, embedded as a badge in somebody else's README, and driven by a script holding a key of its own rather than the master token. It can measure a DNS resolver by asking it a real question instead of pinging it, keep each resolution for as long as the disk allows, and take the pages it has no use for off the public site. Six of the nine entries below are contributions from HostMyServers, reviewed and merged as a set.

@@ -123,6 +123,20 @@ Default retention, settable per tier by the operator: raw samples 48 h,
 forever. A tier may not be kept for less than the window that rolls it up,
 nor for less than the tier below it.
 
+**NTP.** A 48-byte client request to port 123, timed the way every other
+protocol here is timed, so an NTP target stays comparable with an ICMP one.
+Deliberately not NTP's own offset formula: the offset is a different quantity
+and does not belong on the same axis as a round trip.
+
+What the round trip cannot show, the reply does. A server answering in two
+milliseconds at stratum 16, or with its leap indicator saying its own clock is
+adrift, is not a clock, and that is recorded as a failure rather than graphed
+as a healthy two milliseconds. Stratum 0 is a refusal — polling too often, or
+not welcome — and the four-character reference id says which. The correlation
+between a request and its reply is the protocol's own: a server copies the
+client's transmit timestamp into the origin field, so a late reply cannot be
+timed against the wrong request.
+
 ## 5. Storage
 
 Two SQLite databases in the data directory:
@@ -537,6 +551,27 @@ refused, so that changing only a target's protocol is never turned down over a
 field the caller did not send, and a target hiding its address hides its query
 name from the public tree as well. A double-check request has no room for a
 query, so DNS targets are refused there, and the breakdown stays TCP-only.
+
+**NTP targets.** A 48-byte client request to port 123, timed the way every
+other protocol here is timed, so an NTP target sits on the same axis as an
+ICMP one. Deliberately not NTP's own offset formula: the offset is a different
+quantity and would not be comparable with anything else on the page.
+
+It is a protocol rather than a UDP echo pointed at 123 because an NTP server
+does not echo — it answers a client packet with a server packet and refuses
+what it does not recognise. And the answer carries what a round trip cannot:
+the server's own view of itself. A clock replying in two milliseconds while
+reporting stratum 16, or whose leap indicator says its own clock is adrift, is
+not a clock, and that is recorded as a failure rather than graphed as a
+healthy two milliseconds. Stratum 0 is a refusal rather than a fault, and the
+four printable characters of the reference id say which: `RATE` for polling
+too often, `DENY` or `RSTR` for a client that is not welcome.
+
+A request and its reply are matched by the protocol's own mechanism, not by a
+nonce bolted onto it: a server copies the client's transmit timestamp into the
+origin field. A reply arriving late, during the wait for the next packet of
+the pass, is therefore dropped rather than timed against the wrong request.
+The probe needs no privilege, so unlike ICMP it works in either probe mode.
 
 **Interval and retention.** The interval is free between 10 s and a day: the
 list of four values was a restriction, not a measurement constraint, and the
