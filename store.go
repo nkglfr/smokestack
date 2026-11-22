@@ -314,6 +314,8 @@ func OpenStore(dir string) (*Store, error) {
 	addColumn(cfg, "targets", "primary_probe_id INTEGER NOT NULL DEFAULT 0")
 	addColumn(cfg, "targets", "dns_name TEXT NOT NULL DEFAULT ''")
 	addColumn(cfg, "targets", "dns_type TEXT NOT NULL DEFAULT ''")
+	addColumn(cfg, "targets", "http_path TEXT NOT NULL DEFAULT ''")
+	addColumn(cfg, "targets", "http_scheme TEXT NOT NULL DEFAULT ''")
 	// When this probe was last reported as silent, so that going quiet wakes
 	// somebody once rather than every minute. Cleared the moment it reports
 	// again, which is also what sends the notice that it is back.
@@ -454,6 +456,11 @@ type Target struct {
 	// Empty on every other protocol.
 	DNSName string `json:"dns_name,omitempty"`
 	DNSType string `json:"dns_type,omitempty"`
+	// HTTPPath : le chemin demande par une cible "http". Vide valant "/".
+	HTTPPath string `json:"http_path,omitempty"`
+	// HTTPScheme : "http" ou "https" quand l'exploitant le dit. Vide, le
+	// port decide, comme pour le detail de temps de reponse.
+	HTTPScheme string `json:"http_scheme,omitempty"`
 }
 
 type Category struct {
@@ -540,7 +547,7 @@ func (s *Store) SetCategoryParams(id int64, p TargetParams) error {
 // targetCols is the column list every target query shares, so adding a
 // column is one edit rather than five.
 const targetCols = `id,category_id,slug,title,host,proto,interval_s,packets,
-	        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host,keep_days,loss_warn,loss_crit,lat_factor,cert_off,dc_check,primary_probe_id,dns_name,dns_type`
+	        spacing_ms,timeout_ms,public,enabled,family,port,pin_ip,alerts_off,archived_at,trace_hours,hide_host,keep_days,loss_warn,loss_crit,lat_factor,cert_off,dc_check,primary_probe_id,dns_name,dns_type,http_path,http_scheme`
 
 // inheritableFields maps the name the interface uses to the column it
 // clears. Only these can be inherited; the host, the protocol, the port and
@@ -724,7 +731,7 @@ func scanTargets(rows *sql.Rows) ([]*Target, error) {
 			&t.Proto, &t.IntervalS, &t.Packets, &t.SpacingMs, &t.TimeoutMs,
 			&pub, &en, &t.Family, &t.Port, &t.PinIP, &off, &t.ArchivedAt, &t.TraceHours, &hide, &t.KeepDays,
 			&t.LossWarn, &t.LossCrit, &t.LatFactor, &certOff, &t.DCCheck, &t.PrimaryProbeID,
-			&t.DNSName, &t.DNSType); err != nil {
+			&t.DNSName, &t.DNSType, &t.HTTPPath, &t.HTTPScheme); err != nil {
 			return nil, err
 		}
 		t.Public, t.Enabled, t.AlertsOff = pub == 1, en == 1, off == 1
@@ -1313,7 +1320,7 @@ func normalizeHost(raw string) (string, error) {
 // The protocols a target may be measured with. One list, so that adding one
 // is a single edit and so that nothing can be stored that Prober.Run would
 // not recognise.
-var knownProtos = []string{"icmp", "tcp", "udp", "dns", "ntp"}
+var knownProtos = []string{"icmp", "tcp", "udp", "dns", "ntp", "http"}
 
 func validProto(p string) bool {
 	for _, k := range knownProtos {
@@ -1486,10 +1493,10 @@ func (s *Store) UpdateTarget(t *Target) error {
 	_, err := s.cfg.Exec(
 		`UPDATE targets SET category_id=?,slug=?,title=?,host=?,proto=?,family=?,interval_s=?,packets=?,
 		        spacing_ms=?,timeout_ms=?,public=?,enabled=?,port=?,pin_ip=?,alerts_off=?,trace_hours=?,hide_host=?,keep_days=?,
-		        loss_warn=?,loss_crit=?,lat_factor=?,cert_off=?,dc_check=?,dns_name=?,dns_type=? WHERE id=?`,
+		        loss_warn=?,loss_crit=?,lat_factor=?,cert_off=?,dc_check=?,dns_name=?,dns_type=?,http_path=?,http_scheme=? WHERE id=?`,
 		t.CategoryID, t.Slug, t.Title, t.Host, t.Proto, t.Family, t.IntervalS, t.Packets,
 		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), t.Port, t.PinIP, b2i(t.AlertsOff), t.TraceHours, b2i(t.HideHost), t.KeepDays,
-		t.LossWarn, t.LossCrit, t.LatFactor, b2i(t.CertOff), t.DCCheck, t.DNSName, t.DNSType, t.ID)
+		t.LossWarn, t.LossCrit, t.LatFactor, b2i(t.CertOff), t.DCCheck, t.DNSName, t.DNSType, t.HTTPPath, t.HTTPScheme, t.ID)
 	if err != nil {
 		return slugError(err, t.Slug)
 	}
@@ -1518,12 +1525,12 @@ func (s *Store) CreateTarget(t *Target) (int64, error) {
 	res, err := s.cfg.Exec(
 		`INSERT INTO targets(category_id,slug,title,host,proto,interval_s,packets,
 		                     spacing_ms,timeout_ms,public,enabled,created_at,family,port,pin_ip,alerts_off,trace_hours,hide_host,keep_days,
-		                     loss_warn,loss_crit,lat_factor,cert_off,dc_check,dns_name,dns_type)
-		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		                     loss_warn,loss_crit,lat_factor,cert_off,dc_check,dns_name,dns_type,http_path,http_scheme)
+		 VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		t.CategoryID, t.Slug, t.Title, t.Host, t.Proto, t.IntervalS, t.Packets,
 		t.SpacingMs, t.TimeoutMs, b2i(t.Public), b2i(t.Enabled), time.Now().Unix(), t.Family, t.Port,
 		t.PinIP, b2i(t.AlertsOff), t.TraceHours, b2i(t.HideHost), t.KeepDays,
-		t.LossWarn, t.LossCrit, t.LatFactor, b2i(t.CertOff), t.DCCheck, t.DNSName, t.DNSType)
+		t.LossWarn, t.LossCrit, t.LatFactor, b2i(t.CertOff), t.DCCheck, t.DNSName, t.DNSType, t.HTTPPath, t.HTTPScheme)
 	if err != nil {
 		return 0, slugError(err, t.Slug)
 	}

@@ -6,7 +6,7 @@ const FAMILY={0:"auto",4:"IPv4",6:"IPv6"};
 const DNS_TYPES=["NS","SOA","A","AAAA","MX","TXT"];
 // The port each protocol starts from. One left over from the previous protocol is replaced on a switch, so
 // a UDP echo target turned into a DNS one does not go on querying port 7.
-const DEFAULT_PORT={udp:"7",dns:"53",ntp:"123"};
+const DEFAULT_PORT={udp:"7",dns:"53",ntp:"123",http:"443"};
 const COMMON_PORTS=[[443,"HTTPS"],[80,"HTTP"],[22,"SSH"],[53,"DNS"],[25,"SMTP"],[587,"SMTP submission"],[179,"BGP"],[3306,"MySQL"],[5432,"PostgreSQL"],[8080,"HTTP alt"]];
 let EDIT=null;   // target being edited, null when creating
 
@@ -44,11 +44,26 @@ async function viewTargets(m){
         <div class="field"><label>Protocol</label><select id="tproto">
           <option value="icmp">ICMP</option><option value="tcp">TCP connect</option>
           <option value="udp">UDP echo</option><option value="dns">DNS query</option>
-          <option value="ntp">NTP</option></select></div>
+          <option value="ntp">NTP</option><option value="http">HTTP</option></select></div>
         <div class="field" id="portfield" hidden><label id="portlabel">TCP port</label>
           <input id="tport" list="ports" placeholder="443">
           <datalist id="ports">${COMMON_PORTS.map(([p,l])=>html`<option value="${p}">${p} — ${l}</option>`)}</datalist>
           <div id="portnote" style="font-size:11px;color:var(--ink3);margin-top:3px" hidden>Port 7 is the RFC 862 echo port, which a Junos probe-server listens on. A receiver can be told to use the 49160–65535 range instead.</div></div>
+        <div class="field" id="httppathfield" hidden><label>Path</label>
+          <input id="thttppath" class="mono" placeholder="/">
+          <div style="font-size:11px;color:var(--ink3);margin-top:3px">What is timed is the request going out
+            and the response's headers coming back — the first byte, not the download. A slow body does not
+            move the figure, which is what keeps an HTTP target on the same axis as an ICMP one. A redirect is
+            an answer and is not followed. 4xx and 5xx are loss, with the status in the reason under the
+            target. Prefer a small path a server answers cheaply: a health endpoint rather than a home page.</div></div>
+        <div class="field" id="httpschemefield" hidden><label>Scheme</label>
+          <select id="thttpscheme">
+            <option value="">From the port (443 and the usual TLS ports mean https)</option>
+            <option value="https">Always https</option>
+            <option value="http">Always http</option></select>
+          <div style="font-size:11px;color:var(--ink3);margin-top:3px">The certificate is verified either way.
+            A figure measured over a connection that accepted any certificate would not be the path a visitor
+            takes.</div></div>
         <div class="field" id="ntpnote" hidden><label>What is measured</label>
           <div style="font-size:11px;color:var(--ink3)">A client request, timed like any other round trip,
             so an NTP target stays comparable with an ICMP one. The reply also says what the server thinks of
@@ -266,12 +281,13 @@ async function viewTargets(m){
   // one-line gap that would have shipped a protocol with no way to set the port it measures.
   let lastProto=null;
   const syncProto=()=>{
-    const p=$("#tproto").value, needsPort=p==="tcp"||p==="udp"||p==="dns"||p==="ntp";
+    const p=$("#tproto").value, needsPort=p==="tcp"||p==="udp"||p==="dns"||p==="ntp"||p==="http";
     $("#portfield").hidden=!needsPort;
-    $("#portlabel").textContent={udp:"UDP port",dns:"DNS port",ntp:"NTP port"}[p]||"TCP port";
+    $("#portlabel").textContent={udp:"UDP port",dns:"DNS port",ntp:"NTP port",http:"HTTP port"}[p]||"TCP port";
     $("#portnote").hidden=p!=="udp";
     $("#dnsnamefield").hidden=$("#dnstypefield").hidden=p!=="dns";
     $("#ntpnote").hidden=p!=="ntp";
+    $("#httppathfield").hidden=$("#httpschemefield").hidden=p!=="http";
     const port=$("#tport").value;
     if(DEFAULT_PORT[p]&&(!port||port===DEFAULT_PORT[lastProto])) $("#tport").value=DEFAULT_PORT[p];
     lastProto=p;
@@ -281,6 +297,7 @@ async function viewTargets(m){
     $("#tcat").value=EDIT.category_id; $("#ttitle").value=EDIT.title; $("#thost").value=EDIT.host;
     $("#tproto").value=EDIT.proto; $("#tport").value=EDIT.port||""; $("#tfam").value=String(EDIT.family||0);
     $("#tdnsname").value=EDIT.dns_name||""; $("#tdnstype").value=EDIT.dns_type||"NS";
+    $("#thttppath").value=EDIT.http_path||""; $("#thttpscheme").value=EDIT.http_scheme||"";
     $("#tlw").value=EDIT.loss_warn||0; $("#tlc").value=EDIT.loss_crit||0; $("#tlf").value=EDIT.lat_factor||0;
     // Auto is no longer offered for a new target; a target that already has
     // it keeps it visible, so editing something else does not silently
@@ -383,6 +400,8 @@ async function viewTargets(m){
       port:$("#portfield").hidden?0:parseInt($("#tport").value||"0",10),
       dns_name:$("#tproto").value==="dns"?$("#tdnsname").value.trim():"",
       dns_type:$("#tproto").value==="dns"?$("#tdnstype").value:"",
+      http_path:$("#tproto").value==="http"?$("#thttppath").value.trim():"",
+      http_scheme:$("#tproto").value==="http"?$("#thttpscheme").value:"",
       interval_s:num0($("#tiv").value), keep_days:parseInt($("#tkeep").value||"0",10),
       packets:num0($("#tpk").value), spacing_ms:num0($("#tsp").value), timeout_ms:num0($("#tto").value),
       pin_ip:$("#tpin").value.trim(), alerts_off:!$("#talert").checked,
