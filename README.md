@@ -190,7 +190,7 @@ Details in [DEPLOY.md § 10](DEPLOY.md#10-probe-isolation-and-performance).
 
 **Back-office**
 - Accounts with four roles (viewer, editor, admin, master) and an audit log
-- Targets and categories, ICMP, TCP, UDP echo or DNS queries, IPv4 or IPv6, at any interval from 10 s to a day
+- Targets and categories, ICMP, TCP, UDP echo, DNS queries or NTP, IPv4 or IPv6, at any interval from 10 s to a day
 - A catalogue of ready-made targets to enable in one click, plus per-country
   suggestions in the [wiki](https://github.com/nkglfr/smokestack/wiki)
 - A contact form on the public pages, so your address stays off spam lists
