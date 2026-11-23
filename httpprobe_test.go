@@ -248,3 +248,62 @@ func TestHTTPIsAKnownProtocol(t *testing.T) {
 		t.Fatal("http is not a known protocol, so no target could be created with it")
 	}
 }
+
+// httpsTarget points at a TLS test server. Kept separate from httpTarget
+// because the scheme has to be stated rather than guessed: httptest listens
+// on an ephemeral port, which is not in the TLS port list, so deriving the
+// scheme from the port would send plain HTTP at a TLS listener and test the
+// wrong thing.
+func httpsTarget(srv *httptest.Server, path string, timeoutMs int) *Target {
+	host, port, _ := net.SplitHostPort(strings.TrimPrefix(srv.URL, "https://"))
+	p, _ := strconv.Atoi(port)
+	return &Target{Host: host, Proto: "http", Port: p, HTTPPath: path,
+		HTTPScheme: "https", Packets: 1, SpacingMs: 1, TimeoutMs: timeoutMs,
+		IntervalS: 60}
+}
+
+// The certificate is verified, and this is the test that holds it there.
+//
+// httptest's TLS server presents a self-signed certificate from an authority
+// nothing trusts, so a probe that verifies must refuse it. If anyone ever
+// reaches for InsecureSkipVerify — to make a staging instance with a bad
+// certificate graph green, which is exactly how it gets added — this test is
+// what says no. A latency figure from a connection that accepted any
+// certificate measures a different path from the one a visitor takes, and
+// says nothing about the one that matters.
+//
+// The opposite case, a valid certificate measuring normally, is deliberately
+// not tested here. Reaching it would mean planting httptest's authority in
+// the probe's own client, which means the probe taking a trust-roots option
+// it must not have. The property worth defending is the refusal.
+func TestHTTPRefusesAnUntrustedCertificate(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	p := &Prober{res: newResolver()}
+	start := time.Now()
+	rtts, errStr := p.runHTTP(httpsTarget(srv, "/", 2000))
+	took := time.Since(start)
+
+	if len(rtts) != 0 {
+		t.Fatalf("measured %d round trips over a certificate nothing trusts: verification "+
+			"is off, and the figure describes a path no visitor takes", len(rtts))
+	}
+	if errStr == "" {
+		t.Fatal("the certificate was refused without a reason, which reads as a target " +
+			"that was never measured")
+	}
+	// An operator has to be able to tell a refused certificate from a slow
+	// server. Those call for opposite actions.
+	if !strings.Contains(strings.ToLower(errStr), "certificate") {
+		t.Errorf("the reason is %q and does not mention the certificate", errStr)
+	}
+	// A refusal is immediate. Burning the timeout would mean the error was
+	// swallowed somewhere and the pass waited for nothing.
+	if took > time.Second {
+		t.Errorf("the pass took %v on a certificate that is refused at the handshake: the "+
+			"error was not surfaced where it happened", took)
+	}
+}
