@@ -138,9 +138,17 @@ func httpProbeClient(addr string, timeout time.Duration) *http.Client {
 			DisableKeepAlives:      true,
 			DisableCompression:     true,
 			MaxResponseHeaderBytes: httpMaxHeaderBytes,
-			// TLS is verified. A latency figure from a connection that
-			// accepted any certificate would be measuring a different path
-			// from the one a visitor takes.
+			// TLS is verified, and TestHTTPRefusesAnUntrustedCertificate
+			// holds that there: a latency figure from a connection that
+			// accepted any certificate measures a different path from the
+			// one a visitor takes.
+			//
+			// The 1.2 floor is not separately tested, and cannot be with
+			// what this probe offers: isolating a version refusal from a
+			// certificate refusal would mean trusting the test server's
+			// authority, which means a trust-roots option this must not
+			// have. A test that asserted the refusal without isolating it
+			// would pass whether the floor were set or not.
 			TLSClientConfig:     &tls.Config{MinVersion: tls.VersionTLS12},
 			TLSHandshakeTimeout: timeout,
 			DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
