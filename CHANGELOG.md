@@ -4,6 +4,16 @@ Versions are published as signed releases; servers with automatic updates instal
 
 ## Unreleased
 
+- **HTTP targets, timed on the first byte.**
+
+  The request going out and the response's headers coming back, not the transfer of the body. A redirect is an answer and is not followed; 4xx and 5xx are loss with the status in the reason, the way a DNS SERVFAIL is; the certificate is verified; and keep-alives are off so every packet of a burst resolves, connects and shakes hands as the first one did.
+
+  **The reason it is the first byte and not the whole download**, which is what SmokePing measures: a download is dominated by the weight of the page and the bandwidth to it rather than by the path — two megabytes over ten megabits take 1.6 seconds whatever the round trip is. The figure would stop being comparable with its own past the day the page grew, which is the one thing exact percentiles over a year exist to provide. The smoke band, the spread across the packets of a pass everywhere else here, would become the variance of bandwidth. And ten full downloads every ten seconds, per target and per probe, is a load generator pointed at somebody else's server.
+
+  What the first byte cannot see is a server that answers quickly and then stalls. That is a second figure rather than this one, and it is not here.
+
+  The path and the scheme are set per target. Left unset, the scheme comes from the port, using the same list the response-time breakdown uses to decide whether a handshake is expected.
+
 - **NTP targets.**
 
   A 48-byte client request to port 123, timed the way every other protocol here is timed, so an NTP target sits on the same axis as an ICMP one. Not NTP's own offset formula, which is a different quantity and would not be comparable with anything else on the page.

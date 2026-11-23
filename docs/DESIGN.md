@@ -552,6 +552,40 @@ field the caller did not send, and a target hiding its address hides its query
 name from the public tree as well. A double-check request has no room for a
 query, so DNS targets are refused there, and the breakdown stays TCP-only.
 
+**HTTP targets.** What is timed is the request going out and the response's
+headers coming back — the first byte — and not the transfer of the body. That
+is the design, so it is worth the reason rather than the statement.
+
+A full download, which is what SmokePing's HTTP probes measure, is dominated
+by the weight of the page and the bandwidth to it rather than by the path: two
+megabytes over ten megabits take 1.6 seconds whatever the round trip is. Three
+things follow, and each breaks something this program exists to do. The figure
+stops being comparable with its own past the day the page grows, so a year of
+history becomes unreadable — and exact percentiles over a year are the whole
+point of the rollup design. The smoke band, which everywhere else is the
+spread across the packets of one pass, would become the variance of
+bandwidth. And a burst of ten full downloads every ten seconds, per target and
+per probe, turns a probe into a load generator against somebody else's server.
+
+So the first byte, which keeps an HTTP target on the same axis as an ICMP one.
+What it cannot see is a server that answers quickly and then stalls; that is a
+second figure and it is not here.
+
+The rest follows from timing one exchange. A redirect is an answer and is not
+followed: following it would time a second request, possibly to another host,
+and call the sum one latency — and it would raise whether to follow https to
+http, which is not a question a latency measurement should answer. 4xx and 5xx
+are loss, with the status in the reason, the way a DNS SERVFAIL is. The
+certificate is verified, because a figure from a connection that accepted any
+certificate measures a different path from the one a visitor takes.
+Keep-alives are off, so each packet of a burst resolves, connects and shakes
+hands as the first one did: reusing the connection would make packets 2..N a
+different quantity from packet 1, and the spread between them would be the
+difference between two measurements rather than the variability of one. The
+scheme comes from `http_scheme` when the operator states one and otherwise
+from the port, using the same list the response-time breakdown uses to decide
+whether to expect a handshake.
+
 **NTP targets.** A 48-byte client request to port 123, timed the way every
 other protocol here is timed, so an NTP target sits on the same axis as an
 ICMP one. Deliberately not NTP's own offset formula: the offset is a different
