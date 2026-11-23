@@ -552,6 +552,26 @@ field the caller did not send, and a target hiding its address hides its query
 name from the public tree as well. A double-check request has no room for a
 query, so DNS targets are refused there, and the breakdown stays TCP-only.
 
+**SSH targets.** An SSH server announces itself as soon as the connection is
+up, without being asked (RFC 4253 §4.2), so this needs no SSH client and no
+cryptography: connect, read the greeting, stop. The figure is the connection
+plus the greeting, which is the exchange a client waits through before it can
+do anything.
+
+**Nothing is ever sent.** No key exchange is started and no authentication
+attempted, so the probe leaves nothing in the auth log and trips no rate
+limiter watching for failed logins. A probe that got itself banned from the
+server it measures, every pass, would be worse than no probe.
+
+What it sees that a TCP connect cannot: an sshd that accepts a connection and
+is too wedged to greet. The port is open either way, so a `tcp` target reads
+that as healthy. The deadline covers connection and greeting together, set
+from the start rather than from the moment the connection came up, so a slow
+connection cannot buy itself a fresh timeout. A server may send other lines
+first — a legal banner, most often, which the specification allows — and those
+are read through within a budget, so that a banner is not reported as a server
+that never greeted and an endless stream of them is not graphed as latency.
+
 **NTP targets.** A 48-byte client request to port 123, timed the way every
 other protocol here is timed, so an NTP target sits on the same axis as an
 ICMP one. Deliberately not NTP's own offset formula: the offset is a different

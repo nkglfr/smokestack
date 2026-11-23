@@ -6,7 +6,7 @@ const FAMILY={0:"auto",4:"IPv4",6:"IPv6"};
 const DNS_TYPES=["NS","SOA","A","AAAA","MX","TXT"];
 // The port each protocol starts from. One left over from the previous protocol is replaced on a switch, so
 // a UDP echo target turned into a DNS one does not go on querying port 7.
-const DEFAULT_PORT={udp:"7",dns:"53",ntp:"123"};
+const DEFAULT_PORT={udp:"7",dns:"53",ntp:"123",ssh:"22"};
 const COMMON_PORTS=[[443,"HTTPS"],[80,"HTTP"],[22,"SSH"],[53,"DNS"],[25,"SMTP"],[587,"SMTP submission"],[179,"BGP"],[3306,"MySQL"],[5432,"PostgreSQL"],[8080,"HTTP alt"]];
 let EDIT=null;   // target being edited, null when creating
 
@@ -44,11 +44,18 @@ async function viewTargets(m){
         <div class="field"><label>Protocol</label><select id="tproto">
           <option value="icmp">ICMP</option><option value="tcp">TCP connect</option>
           <option value="udp">UDP echo</option><option value="dns">DNS query</option>
-          <option value="ntp">NTP</option></select></div>
+          <option value="ntp">NTP</option><option value="ssh">SSH</option></select></div>
         <div class="field" id="portfield" hidden><label id="portlabel">TCP port</label>
           <input id="tport" list="ports" placeholder="443">
           <datalist id="ports">${COMMON_PORTS.map(([p,l])=>html`<option value="${p}">${p} — ${l}</option>`)}</datalist>
           <div id="portnote" style="font-size:11px;color:var(--ink3);margin-top:3px" hidden>Port 7 is the RFC 862 echo port, which a Junos probe-server listens on. A receiver can be told to use the 49160–65535 range instead.</div></div>
+        <div class="field" id="sshnote" hidden><label>What is measured</label>
+          <div style="font-size:11px;color:var(--ink3)">The connection and the identification string the
+            server sends of its own accord — the exchange a client waits through before it can do anything.
+            <strong>Nothing is ever sent</strong>: no key exchange is started and no authentication attempted,
+            so this leaves nothing in the auth log and trips no rate limiter watching for failed logins. It
+            sees what a TCP connect cannot: an sshd that accepts the connection and is too wedged to greet,
+            which a port check reads as healthy.</div></div>
         <div class="field" id="ntpnote" hidden><label>What is measured</label>
           <div style="font-size:11px;color:var(--ink3)">A client request, timed like any other round trip,
             so an NTP target stays comparable with an ICMP one. The reply also says what the server thinks of
@@ -266,12 +273,13 @@ async function viewTargets(m){
   // one-line gap that would have shipped a protocol with no way to set the port it measures.
   let lastProto=null;
   const syncProto=()=>{
-    const p=$("#tproto").value, needsPort=p==="tcp"||p==="udp"||p==="dns"||p==="ntp";
+    const p=$("#tproto").value, needsPort=p==="tcp"||p==="udp"||p==="dns"||p==="ntp"||p==="ssh";
     $("#portfield").hidden=!needsPort;
-    $("#portlabel").textContent={udp:"UDP port",dns:"DNS port",ntp:"NTP port"}[p]||"TCP port";
+    $("#portlabel").textContent={udp:"UDP port",dns:"DNS port",ntp:"NTP port",ssh:"SSH port"}[p]||"TCP port";
     $("#portnote").hidden=p!=="udp";
     $("#dnsnamefield").hidden=$("#dnstypefield").hidden=p!=="dns";
     $("#ntpnote").hidden=p!=="ntp";
+    $("#sshnote").hidden=p!=="ssh";
     const port=$("#tport").value;
     if(DEFAULT_PORT[p]&&(!port||port===DEFAULT_PORT[lastProto])) $("#tport").value=DEFAULT_PORT[p];
     lastProto=p;

@@ -1313,7 +1313,7 @@ func normalizeHost(raw string) (string, error) {
 // The protocols a target may be measured with. One list, so that adding one
 // is a single edit and so that nothing can be stored that Prober.Run would
 // not recognise.
-var knownProtos = []string{"icmp", "tcp", "udp", "dns", "ntp"}
+var knownProtos = []string{"icmp", "tcp", "udp", "dns", "ntp", "ssh"}
 
 func validProto(p string) bool {
 	for _, k := range knownProtos {

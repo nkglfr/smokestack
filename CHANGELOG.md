@@ -4,6 +4,14 @@ Versions are published as signed releases; servers with automatic updates instal
 
 ## Unreleased
 
+- **SSH targets.**
+
+  An SSH server announces itself the moment the connection is up, without being asked, so this needs no SSH client and no cryptography: connect, read the identification string, stop. The figure is the connection plus the greeting — the exchange a client waits through before it can do anything.
+
+  **Nothing is ever sent.** No key exchange is started and no authentication attempted, so it leaves nothing in the auth log and trips no rate limiter watching for failed logins. A probe that got itself banned from the server it measures, every thirty seconds, would be worse than no probe.
+
+  What it sees that a TCP connect cannot: an sshd that accepts the connection and is too wedged to greet. The port is open either way, so a `tcp` target reads that as healthy and this reads it as the timeout it is. A legal banner before the identification string is allowed by the specification and is read through, within a budget, so such a server is measured rather than reported as silent.
+
 - **NTP targets.**
 
   A 48-byte client request to port 123, timed the way every other protocol here is timed, so an NTP target sits on the same axis as an ICMP one. Not NTP's own offset formula, which is a different quantity and would not be comparable with anything else on the page.
