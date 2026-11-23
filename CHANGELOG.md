@@ -2,7 +2,9 @@
 
 Versions are published as signed releases; servers with automatic updates install the newest one directly, whatever versions came in between. The release workflow reads a section straight out of this file and publishes it as the release notes, so how an entry is written matters — see [DEPLOY.md § 6](DEPLOY.md#6-publishing-your-own-releases).
 
-## Unreleased
+## 0.8.6
+
+**Three protocols, chosen for what they see rather than for the list.** A target can now be an HTTP endpoint, an SSH server or an NTP clock, alongside ICMP, TCP, UDP echo and DNS. Each of the three answers a question its nearest existing protocol cannot: whether a page is served and how soon its first byte leaves, whether an sshd is awake enough to greet rather than merely accepting connections, and whether a clock is a clock rather than just a host that replies.
 
 - **HTTP targets, timed on the first byte.**
 
